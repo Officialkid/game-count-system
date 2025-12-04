@@ -17,6 +17,12 @@ import { SettingsTab } from '@/components/event-tabs/SettingsTab';
 import { EditEventModal } from '@/components/modals/EditEventModal';
 import { auth } from '@/lib/api-client';
 
+// Helper function to convert hex color to RGB
+function hexToRgb(hex: string): string {
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  return result ? `${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(result[3], 16)}` : '107, 70, 193';
+}
+
 interface Event {
   id: number;
   event_name: string;
@@ -150,7 +156,7 @@ export default function EventDetailPage() {
         <div
           className="bg-gradient-to-br rounded-3xl shadow-2xl p-8 mb-8 border-t-4 overflow-hidden relative backdrop-blur-xl"
           style={{
-            background: `linear-gradient(135deg, rgba(${palette!.primaryRGB}, 0.1) 0%, rgba(${palette!.accentRGB}, 0.08) 100%), rgba(255, 255, 255, 0.6)`,
+            background: `linear-gradient(135deg, rgba(${hexToRgb(palette!.primary)}, 0.1) 0%, rgba(${hexToRgb(palette!.accent)}, 0.08) 100%), rgba(255, 255, 255, 0.6)`,
             borderTopColor: palette!.primary,
             boxShadow: `0 8px 32px 0 rgba(31, 38, 135, 0.37)`,
             backdropFilter: 'blur(4px)',
