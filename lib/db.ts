@@ -64,8 +64,11 @@ export const db = {
     logoUrl: string | null = null,
     allowNegative: boolean = false,
     displayMode: 'cumulative' | 'per_day' = 'cumulative',
-    numTeams: number = 3
+    numTeams: number = 3,
+    startDate: string | null = null,
+    endDate: string | null = null
   ) {
+    // TODO: Re-enable start_date and end_date after running migration 001_add_event_dates.sql on Render
     const result = await sql`
       INSERT INTO events (user_id, event_name, theme_color, logo_url, allow_negative, display_mode, num_teams)
       VALUES (${userId}, ${eventName}, ${themeColor}, ${logoUrl}, ${allowNegative}, ${displayMode}, ${numTeams})
@@ -637,6 +640,9 @@ export const db = {
     `;
     return result.rows[0] || null;
   },
+  
+  // Export pool for direct access
+  pool,
 };
 
 // Standalone helper functions for API routes

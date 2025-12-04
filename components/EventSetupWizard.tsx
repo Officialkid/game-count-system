@@ -95,6 +95,8 @@ export function EventSetupWizard({ onComplete }: EventSetupWizardProps) {
 
   // Step 1: Event Details
   const [eventName, setEventName] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
   const [brandColor, setBrandColor] = useState('purple'); // Palette ID
   const [logoUrl, setLogoUrl] = useState('');
   const [logoFile, setLogoFile] = useState<File | null>(null);
@@ -143,6 +145,8 @@ export function EventSetupWizard({ onComplete }: EventSetupWizardProps) {
 
       const response = await apiClient.post('/api/events/create', {
         event_name: eventName,
+        start_date: startDate || null,
+        end_date: endDate || null,
         theme_color: brandColor,
         logo_url: safeLogoUrl,
         allow_negative: allowNegative,
@@ -251,6 +255,38 @@ export function EventSetupWizard({ onComplete }: EventSetupWizardProps) {
               aria-required="true"
               aria-label="Event name"
             />
+          </div>
+
+          {/* Event Dates */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label htmlFor="start-date" className="block text-sm font-medium mb-2">
+                Start Date (Optional)
+              </label>
+              <Input
+                id="start-date"
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                aria-label="Event start date"
+              />
+            </div>
+            <div>
+              <label htmlFor="end-date" className="block text-sm font-medium mb-2">
+                End Date (Optional)
+              </label>
+              <Input
+                id="end-date"
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                min={startDate || undefined}
+                aria-label="Event end date"
+              />
+              {startDate && endDate && new Date(endDate) < new Date(startDate) && (
+                <p className="text-xs text-red-500 mt-1">End date must be after start date</p>
+              )}
+            </div>
           </div>
 
           {/* Number of Teams */}

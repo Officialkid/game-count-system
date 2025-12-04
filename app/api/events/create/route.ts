@@ -35,6 +35,8 @@ export async function POST(request: NextRequest) {
 
     const { 
       event_name, 
+      start_date = null,
+      end_date = null,
       theme_color = 'purple',
       logo_url = null,
       allow_negative = false,
@@ -50,7 +52,9 @@ export async function POST(request: NextRequest) {
       logo_url,
       allow_negative,
       display_mode,
-      num_teams
+      num_teams,
+      start_date,
+      end_date
     );
 
     // Create a share link token for the event
@@ -69,6 +73,8 @@ export async function POST(request: NextRequest) {
             user_id: event.user_id,
             event_name: event.event_name,
             created_at: event.created_at,
+            start_date: event.start_date,
+            end_date: event.end_date,
             theme_color: event.theme_color,
             logo_url: event.logo_url,
             allow_negative: event.allow_negative,

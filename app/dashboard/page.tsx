@@ -1,35 +1,19 @@
-// app/dashboard/page.tsx - COMPLETELY REDESIGNED
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { apiClient, clearAuth } from '@/lib/api-client';
-import { Event } from '@/lib/types';
-import { 
-  Button, 
-  Card, 
-  CardHeader, 
-  CardTitle, 
-  CardContent, 
-  CardFooter,
-  Badge, 
-  Avatar,
-  LoadingCardSkeleton,
-  ConfirmDialog,
-  useToast
-} from '@/components/ui';
-import { EventCardSkeletonList } from '@/components/skeletons';
+import { apiClient, auth, clearAuth } from '@/lib/api-client';
+import { Navbar } from '@/components/Navbar';
 import { EventSetupWizard } from '@/components/EventSetupWizard';
-import { UseTemplateModal } from '@/components/modals';
-import { getPaletteById } from '@/lib/color-palettes';
 
-interface ExtendedEvent extends Event {
-  team_count?: number;
+interface Event {
+  id: string;
+  event_name: string;
   status?: string;
-  public_url?: string;
+  team_count?: number;
 }
 
-interface UserProfile {
+interface User {
   name: string;
   email: string;
   avatar_url?: string;
@@ -37,442 +21,245 @@ interface UserProfile {
 
 export default function DashboardPage() {
   const router = useRouter();
-  const { showToast } = useToast();
   const [mounted, setMounted] = useState(false);
-  const [user, setUser] = useState<UserProfile | null>(null);
-  const [events, setEvents] = useState<ExtendedEvent[]>([]);
+  const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [showCreateWizard, setShowCreateWizard] = useState(false);
-  const [deleteEventId, setDeleteEventId] = useState<string | null>(null);
-  const [deleting, setDeleting] = useState(false);
+  const [user, setUser] = useState<User | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'completed'>('all');
-  const [showUseTemplate, setShowUseTemplate] = useState(false);
+  const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'inactive'>('all');
+  const [showCreateWizard, setShowCreateWizard] = useState(false);
 
   useEffect(() => {
     setMounted(true);
-  }, []);
-
-  const loadDashboard = useCallback(async () => {
-    if (!mounted) return;
-    
-    setLoading(true);
-    setError('');
-    try {
-      // Load user info and events in parallel
-      const [eventsResponse, userResponse] = await Promise.all([
-        apiClient.get('/api/events/list'),
-        apiClient.get('/api/auth/me')
-      ]);
-
-      // Parse JSON responses
-      const eventsData = await eventsResponse.json();
-      const userData = await userResponse.json();
-
-      if (eventsData.success && eventsData.data?.events) {
-        setEvents(eventsData.data.events);
-      } else {
-        console.error('Failed to load events:', eventsData.error);
-        setError(eventsData.error || 'Failed to load events');
-      }
-
-      if (userData.success && userData.data?.user) {
-        setUser(userData.data.user);
-      }
-    } catch (err: any) {
-      console.error('Dashboard load error:', err);
-      const errorMsg = 'Failed to load dashboard';
-      setError(errorMsg);
-      showToast('Failed to load dashboard', 'error');
-    } finally {
-      setLoading(false);
+    const token = auth.getToken();
+    if (!token) {
+      router.push('/login?returnUrl=/dashboard');
+      return;
     }
-  }, [mounted, showToast]);
+  }, [router]);
 
   useEffect(() => {
-    if (mounted) {
-      loadDashboard();
+    if (!mounted) return;
+    
+    // Check if user is authenticated before making API calls
+    const token = auth.getToken();
+    if (!token) {
+      setLoading(false);
+      return;
     }
-  }, [mounted, loadDashboard]);
 
-  const handleDeleteEvent = async () => {
-    if (!deleteEventId) return;
+    const loadData = async () => {
+      try {
+        const [eventsRes, userRes] = await Promise.all([
+          apiClient.get('/api/events/list'),
+          apiClient.get('/api/auth/me'),
+        ]);
 
-    setDeleting(true);
-    try {
-      const response = await apiClient.delete(`/api/events/${deleteEventId}`);
-      const data = await response.json();
-      
-      if (data.success) {
-        setEvents(events.filter(e => e.id !== deleteEventId));
-        showToast('Event deleted successfully', 'success');
-      } else {
-        showToast(data.error || 'Failed to delete event', 'error');
+        const eventsData = await eventsRes.json();
+        const userData = await userRes.json();
+
+        if (eventsData.success && eventsData.data?.events) {
+          setEvents(eventsData.data.events);
+        }
+        if (userData.success && userData.data?.user) {
+          setUser(userData.data.user);
+        }
+      } catch (error) {
+        console.error('Dashboard load error:', error);
+      } finally {
+        setLoading(false);
       }
-    } catch (err) {
-      console.error('Delete event error:', err);
-      showToast('Failed to delete event', 'error');
-    } finally {
-      setDeleting(false);
-      setDeleteEventId(null);
-    }
-  };
+    };
 
-  const handleWizardComplete = (eventId: string) => {
-    setShowCreateWizard(false);
-    showToast('Event created successfully!', 'success');
-    router.push(`/event/${eventId}`);
-  };
+    loadData();
+  }, [mounted]);
 
-  const handleUseTemplate = async (templateId: number, eventName: string) => {
-    try {
-      const response = await apiClient.post('/api/events/create-from-template', {
-        template_id: templateId,
-        event_name: eventName,
-      });
-
-      const data = await response.json();
-      
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to create event from template');
-      }
-
-      setShowUseTemplate(false);
-      showToast('Event created from template!', 'success');
-      
-      // Refresh events list
-      await loadDashboard();
-      
-      // Navigate to the new event
-      router.push(`/event/${data.event.event_id}`);
-    } catch (error) {
-      console.error('Error creating event from template:', error);
-      showToast('Failed to create event from template', 'error');
-    }
-  };
-
-  const handleLogout = () => {
-    clearAuth();
-    showToast('Logged out successfully', 'info');
-    router.push('/login');
-  };
-
-  const filteredEvents = events.filter(event => {
+  const filteredEvents = events.filter((event) => {
     const matchesSearch = event.event_name.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesFilter = filterStatus === 'all' || event.status === filterStatus;
     return matchesSearch && matchesFilter;
   });
 
-  const purplePalette = getPaletteById('purple');
-  const bluePalette = getPaletteById('blue');
-  const bgGradient = `linear-gradient(135deg, ${purplePalette!.background} 0%, ${bluePalette!.background} 100%)`;
+  const handleWizardComplete = (eventId: string) => {
+    setShowCreateWizard(false);
+    router.push(`/event/${eventId}`);
+  };
 
-  if (!mounted || loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-blue-50 to-indigo-50 dark:from-gray-900 dark:via-gray-900 dark:to-gray-800 py-12">
-        <div className="container-safe">
-          <div className="mb-8 flex justify-between items-center">
-            <div className="space-y-2">
-              <div className="h-10 w-48 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
-              <div className="h-4 w-64 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
-            </div>
-          </div>
-          <EventCardSkeletonList count={6} />
-        </div>
-      </div>
-    );
-  }
+  const handleLogout = () => {
+    clearAuth();
+    router.push('/login');
+  };
 
+  // Show create wizard modal
   if (showCreateWizard) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-blue-50 to-indigo-50 py-8 px-4">
-        <div className="max-w-4xl mx-auto">
-          <Button
-            variant="secondary"
+      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-amber-50 to-pink-50">
+        <Navbar />
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 mt-20">
+          <button
             onClick={() => setShowCreateWizard(false)}
-            className="mb-4"
+            className="mb-4 px-4 py-2 bg-gray-200 text-gray-800 rounded-lg font-medium hover:bg-gray-300 transition-all"
           >
             ← Back to Dashboard
-          </Button>
+          </button>
           <EventSetupWizard onComplete={handleWizardComplete} />
         </div>
       </div>
     );
   }
 
+  if (!mounted || loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-amber-50 to-pink-50">
+        <Navbar />
+        <div className="container-safe py-8 mt-20">
+          <div className="mb-8 flex justify-between items-center">
+            <div className="space-y-2">
+              <div className="h-10 w-48 bg-gray-200 rounded animate-pulse" />
+              <div className="h-4 w-64 bg-gray-200 rounded animate-pulse" />
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[1, 2, 3, 4, 5, 6].map((i) => (
+              <div key={i} className="h-64 bg-white/40 rounded-2xl animate-pulse" />
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen" style={{ background: bgGradient }}>
-      <div className="container-safe py-8">
-        {/* Header Section with User Profile */}
+    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-amber-50 to-pink-50">
+      <Navbar />
+      <div className="container-safe py-8 mt-20">
+        {/* Header Section with User Profile - Premium Glass Design */}
         <div className="mb-8">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-6">
-            <div className="flex items-center gap-4">
-              <Avatar
-                src={user?.avatar_url}
-                alt={user?.name || 'User'}
-                fallback={user?.name}
-                size="xl"
-              />
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-8 bg-white/40 backdrop-blur-xl rounded-3xl p-8 border border-white/20 shadow-xl hover:shadow-2xl transition-all">
+            <div className="flex items-center gap-6">
+              <div className="w-16 h-16 rounded-full bg-gradient-to-r from-purple-600 to-amber-500 flex items-center justify-center text-white text-2xl font-bold shadow-lg">
+                {user?.name?.charAt(0).toUpperCase() || 'U'}
+              </div>
               <div>
-                <h1 className="text-4xl font-bold text-gray-900 mb-1">
-                  Welcome back, {user?.name?.split(' ')[0] || 'User'}!
+                <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-amber-500 bg-clip-text text-transparent">
+                  Welcome back, {user?.name || 'User'}
                 </h1>
-                <p className="text-gray-600">{user?.email}</p>
+                <p className="text-gray-600 text-sm">{user?.email}</p>
               </div>
             </div>
-            <div className="flex gap-3">
-              <Button
-                onClick={() => setShowCreateWizard(true)}
-                size="lg"
-              >
-                + Create New Event
-              </Button>
-              <Button
-                onClick={() => setShowUseTemplate(true)}
-                variant="secondary"
-                size="lg"
-              >
-                📋 Use Template
-              </Button>
-              <Button
-                variant="ghost"
-                onClick={handleLogout}
-              >
-                Logout
-              </Button>
-            </div>
+            <button
+              onClick={handleLogout}
+              className="px-6 py-2 bg-gradient-to-r from-red-500 to-pink-600 text-white rounded-lg font-medium hover:shadow-lg transition-all transform hover:scale-105"
+            >
+              Logout
+            </button>
           </div>
 
           {/* Stats Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-            {(() => {
-              const palettes = [getPaletteById('purple')!, getPaletteById('blue')!, getPaletteById('green')!];
-              const statData = [
-                { label: 'Total Events', value: events.length, icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2' },
-                { label: 'Active Events', value: events.filter(e => e.status === 'active' || !e.status).length, icon: 'M13 10V3L4 14h7v7l9-11h-7z' },
-                { label: 'Total Teams', value: events.reduce((sum, e) => sum + (e.team_count || e.num_teams || 0), 0), icon: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z' }
-              ];
-              return statData.map((stat, idx) => (
-                <Card key={idx} style={{ background: `linear-gradient(135deg, ${palettes[idx].primary}f0 0%, ${palettes[idx].secondary}f0 100%)`, borderTop: `4px solid ${palettes[idx].primary}` }} className="text-white overflow-hidden">
-                  <CardContent className="py-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="opacity-90 text-sm font-medium">{stat.label}</p>
-                        <p className="text-4xl font-bold mt-2">{stat.value}</p>
-                      </div>
-                      <svg className="w-12 h-12 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={stat.icon} />
-                      </svg>
-                    </div>
-                  </CardContent>
-                </Card>
-              ));
-            })()}
-          </div>
-
-          {/* Search and Filter */}
-          <div className="flex flex-col md:flex-row gap-4">
-            <div className="flex-1 relative">
-              <svg className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-              <input
-                type="text"
-                placeholder="Search events..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2"
-                style={{ focusRingColor: getPaletteById('purple')!.primary }}
-                onFocus={(e) => e.currentTarget.style.borderColor = getPaletteById('purple')!.primary}
-                onBlur={(e) => e.currentTarget.style.borderColor = '#d1d5db'}
-              />
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div className="bg-white/40 backdrop-blur-xl rounded-2xl p-6 border border-white/20 shadow-lg">
+              <p className="text-gray-600 text-sm font-medium mb-2">Total Events</p>
+              <p className="text-4xl font-bold text-purple-600">{events.length}</p>
             </div>
-            <div className="flex gap-2">
-              <Button
-                variant={filterStatus === 'all' ? 'primary' : 'secondary'}
-                onClick={() => setFilterStatus('all')}
-              >
-                All
-              </Button>
-              <Button
-                variant={filterStatus === 'active' ? 'primary' : 'secondary'}
-                onClick={() => setFilterStatus('active')}
-              >
-                Active
-              </Button>
-              <Button
-                variant={filterStatus === 'completed' ? 'primary' : 'secondary'}
-                onClick={() => setFilterStatus('completed')}
-              >
-                Completed
-              </Button>
+            <div className="bg-white/40 backdrop-blur-xl rounded-2xl p-6 border border-white/20 shadow-lg">
+              <p className="text-gray-600 text-sm font-medium mb-2">Active Events</p>
+              <p className="text-4xl font-bold text-amber-500">{events.filter(e => e.status !== 'inactive').length}</p>
+            </div>
+            <div className="bg-white/40 backdrop-blur-xl rounded-2xl p-6 border border-white/20 shadow-lg">
+              <p className="text-gray-600 text-sm font-medium mb-2">Total Teams</p>
+              <p className="text-4xl font-bold text-pink-500">{events.reduce((sum, e) => sum + (e.team_count || 0), 0)}</p>
             </div>
           </div>
         </div>
 
+        {/* Search and Filter Section */}
+        <div className="mb-8 flex flex-col md:flex-row gap-4">
+          <input
+            type="text"
+            placeholder="Search events..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="flex-1 px-4 py-3 bg-white/40 backdrop-blur-xl border border-white/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-600 focus:border-transparent placeholder-gray-500"
+          />
+          <select
+            value={filterStatus}
+            onChange={(e) => setFilterStatus(e.target.value as any)}
+            className="px-4 py-3 bg-white/40 backdrop-blur-xl border border-white/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-600 focus:border-transparent text-gray-700"
+          >
+            <option value="all">All Events</option>
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+          </select>
+          <button
+            onClick={() => setShowCreateWizard(true)}
+            className="px-6 py-3 bg-gradient-to-r from-purple-600 to-amber-500 text-white rounded-xl font-medium hover:shadow-lg transition-all transform hover:scale-105 whitespace-nowrap"
+          >
+            + New Event
+          </button>
+        </div>
+
         {/* Events Grid */}
-        {filteredEvents.length === 0 ? (
-          <Card>
-            <CardContent className="py-16 text-center">
-              <div className="text-6xl mb-4">📊</div>
-              <h3 className="text-2xl font-bold text-gray-900 mb-2">
-                {searchQuery ? 'No events found' : 'No events yet'}
-              </h3>
-              <p className="text-gray-600 mb-6">
-                {searchQuery 
-                  ? 'Try adjusting your search or filter'
-                  : 'Create your first event to get started tracking scores!'
-                }
-              </p>
-              {!searchQuery && (
-                <Button onClick={() => setShowCreateWizard(true)} size="lg">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredEvents.length === 0 ? (
+            <div className="col-span-full text-center py-16">
+              <div className="bg-white/40 backdrop-blur-xl rounded-2xl p-12 border border-white/20 shadow-lg">
+                <p className="text-gray-500 text-lg mb-6">
+                  {searchQuery || filterStatus !== 'all'
+                    ? 'No events match your search'
+                    : 'No events yet. Create your first event!'}
+                </p>
+                <button
+                  onClick={() => setShowCreateWizard(true)}
+                  className="px-8 py-3 bg-gradient-to-r from-purple-600 to-amber-500 text-white rounded-xl font-medium hover:shadow-lg transition-all transform hover:scale-105"
+                >
                   Create Your First Event
-                </Button>
-              )}
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredEvents.map((event) => {
-              const palette = getPaletteById(event.theme_color || 'purple') || getPaletteById('purple')!;
-              
-              return (
-                <Card key={event.id} interactive className="relative overflow-hidden group">
-                  {/* Theme Color Bar */}
-                  <div
-                    className="absolute top-0 left-0 right-0 h-1.5"
-                    style={{ background: `linear-gradient(90deg, ${palette.primary}, ${palette.secondary})` }}
-                  />
+                </button>
+              </div>
+            </div>
+          ) : (
+            filteredEvents.map((event) => (
+              <div
+                key={event.id}
+                onClick={() => router.push(`/event/${event.id}`)}
+                className="group bg-white/40 backdrop-blur-xl rounded-2xl border border-white/20 p-6 shadow-lg hover:shadow-2xl hover:scale-105 transition-all cursor-pointer"
+              >
+                {/* Card Header */}
+                <div className="flex justify-between items-start mb-4">
+                  <h3 className="text-xl font-bold text-gray-900 group-hover:text-purple-600 transition-colors line-clamp-2">
+                    {event.event_name}
+                  </h3>
+                  <span
+                    className={`px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap ml-2 ${
+                      event.status === 'inactive'
+                        ? 'bg-red-100 text-red-700'
+                        : 'bg-green-100 text-green-700'
+                    }`}
+                  >
+                    {event.status === 'inactive' ? 'Inactive' : 'Active'}
+                  </span>
+                </div>
 
-                  <CardHeader>
-                    <div className="flex items-start gap-4">
-                      {/* Logo or Avatar */}
-                      {event.logo_url ? (
-                        <img
-                          src={event.logo_url}
-                          alt={event.event_name}
-                          className="w-16 h-16 rounded-lg object-cover"
-                        />
-                      ) : (
-                        <div
-                          className="w-16 h-16 rounded-lg flex items-center justify-center text-white text-xl font-bold"
-                          style={{ backgroundColor: palette.primary }}
-                        >
-                          {event.event_name.substring(0, 2).toUpperCase()}
-                        </div>
-                      )}
+                {/* Card Stats */}
+                <div className="grid grid-cols-2 gap-4 mb-6 py-4 border-t border-b border-white/20">
+                  <div>
+                    <p className="text-gray-600 text-xs font-medium">Teams</p>
+                    <p className="text-2xl font-bold text-purple-600">{event.team_count || 0}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-600 text-xs font-medium">Event ID</p>
+                    <p className="text-sm font-mono text-gray-600 truncate">{event.id.slice(0, 8)}...</p>
+                  </div>
+                </div>
 
-                      <div className="flex-1 min-w-0">
-                        <CardTitle className="mb-2 truncate">{event.event_name}</CardTitle>
-                        <Badge variant={event.status === 'completed' ? 'default' : 'success'}>
-                          {event.status === 'completed' ? 'Completed' : 'Active'}
-                        </Badge>
-                      </div>
-                    </div>
-                  </CardHeader>
-
-                  <CardContent>
-                    <div className="space-y-2 text-sm text-gray-600">
-                      <div className="flex items-center gap-2">
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                        </svg>
-                        <span>{event.team_count || event.num_teams || 0} teams</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                        </svg>
-                        <span>{new Date(event.created_at).toLocaleDateString()}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
-                        </svg>
-                        <span style={{ color: palette.primary }} className="font-medium">
-                          {palette.name} theme
-                        </span>
-                      </div>
-                    </div>
-                  </CardContent>
-
-                  <CardFooter className="flex flex-wrap gap-2">
-                    <Button
-                      size="sm"
-                      className="flex-1 min-w-[100px]"
-                      onClick={() => router.push(`/event/${event.id}`)}
-                      title="View and manage event details"
-                    >
-                      📊 View
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      className="flex-1 min-w-[100px]"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        router.push(`/event/${event.id}?tab=settings`);
-                      }}
-                      title="Edit event settings"
-                    >
-                      ⚙️ Edit
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="accent"
-                      className="flex-1 min-w-[100px]"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if ((event as any).share_token) {
-                          window.open(`/scoreboard/${(event as any).share_token}`, '_blank');
-                        } else {
-                          showToast('Create a share link in Settings first', 'info');
-                        }
-                      }}
-                      disabled={!(event as any).share_token}
-                      title={(event as any).share_token ? 'Open public scoreboard in new tab' : 'Create share link in Settings tab first'}
-                    >
-                      👁️ Public
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="danger"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setDeleteEventId(event.id);
-                      }}
-                      title="Delete this event permanently"
-                    >
-                      🗑️
-                    </Button>
-                  </CardFooter>
-                </Card>
-              );
-            })}
-          </div>
-        )}
+                {/* Card Actions */}
+                <button className="w-full py-2 bg-gradient-to-r from-purple-600 to-amber-500 text-white rounded-lg font-medium hover:shadow-lg transition-all transform group-hover:scale-105">
+                  View Event
+                </button>
+              </div>
+            ))
+          )}
+        </div>
       </div>
-
-      {/* Delete Confirmation Dialog */}
-      <ConfirmDialog
-        isOpen={deleteEventId !== null}
-        onClose={() => setDeleteEventId(null)}
-        onConfirm={handleDeleteEvent}
-        title="Delete Event"
-        message="Are you sure you want to delete this event? This will permanently remove all teams, scores, and share links associated with this event."
-        confirmText="Delete"
-        cancelText="Cancel"
-        variant="danger"
-        loading={deleting}
-      />
-
-      {/* Use Template Modal */}
-      <UseTemplateModal
-        isOpen={showUseTemplate}
-        onClose={() => setShowUseTemplate(false)}
-        onUseTemplate={handleUseTemplate}
-      />
     </div>
   );
 }

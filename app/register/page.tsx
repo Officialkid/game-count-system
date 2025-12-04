@@ -3,16 +3,18 @@
 // ENHANCED: Added real-time password validation with strength meter
 'use client';
 
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { apiClient, auth } from '@/lib/api-client';
 import { PasswordInput } from '@/components';
+import { Navbar } from '@/components/Navbar';
 
 export default function RegisterPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [returnUrl, setReturnUrl] = useState('/dashboard');
   const [fieldErrors, setFieldErrors] = useState<{ name?: string; email?: string; password?: string; confirmPassword?: string }>({});
   const [touched, setTouched] = useState<{ name: boolean; email: boolean; password: boolean; confirmPassword: boolean }>({
     name: false,
@@ -26,6 +28,15 @@ export default function RegisterPage() {
     password: '',
     confirmPassword: '',
   });
+  
+  // Get returnUrl from query params on mount
+  React.useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const returnUrlParam = params.get('returnUrl');
+    if (returnUrlParam) {
+      setReturnUrl(returnUrlParam);
+    }
+  }, []);
 
   const validateName = (name: string): string | undefined => {
     if (!name) return 'Name is required';
@@ -96,7 +107,10 @@ export default function RegisterPage() {
 
       if (response.success && response.data?.token) {
         auth.setToken(response.data.token);
-        router.push('/dashboard');
+        // Delay redirect slightly to ensure localStorage is set
+        setTimeout(() => {
+          router.push(returnUrl);
+        }, 100);
       } else {
         setError(response.error || 'Registration failed');
       }
@@ -108,8 +122,11 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="max-w-md mx-auto px-4 py-16">
-      <div className="card dark:bg-gray-800 dark:border-gray-700">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-purple-50 to-amber-50">
+      <Navbar />
+
+      <div className="max-w-md mx-auto px-4 pt-24 pb-16">
+        <div className="card dark:bg-gray-800 dark:border-gray-700">
         <h1 className="text-3xl font-bold mb-6 text-center dark:text-gray-100">Create Account</h1>
 
         {error && (
@@ -217,6 +234,7 @@ export default function RegisterPage() {
             Login
           </Link>
         </p>
+        </div>
       </div>
     </div>
   );

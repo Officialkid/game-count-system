@@ -148,10 +148,13 @@ export default function EventDetailPage() {
 
         {/* Event Header - Enhanced Layout */}
         <div
-          className="bg-gradient-to-br rounded-2xl shadow-lg p-8 mb-8 border-t-4 overflow-hidden relative"
+          className="bg-gradient-to-br rounded-3xl shadow-2xl p-8 mb-8 border-t-4 overflow-hidden relative backdrop-blur-xl"
           style={{
-            background: `linear-gradient(135deg, ${palette!.primary}05 0%, ${palette!.accent}05 100%)`,
+            background: `linear-gradient(135deg, rgba(${palette!.primaryRGB}, 0.1) 0%, rgba(${palette!.accentRGB}, 0.08) 100%), rgba(255, 255, 255, 0.6)`,
             borderTopColor: palette!.primary,
+            boxShadow: `0 8px 32px 0 rgba(31, 38, 135, 0.37)`,
+            backdropFilter: 'blur(4px)',
+            border: '1px solid rgba(255, 255, 255, 0.18)',
           }}
         >
           {/* Decorative Background Elements */}
@@ -170,10 +173,10 @@ export default function EventDetailPage() {
                 />
               )}
               <div className="flex-1">
-                <h1 className="text-5xl font-black text-gray-900 mb-3">{event.event_name}</h1>
-                <div className="flex items-center space-x-4 flex-wrap gap-2">
-                  <Badge variant={event.status === 'active' ? 'success' : 'default'} className="px-4 py-2 text-base">
-                    {event.status || 'active'}
+                <h1 className="text-5xl md:text-6xl font-black bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent mb-4">{event.event_name}</h1>
+                <div className="flex items-center space-x-4 flex-wrap gap-3">
+                  <Badge variant={event.status === 'active' ? 'success' : 'default'} className="px-4 py-2 text-sm font-semibold shadow-md">
+                    {event.status === 'active' ? '🟢 Active' : '⚫ Inactive'}
                   </Badge>
                   
                   {/* Palette Preview */}
@@ -193,7 +196,7 @@ export default function EventDetailPage() {
             <div className="flex flex-col space-y-3">\n              <Button
                 onClick={() => setShowScoringModal(true)}
                 style={{ backgroundColor: palette!.primary }}
-                className="text-white font-bold py-3 px-6 rounded-xl text-lg shadow-lg hover:shadow-xl transition-all hover:scale-105"
+                className="text-white font-bold py-3 px-8 rounded-xl text-lg shadow-lg hover:shadow-2xl transition-all hover:scale-105 hover:-translate-y-1 duration-200 backdrop-blur-sm"
               >
                 ➕ Quick Add Score
               </Button>

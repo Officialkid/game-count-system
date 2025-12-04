@@ -6,6 +6,7 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { apiClient, auth } from '@/lib/api-client';
+import { Navbar } from '@/components/Navbar';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -17,18 +18,26 @@ export default function LoginPage() {
     password: false,
   });
   const [rememberMe, setRememberMe] = useState(false);
+  const [returnUrl, setReturnUrl] = useState('/dashboard');
   const [formData, setFormData] = useState({
     email: '',
     password: '',
   });
 
-  // Load saved credentials on mount
+  // Load saved credentials and returnUrl on mount
   React.useEffect(() => {
     const savedEmail = localStorage.getItem('remembered_email');
     const savedRemember = localStorage.getItem('remember_me');
     if (savedEmail && savedRemember === 'true') {
       setFormData({ ...formData, email: savedEmail });
       setRememberMe(true);
+    }
+    
+    // Get returnUrl from query params
+    const params = new URLSearchParams(window.location.search);
+    const returnUrlParam = params.get('returnUrl');
+    if (returnUrlParam) {
+      setReturnUrl(returnUrlParam);
     }
   }, []);
 
@@ -98,7 +107,10 @@ export default function LoginPage() {
           localStorage.removeItem('remember_me');
         }
         
-        router.push('/dashboard');
+        // Delay redirect slightly to ensure localStorage is set
+        setTimeout(() => {
+          router.push(returnUrl);
+        }, 100);
       } else {
         setError(response.error || 'Login failed');
       }
@@ -110,8 +122,11 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="max-w-md mx-auto px-4 py-16">
-      <div className="card dark:bg-gray-800 dark:border-gray-700">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-purple-50 to-amber-50">
+      <Navbar />
+
+      <div className="max-w-md mx-auto px-4 pt-24 pb-16">
+        <div className="card dark:bg-gray-800 dark:border-gray-700">
         <h1 className="text-3xl font-bold mb-6 text-center dark:text-gray-100">Login</h1>
 
         {error && (
@@ -199,6 +214,7 @@ export default function LoginPage() {
             Register
           </Link>
         </p>
+        </div>
       </div>
     </div>
   );

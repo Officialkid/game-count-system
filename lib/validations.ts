@@ -16,6 +16,8 @@ export const loginSchema = z.object({
 // Event validation schemas
 export const createEventSchema = z.object({
   event_name: z.string().min(3, 'Event name must be at least 3 characters').max(255),
+  start_date: z.string().nullable().optional(),
+  end_date: z.string().nullable().optional(),
   theme_color: z.string().min(1).max(50).optional().default('purple'), // Color palette ID
   logo_url: z.string().url('Invalid URL').max(500).nullable().optional(),
   allow_negative: z.boolean().optional().default(false),

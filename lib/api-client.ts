@@ -98,7 +98,11 @@ export const apiClient = {
       body: JSON.stringify({ name, email, password }),
       credentials: 'include',
     });
-    return res.json() as Promise<ApiResponse>;
+    const data = await res.json();
+    if (!res.ok && !data.success) {
+      return { success: false, error: data.error || 'Registration failed' };
+    }
+    return data as ApiResponse;
   },
 
   async login(email: string, password: string) {
@@ -108,7 +112,11 @@ export const apiClient = {
       body: JSON.stringify({ email, password }),
       credentials: 'include',
     });
-    return res.json() as Promise<ApiResponse>;
+    const data = await res.json();
+    if (!res.ok && !data.success) {
+      return { success: false, error: data.error || 'Login failed' };
+    }
+    return data as ApiResponse;
   },
 
   async createEvent(token: string, event_name: string) {

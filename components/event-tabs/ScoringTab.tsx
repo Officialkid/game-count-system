@@ -69,7 +69,8 @@ export function ScoringTab({ eventId, event }: ScoringTabProps) {
 
       if (!response.ok) throw new Error('Failed to load teams');
       const data = await response.json();
-      setTeams(data.teams || []);
+      // API returns { success: true, data: { teams: [...] } }
+      setTeams(data.data?.teams || data.teams || []);
     } catch (error) {
       console.error('Error loading teams:', error);
       showToast('Failed to load teams', 'error');

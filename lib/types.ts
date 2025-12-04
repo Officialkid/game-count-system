@@ -18,6 +18,9 @@ export interface Event {
   allow_negative?: boolean;
   display_mode?: 'cumulative' | 'per_day';
   num_teams?: number;
+  start_date?: string | null;
+  end_date?: string | null;
+  status?: 'active' | 'inactive';
 }
 
 export interface AuditLog {
