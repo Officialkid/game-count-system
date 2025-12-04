@@ -27,6 +27,9 @@ async function sql(strings: TemplateStringsArray, ...values: any[]) {
   }
 }
 
+// Export pool for direct database access (used by templates route)
+export { pool };
+
 export const db = {
   // User queries
   async createUser(name: string, email: string, passwordHash: string) {
