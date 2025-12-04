@@ -1,0 +1,274 @@
+/* Global CSS Theme for Jewels Mentorship Bootcamp Challenges System */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Light mode (default) */
+  --background: #f9fafb;
+  --foreground: #111827;
+  --primary-color: #6b46c1; /* jewel purple - main brand */
+  --primary-500: #6b46c1;
+  --primary-600: #6b46c1; /* Match 500 for consistency */
+  --accent-500: #f59e0b;  /* amber */
+  --success-500: #10b981; /* green */
+  --error-500: #ef4444;   /* red */
+  --warning-500: #f59e0b; /* amber */
+  
+  /* Dynamic theme variables (can be overridden per event) */
+  --event-theme-color: var(--primary-color);
+  --event-theme-foreground: #ffffff;
+  --event-theme-muted: rgba(107, 70, 193, 0.12);
+  --event-logo-url: none;
+}
+
+/* Dark mode variables */
+.dark {
+  --background: #111827;
+  --foreground: #f9fafb;
+  --primary-color: #8b5cf6; /* Lighter purple for dark mode */
+  --primary-500: #8b5cf6;
+  --primary-600: #8b5cf6;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+@layer base {
+  body {
+    background: var(--background);
+    color: var(--foreground);
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+}
+
+@layer components {
+  /* Enhanced Button Styles */
+  .btn-primary {
+    @apply px-4 py-2 rounded-lg font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed;
+    background-color: var(--primary-500);
+    color: white;
+  }
+  
+  .btn-primary:hover:not(:disabled) {
+    filter: brightness(1.1);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(107, 70, 193, 0.3);
+  }
+  
+  .btn-secondary {
+    @apply px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-all duration-200;
+  }
+  
+  .btn-accent {
+    @apply px-4 py-2 rounded-lg font-medium transition-all duration-200;
+    background-color: var(--accent-500);
+    color: white;
+  }
+  
+  .btn-accent:hover:not(:disabled) {
+    filter: brightness(1.1);
+  }
+  
+  /* Enhanced Input Styles */
+  .input-field {
+    @apply w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 transition-all duration-200;
+    focus-ring-color: var(--primary-500);
+  }
+  
+  .input-field:focus {
+    border-color: var(--primary-500);
+    box-shadow: 0 0 0 3px rgba(107, 70, 193, 0.1);
+  }
+  
+  /* Enhanced Card Styles */
+  .card {
+    @apply bg-white rounded-lg shadow-md p-6 transition-all duration-200;
+  }
+  
+  .card:hover {
+    @apply shadow-lg;
+  }
+  
+  .card-interactive {
+    @apply card cursor-pointer;
+  }
+  
+  .card-interactive:hover {
+    @apply shadow-xl;
+    transform: translateY(-2px);
+  }
+  
+  /* Theme-aware components */
+  .event-themed {
+    background-color: var(--event-theme-color);
+    color: var(--event-theme-foreground);
+  }
+  
+  .event-themed-text {
+    color: var(--event-theme-color);
+  }
+  
+  .event-themed-border {
+    border-color: var(--event-theme-color);
+  }
+
+  /* Sticky public scoreboard header */
+  .scoreboard-header {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background: var(--background);
+    backdrop-filter: saturate(180%) blur(8px);
+  }
+  
+  /* Loading skeleton */
+  .skeleton {
+    @apply animate-pulse bg-gray-200 rounded;
+  }
+  
+  /* Score animation */
+  @keyframes scoreUpdate {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.2); }
+    100% { transform: scale(1); }
+  }
+  
+  .score-update {
+    animation: scoreUpdate 0.3s ease-in-out;
+  }
+  
+  /* Confetti animation for leader */
+  @keyframes confetti {
+    0% { transform: translateY(0) rotate(0deg); opacity: 1; }
+    100% { transform: translateY(100vh) rotate(720deg); opacity: 0; }
+  }
+  
+  .confetti-piece {
+    animation: confetti 3s ease-in-out infinite;
+  }
+  
+  /* Smooth transitions */
+  .smooth-transition {
+    @apply transition-all duration-300 ease-in-out;
+  }
+  
+  /* Accessibility improvements */
+  .focus-visible:focus {
+    @apply outline-none ring-2 ring-offset-2;
+    ring-color: var(--primary-500);
+  }
+  
+  /* Badge styles */
+  .badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+  }
+  
+  .badge-success {
+    @apply bg-green-100 text-green-800;
+  }
+  
+  .badge-warning {
+    @apply bg-yellow-100 text-yellow-800;
+  }
+  
+  .badge-error {
+    @apply bg-red-100 text-red-800;
+  }
+  
+  .badge-primary {
+    background-color: rgba(107, 70, 193, 0.1);
+    color: var(--primary-500);
+  }
+  
+  /* Toast notifications */
+  .toast {
+    /* Replaced tailwind-animate utilities with safe transitions */
+    @apply fixed bottom-4 right-4 p-4 rounded-lg shadow-lg z-50 bg-white dark:bg-gray-800 transition-transform transition-opacity duration-300 ease-out;
+    transform: translateX(0);
+    opacity: 1;
+  }
+
+  /* Optional entering state; add class .toast-enter for slide-in */
+  .toast-enter {
+    transform: translateX(16px);
+    opacity: 0;
+  }
+  
+  .toast-success {
+    @apply bg-green-500 text-white;
+  }
+  
+  .toast-error {
+    @apply bg-red-500 text-white;
+  }
+  
+  .toast-info {
+    background-color: var(--primary-500);
+    color: white;
+  }
+}
+
+/* Responsive utilities */
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+  
+  .container-safe {
+    @apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-8;
+  }
+  
+  /* Gradient backgrounds */
+  .gradient-primary {
+    background: linear-gradient(135deg, var(--primary-500) 0%, #8b5cf6 100%);
+  }
+  
+  .gradient-accent {
+    background: linear-gradient(135deg, var(--accent-500) 0%, #fbbf24 100%);
+  }
+  
+  /* Glass morphism effect */
+  .glass {
+    background: rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+  }
+
+  /* Fade in animation for notifications */
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(-20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .animate-fade-in {
+    animation: fadeIn 0.3s ease-out;
+  }
+}
+
+/* Print styles */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  
+  .card {
+    box-shadow: none;
+    border: 1px solid #e5e7eb;
+  }
+}

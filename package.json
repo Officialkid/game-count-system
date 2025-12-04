@@ -1,0 +1,50 @@
+{
+  "name": "game-count-system",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "generate-secret": "tsx scripts/generate-jwt-secret.ts",
+    "check-db": "tsx scripts/check-database.ts",
+    "migrate": "tsx scripts/run-migration.ts"
+  },
+  "dependencies": {
+    "@types/pg": "^8.15.6",
+    "@vercel/postgres": "^0.5.1",
+    "bcrypt": "^5.1.1",
+    "cloudinary": "^2.8.0",
+    "dotenv": "^17.2.3",
+    "isomorphic-dompurify": "^2.33.0",
+    "jsonwebtoken": "^9.0.2",
+    "jspdf": "^3.0.4",
+    "jspdf-autotable": "^5.0.2",
+    "multer": "^2.0.2",
+    "nanoid": "^5.0.4",
+    "next": "^14.0.0",
+    "nodemailer": "^6.9.7",
+    "papaparse": "^5.5.3",
+    "pg": "^8.16.3",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-hot-toast": "^2.6.0",
+    "recharts": "^3.5.1",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@types/bcrypt": "^5.0.2",
+    "@types/jsonwebtoken": "^9.0.5",
+    "@types/node": "^20.10.0",
+    "@types/nodemailer": "^6.4.14",
+    "@types/papaparse": "^5.5.1",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "autoprefixer": "^10.4.16",
+    "postcss": "^8.4.32",
+    "tailwindcss": "^3.4.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.0"
+  }
+}
