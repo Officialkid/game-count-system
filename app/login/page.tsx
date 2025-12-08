@@ -78,7 +78,7 @@ export default function LoginPage() {
     return 'input-field border-green-500 dark:border-green-600 focus:ring-green-500 dark:focus:ring-green-600';
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();
     setLoading(true);
     setError('');
@@ -96,6 +96,7 @@ export default function LoginPage() {
     }
 
     try {
+      // Call login from auth context - it handles token storage internally
       await login(formData.email, formData.password);
 
       // Store or clear credentials based on Remember Me
@@ -112,7 +113,8 @@ export default function LoginPage() {
         router.push(returnUrl);
       }, 100);
     } catch (err: any) {
-      const friendly = getFriendlyError({ status: err?.status, message: err?.message, context: 'auth' });
+      const errorMessage = err instanceof Error ? err.message : 'Login failed';
+      const friendly = getFriendlyError({ status: err?.status, message: errorMessage, context: 'auth' });
       setError(`${friendly.title}: ${friendly.message}${friendly.suggestion ? ` — ${friendly.suggestion}` : ''}`);
     } finally {
       setLoading(false);
