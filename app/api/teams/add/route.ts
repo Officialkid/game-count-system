@@ -1,18 +1,12 @@
 // app/api/teams/add/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
-import { requireAuth } from '@/lib/middleware';
+import * as db from '@/lib/db';
+import { requireEventPermission } from '@/lib/middleware';
 import { addTeamSchema } from '@/lib/validations';
 import { sanitizeString } from '@/lib/sanitize';
 
 export async function POST(request: NextRequest) {
   try {
-    // Authenticate user
-    const authResult = requireAuth(request);
-    if (!authResult.authenticated) {
-      return authResult.error;
-    }
-
     const body = await request.json();
 
     // Validate input
@@ -28,10 +22,14 @@ export async function POST(request: NextRequest) {
     }
 
     const { event_id, team_name, avatar_url } = validation.data;
-    const { user } = authResult;
 
-    // SECURITY: Verify event ownership before adding team
-    const event = await db.getEventById(event_id);
+    // Check if user has permission to manage teams
+    const permissionResult = await requireEventPermission(request, event_id, 'canManageTeams');
+    if (!permissionResult.authenticated) return permissionResult.error;
+    const { user, role, newToken } = permissionResult;
+
+    // Verify event exists
+    const event = await db.db.getEventById(event_id);
     if (!event) {
       return NextResponse.json(
         {
@@ -42,29 +40,56 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (event.user_id !== user.userId) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'Unauthorized - You do not own this event',
-        },
-        { status: 403 }
-      );
-    }
-
     // Sanitize team name
     const sanitizedName = sanitizeString(team_name);
 
-    // Add team
-    const team = await db.createTeam(event_id, sanitizedName, avatar_url);
+    // VALIDATION: Check for duplicate team name (case-insensitive)
+    const isDuplicate = await db.db.isTeamNameDuplicate(event_id, sanitizedName);
+    if (isDuplicate) {
+      // Generate helpful suggestions
+      const suggestions = await db.db.generateTeamNameSuggestions(event_id, sanitizedName, 3);
+      
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'A team with this name already exists in this event',
+          suggestions,
+        },
+        { status: 409 }
+      );
+    }
 
-    return NextResponse.json(
+    // Add team
+    const team = await db.db.createTeam(event_id, sanitizedName, avatar_url);
+
+    // Log admin activity
+    const ipAddress = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || null;
+    const userAgent = request.headers.get('user-agent') || null;
+    await db.logAdminActivity(
+      event_id,
+      user.userId,
+      role,
+      'add_team',
+      'team',
+      team.id,
+      { team_name: sanitizedName, avatar_url },
+      ipAddress,
+      userAgent
+    );
+
+    const response = NextResponse.json(
       {
         success: true,
         data: { team },
       },
       { status: 201 }
     );
+
+    if (newToken) {
+      response.headers.set('X-Refreshed-Token', newToken);
+    }
+
+    return response;
   } catch (error: any) {
     console.error('Add team error:', error);
     

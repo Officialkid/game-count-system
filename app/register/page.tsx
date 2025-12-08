@@ -1,17 +1,20 @@
 // app/register/page.tsx
-// FIXED: Added validation visual feedback (red/green borders) and ARIA attributes (UI-DEBUG-REPORT Issue #6)
+// FIXED: Now uses centralized auth context for consistent registration flow
+// FIXED: Added validation visual feedback (red/green borders) and ARIA attributes
 // ENHANCED: Added real-time password validation with strength meter
 'use client';
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { apiClient, auth } from '@/lib/api-client';
+import { useAuth } from '@/lib/auth-context';
 import { PasswordInput } from '@/components';
 import { Navbar } from '@/components/Navbar';
+import { getFriendlyError } from '@/lib/error-messages';
 
 export default function RegisterPage() {
   const router = useRouter();
+  const { register, isLoading: authLoading } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [returnUrl, setReturnUrl] = useState('/dashboard');
@@ -99,23 +102,19 @@ export default function RegisterPage() {
     }
 
     try {
-      const response = await apiClient.register(
+      await register(
         formData.name,
         formData.email,
         formData.password
       );
 
-      if (response.success && response.data?.token) {
-        auth.setToken(response.data.token);
-        // Delay redirect slightly to ensure localStorage is set
-        setTimeout(() => {
-          router.push(returnUrl);
-        }, 100);
-      } else {
-        setError(response.error || 'Registration failed');
-      }
-    } catch (err) {
-      setError('An unexpected error occurred');
+      // Delay redirect slightly to ensure auth state is updated
+      setTimeout(() => {
+        router.push(returnUrl);
+      }, 100);
+    } catch (err: any) {
+      const friendly = getFriendlyError({ status: err?.status, message: err?.message, context: 'auth' });
+      setError(`${friendly.title}: ${friendly.message}${friendly.suggestion ? ` — ${friendly.suggestion}` : ''}`);
     } finally {
       setLoading(false);
     }

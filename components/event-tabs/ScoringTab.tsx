@@ -475,6 +475,7 @@ export function ScoringTab({ eventId, event }: ScoringTabProps) {
                 <Button
                   type="submit"
                   variant="primary"
+                  data-tour="add-score-button"
                   loading={submitting}
                   disabled={submitting}
                 >

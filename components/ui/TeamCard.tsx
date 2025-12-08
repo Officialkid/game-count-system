@@ -57,7 +57,7 @@ export function TeamCard({ rank, name, score, avatarUrl, highlight, paletteColor
             src={avatarUrl} 
             alt={name} 
             className="w-12 h-12 rounded-full object-cover ring-2 ring-offset-2 shadow-md"
-            style={{ ringColor: paletteColor }}
+            style={{ borderColor: paletteColor, outline: `2px solid ${paletteColor}` }}
           />
         ) : (
           <div 

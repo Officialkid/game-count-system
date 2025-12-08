@@ -24,12 +24,14 @@ export async function GET(request: NextRequest) {
         // Get all events for the user
         const events = await db.listEventsByUser(user.userId);
 
-        // Get share tokens for each event
+        // Get share tokens and team counts for each event
         return await Promise.all(
           events.map(async (event) => {
             const shareLink = await db.getShareLinkByEvent(event.id);
+            const teams = await db.listTeamsByEvent(event.id);
             return {
               ...event,
+              team_count: teams?.length || 0,
               share_token: shareLink?.token || null,
             };
           })

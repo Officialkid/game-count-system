@@ -206,6 +206,12 @@ export const apiClient = {
       body: JSON.stringify(data),
     }, retryOptions);
     
+    // Check for refreshed token in response headers
+    const refreshedToken = res.headers.get('X-Refreshed-Token');
+    if (refreshedToken) {
+      auth.setToken(refreshedToken);
+    }
+    
     return res;
   },
 
@@ -221,6 +227,12 @@ export const apiClient = {
     const res = await fetchWithRetry(`${API_BASE_URL}${endpoint}`, {
       headers,
     }, retryOptions);
+    
+    // Check for refreshed token in response headers
+    const refreshedToken = res.headers.get('X-Refreshed-Token');
+    if (refreshedToken) {
+      auth.setToken(refreshedToken);
+    }
     
     return res;
   },
@@ -238,6 +250,12 @@ export const apiClient = {
       method: 'DELETE',
       headers,
     }, retryOptions);
+    
+    // Check for refreshed token in response headers
+    const refreshedToken = res.headers.get('X-Refreshed-Token');
+    if (refreshedToken) {
+      auth.setToken(refreshedToken);
+    }
     
     return res;
   },
@@ -259,6 +277,12 @@ export const apiClient = {
       headers,
       body: JSON.stringify(data),
     }, retryOptions);
+    
+    // Check for refreshed token in response headers
+    const refreshedToken = res.headers.get('X-Refreshed-Token');
+    if (refreshedToken) {
+      auth.setToken(refreshedToken);
+    }
     
     return res;
   },

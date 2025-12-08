@@ -1,15 +1,18 @@
 // app/login/page.tsx
-// FIXED: Added validation visual feedback (red/green borders) and ARIA attributes (UI-DEBUG-REPORT Issue #6)
+// FIXED: Now uses centralized auth context for consistent login flow
+// FIXED: Added validation visual feedback (red/green borders) and ARIA attributes
 'use client';
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { apiClient, auth } from '@/lib/api-client';
+import { useAuth } from '@/lib/auth-context';
 import { Navbar } from '@/components/Navbar';
+import { getFriendlyError } from '@/lib/error-messages';
 
 export default function LoginPage() {
   const router = useRouter();
+  const { login, isLoading: authLoading } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({});
@@ -93,29 +96,24 @@ export default function LoginPage() {
     }
 
     try {
-      const response = await apiClient.login(formData.email, formData.password);
+      await login(formData.email, formData.password);
 
-      if (response.success && response.data?.token) {
-        auth.setToken(response.data.token);
-        
-        // Store or clear credentials based on Remember Me
-        if (rememberMe) {
-          localStorage.setItem('remembered_email', formData.email);
-          localStorage.setItem('remember_me', 'true');
-        } else {
-          localStorage.removeItem('remembered_email');
-          localStorage.removeItem('remember_me');
-        }
-        
-        // Delay redirect slightly to ensure localStorage is set
-        setTimeout(() => {
-          router.push(returnUrl);
-        }, 100);
+      // Store or clear credentials based on Remember Me
+      if (rememberMe) {
+        localStorage.setItem('remembered_email', formData.email);
+        localStorage.setItem('remember_me', 'true');
       } else {
-        setError(response.error || 'Login failed');
+        localStorage.removeItem('remembered_email');
+        localStorage.removeItem('remember_me');
       }
-    } catch (err) {
-      setError('An unexpected error occurred');
+      
+      // Delay redirect slightly to ensure auth state is updated
+      setTimeout(() => {
+        router.push(returnUrl);
+      }, 100);
+    } catch (err: any) {
+      const friendly = getFriendlyError({ status: err?.status, message: err?.message, context: 'auth' });
+      setError(`${friendly.title}: ${friendly.message}${friendly.suggestion ? ` — ${friendly.suggestion}` : ''}`);
     } finally {
       setLoading(false);
     }

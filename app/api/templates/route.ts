@@ -1,23 +1,19 @@
 // app/api/templates/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { db, auth } from '@/lib';
+import { db } from '@/lib';
+import { requireAuth } from '@/lib/middleware';
 
 /**
  * GET /api/templates
  * Fetch all templates for the current user
  */
 export async function GET(req: NextRequest) {
+  // Templates are available to all authenticated users (they can create their own)
+  const authResult = requireAuth(req);
+  if (!authResult.authenticated) return authResult.error;
+  const { user, newToken } = authResult;
+
   try {
-    const token = req.headers.get('authorization')?.replace('Bearer ', '');
-    if (!token) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const user = auth.verifyToken(token);
-    if (!user) {
-      return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
-    }
-
     const userId = user.userId;
     const client = await db.pool.connect();
     try {
@@ -38,7 +34,11 @@ export async function GET(req: NextRequest) {
         [userId]
       );
 
-      return NextResponse.json({ templates: templatesResult.rows });
+      const response = NextResponse.json({ templates: templatesResult.rows });
+      if (newToken) {
+        response.headers.set('X-Refreshed-Token', newToken);
+      }
+      return response;
     } finally {
       client.release();
     }
@@ -53,17 +53,11 @@ export async function GET(req: NextRequest) {
  * Create a new template from event configuration
  */
 export async function POST(req: NextRequest) {
+  const authResult = requireAuth(req);
+  if (!authResult.authenticated) return authResult.error;
+  const { user, newToken } = authResult;
+
   try {
-    const token = req.headers.get('authorization')?.replace('Bearer ', '');
-    if (!token) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const user = auth.verifyToken(token);
-    if (!user) {
-      return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
-    }
-
     const body = await req.json();
     const { template_name, event_name_prefix, theme_color, logo_url, allow_negative, display_mode } = body;
 
@@ -93,7 +87,11 @@ export async function POST(req: NextRequest) {
         ]
       );
 
-      return NextResponse.json({ template: insertResult.rows[0] }, { status: 201 });
+      const response = NextResponse.json({ template: insertResult.rows[0] }, { status: 201 });
+      if (newToken) {
+        response.headers.set('X-Refreshed-Token', newToken);
+      }
+      return response;
     } finally {
       client.release();
     }

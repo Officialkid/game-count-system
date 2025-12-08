@@ -27,8 +27,53 @@ export function AuthForm({ type, onSubmit, loading = false, error }: AuthFormPro
     password: '',
   });
 
+  const [fieldErrors, setFieldErrors] = useState<{ name?: string; email?: string; password?: string }>({});
+  const [touched, setTouched] = useState<{ name?: boolean; email?: boolean; password?: boolean }>({});
+
+  const validateName = (name?: string) => {
+    if (type === 'login') return undefined;
+    if (!name) return 'Name is required';
+    if (name.trim().length < 2) return 'Name must be at least 2 characters';
+    return undefined;
+  };
+
+  const validateEmail = (email?: string) => {
+    if (!email) return 'Email is required';
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return 'Enter a valid email address';
+    return undefined;
+  };
+
+  const validatePassword = (password?: string) => {
+    if (!password) return 'Password is required';
+    if (password.length < 8) return 'Password must be at least 8 characters';
+    return undefined;
+  };
+
+  const validateAll = () => {
+    const nextErrors = {
+      name: validateName(formData.name),
+      email: validateEmail(formData.email),
+      password: validatePassword(formData.password),
+    };
+
+    // Remove name check for login
+    if (type === 'login') delete nextErrors.name;
+
+    const hasError = Object.values(nextErrors).some(Boolean);
+    if (hasError) {
+      setFieldErrors(nextErrors);
+    } else {
+      setFieldErrors({});
+    }
+    return !hasError;
+  };
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    setTouched({ name: true, email: true, password: true });
+
+    if (!validateAll()) return;
+
     await onSubmit(formData);
   };
 
@@ -63,8 +108,13 @@ export function AuthForm({ type, onSubmit, loading = false, error }: AuthFormPro
               placeholder="John Doe"
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              onBlur={() => {
+                setTouched({ ...touched, name: true });
+                setFieldErrors({ ...fieldErrors, name: validateName(formData.name) });
+              }}
               required
               minLength={2}
+              error={touched.name ? fieldErrors.name : undefined}
             />
           )}
 
@@ -74,7 +124,12 @@ export function AuthForm({ type, onSubmit, loading = false, error }: AuthFormPro
             placeholder="you@example.com"
             value={formData.email}
             onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+            onBlur={() => {
+              setTouched({ ...touched, email: true });
+              setFieldErrors({ ...fieldErrors, email: validateEmail(formData.email) });
+            }}
             required
+            error={touched.email ? fieldErrors.email : undefined}
           />
 
           <Input
@@ -83,9 +138,16 @@ export function AuthForm({ type, onSubmit, loading = false, error }: AuthFormPro
             placeholder="••••••••"
             value={formData.password}
             onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+            onBlur={() => {
+              setTouched({ ...touched, password: true });
+              setFieldErrors({ ...fieldErrors, password: validatePassword(formData.password) });
+            }}
             required
             minLength={8}
-            helperText={isRegister ? 'Minimum 8 characters' : undefined}
+            helperText={
+              !fieldErrors.password && isRegister ? 'Minimum 8 characters' : undefined
+            }
+            error={touched.password ? fieldErrors.password : undefined}
           />
 
           <Button type="submit" fullWidth disabled={loading}>

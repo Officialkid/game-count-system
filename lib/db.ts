@@ -50,6 +50,26 @@ export const db = {
     return result.rows[0] || null;
   },
 
+  // Onboarding tutorial status
+  async getOnboardingStatus(userId: string) {
+    const result = await sql`
+      SELECT onboarding_completed, onboarding_step
+      FROM users
+      WHERE id = ${userId}
+    `;
+    return result.rows[0] || { onboarding_completed: false, onboarding_step: 0 };
+  },
+
+  async updateOnboardingStatus(userId: string, completed: boolean, step: number) {
+    const result = await sql`
+      UPDATE users
+      SET onboarding_completed = ${completed}, onboarding_step = ${step}
+      WHERE id = ${userId}
+      RETURNING onboarding_completed, onboarding_step
+    `;
+    return result.rows[0];
+  },
+
   async findUserById(id: string) {
     const result = await sql`
       SELECT id, name, email, created_at
@@ -71,11 +91,10 @@ export const db = {
     startDate: string | null = null,
     endDate: string | null = null
   ) {
-    // TODO: Re-enable start_date and end_date after running migration 001_add_event_dates.sql on Render
     const result = await sql`
-      INSERT INTO events (user_id, event_name, theme_color, logo_url, allow_negative, display_mode, num_teams)
-      VALUES (${userId}, ${eventName}, ${themeColor}, ${logoUrl}, ${allowNegative}, ${displayMode}, ${numTeams})
-      RETURNING id, user_id, event_name, created_at, theme_color, logo_url, allow_negative, display_mode, num_teams
+      INSERT INTO events (user_id, event_name, theme_color, logo_url, allow_negative, display_mode, num_teams, start_date, end_date)
+      VALUES (${userId}, ${eventName}, ${themeColor}, ${logoUrl}, ${allowNegative}, ${displayMode}, ${numTeams}, ${startDate || null}, ${endDate || null})
+      RETURNING id, user_id, event_name, created_at, theme_color, logo_url, allow_negative, display_mode, num_teams, start_date, end_date
     `;
     return result.rows[0];
   },
@@ -92,17 +111,17 @@ export const db = {
     }
   ) {
     // Hardened: Use parameterized queries to prevent SQL injection
-    const setClauses = [];
-    const values = [eventId];
+    const setClauses: string[] = [];
+    const values: any[] = [eventId];
     let paramIndex = 2;
 
     if (updates.event_name !== undefined) {
       setClauses.push(`event_name = $${paramIndex++}`);
       values.push(updates.event_name);
     }
-    if (updates.brand_color !== undefined) {
+    if (updates.theme_color !== undefined) {
       setClauses.push(`brand_color = $${paramIndex++}`);
-      values.push(updates.brand_color);
+      values.push(updates.theme_color);
     }
     if (updates.logo_url !== undefined) {
       setClauses.push(`logo_url = $${paramIndex++}`);
@@ -131,13 +150,21 @@ export const db = {
       WHERE id = $1
       RETURNING id, user_id, event_name, created_at, brand_color, logo_url, allow_negative, display_mode, num_teams
     `;
-    const result = await sql.query(query, values);
-    return result.rows[0] || null;
+    const client = await pool.connect();
+    try {
+      const result = await client.query(query, values);
+      return result.rows[0] || null;
+    } finally {
+      client.release();
+    }
   },
 
   async listEventsByUser(userId: string) {
     const result = await sql`
-      SELECT id, user_id, event_name, created_at, brand_color, logo_url, allow_negative, display_mode, num_teams
+      SELECT id, user_id, event_name, created_at, brand_color, logo_url, allow_negative, display_mode, num_teams,
+        COALESCE(start_date, null) as start_date,
+        COALESCE(end_date, null) as end_date,
+        COALESCE(status, 'inactive') as status
       FROM events
       WHERE user_id = ${userId}
       ORDER BY created_at DESC
@@ -147,7 +174,10 @@ export const db = {
 
   async getEventById(eventId: string) {
     const result = await sql`
-      SELECT id, user_id, event_name, created_at, brand_color, logo_url, allow_negative, display_mode, num_teams
+      SELECT id, user_id, event_name, created_at, brand_color, logo_url, allow_negative, display_mode, num_teams,
+        COALESCE(start_date, null) as start_date,
+        COALESCE(end_date, null) as end_date,
+        COALESCE(status, 'inactive') as status
       FROM events
       WHERE id = ${eventId}
     `;
@@ -181,6 +211,64 @@ export const db = {
       WHERE id = ${teamId}
     `;
     return result.rows[0] || null;
+  },
+
+  // Check if team name already exists in event (case-insensitive)
+  async isTeamNameDuplicate(eventId: string, teamName: string): Promise<boolean> {
+    const result = await sql`
+      SELECT COUNT(*) as count
+      FROM teams
+      WHERE event_id = ${eventId}
+      AND LOWER(team_name) = LOWER(${teamName})
+    `;
+    return parseInt(result.rows[0].count) > 0;
+  },
+
+  // Generate alternative team name suggestions
+  async generateTeamNameSuggestions(eventId: string, baseName: string, count: number = 3): Promise<string[]> {
+    const suggestions: string[] = [];
+    
+    // Get existing team names for this event
+    const result = await sql`
+      SELECT team_name
+      FROM teams
+      WHERE event_id = ${eventId}
+    `;
+    const existingNames = result.rows.map(row => row.team_name.toLowerCase());
+    
+    // Strategy 1: Append numbers (Team 2, Team 3, etc.)
+    for (let i = 2; i <= 20; i++) {
+      const suggestion = `${baseName} ${i}`;
+      if (!existingNames.includes(suggestion.toLowerCase())) {
+        suggestions.push(suggestion);
+        if (suggestions.length >= count) break;
+      }
+    }
+    
+    // Strategy 2: Append with parentheses if still need more
+    if (suggestions.length < count) {
+      for (let i = 2; i <= 20; i++) {
+        const suggestion = `${baseName} (${i})`;
+        if (!existingNames.includes(suggestion.toLowerCase())) {
+          suggestions.push(suggestion);
+          if (suggestions.length >= count) break;
+        }
+      }
+    }
+    
+    // Strategy 3: Append descriptive suffixes
+    if (suggestions.length < count) {
+      const suffixes = ['Alpha', 'Beta', 'Gamma', 'Prime', 'Plus', 'Pro', 'Elite', 'Max'];
+      for (const suffix of suffixes) {
+        const suggestion = `${baseName} ${suffix}`;
+        if (!existingNames.includes(suggestion.toLowerCase())) {
+          suggestions.push(suggestion);
+          if (suggestions.length >= count) break;
+        }
+      }
+    }
+    
+    return suggestions.slice(0, count);
   },
 
   // Game score queries
@@ -298,26 +386,6 @@ export const db = {
       RETURNING id
     `;
     return result.rows[0] || null;
-  },
-
-  async upsertGameScore(
-    eventId: string,
-    teamId: string,
-    gameNumber: number,
-    points: number,
-    submissionId?: string
-  ) {
-    const result = await sql`
-      INSERT INTO game_scores (event_id, team_id, game_number, points, submission_id)
-      VALUES (${eventId}, ${teamId}, ${gameNumber}, ${points}, ${submissionId || null})
-      ON CONFLICT (event_id, team_id, game_number)
-      DO UPDATE SET 
-        points = EXCLUDED.points,
-        edited_at = CURRENT_TIMESTAMP,
-        submission_id = COALESCE(EXCLUDED.submission_id, game_scores.submission_id)
-      RETURNING id, event_id, team_id, game_number, points, created_at, edited_at, submission_id
-    `;
-    return result.rows[0];
   },
 
   async getGameHistory(
@@ -771,4 +839,326 @@ export async function getTemplateById(templateId: number, userId: number) {
     WHERE template_id = ${templateId} AND user_id = ${userId}
   `;
   return result.rows[0] || null;
+}
+
+// ========================================
+// ADMIN MANAGEMENT METHODS
+// ========================================
+
+/**
+ * Check if user has admin access to an event and return their role
+ */
+export async function getAdminRole(eventId: string, userId: string): Promise<string | null> {
+  const result = await sql`
+    SELECT role FROM event_admins
+    WHERE event_id = ${eventId} AND user_id = ${userId}
+  `;
+  return result.rows[0]?.role || null;
+}
+
+/**
+ * Get admin permissions based on role
+ */
+export function getAdminPermissions(role: string | null): any {
+  if (!role) {
+    return {
+      canManageAdmins: false,
+      canEditEvent: false,
+      canDeleteEvent: false,
+      canManageTeams: false,
+      canAddScores: false,
+      canEditScores: false,
+      canDeleteScores: false,
+      canManageSharing: false,
+      canExportData: false,
+      canViewActivityLog: false,
+    };
+  }
+
+  const basePermissions = {
+    canManageAdmins: false,
+    canEditEvent: false,
+    canDeleteEvent: false,
+    canManageTeams: false,
+    canAddScores: false,
+    canEditScores: false,
+    canDeleteScores: false,
+    canManageSharing: false,
+    canExportData: false,
+    canViewActivityLog: false,
+  };
+
+  switch (role) {
+    case 'owner':
+      return {
+        canManageAdmins: true,
+        canEditEvent: true,
+        canDeleteEvent: true,
+        canManageTeams: true,
+        canAddScores: true,
+        canEditScores: true,
+        canDeleteScores: true,
+        canManageSharing: true,
+        canExportData: true,
+        canViewActivityLog: true,
+      };
+    case 'admin':
+      return {
+        ...basePermissions,
+        canManageAdmins: false,
+        canEditEvent: true,
+        canManageTeams: true,
+        canAddScores: true,
+        canEditScores: true,
+        canDeleteScores: true,
+        canManageSharing: true,
+        canExportData: true,
+        canViewActivityLog: true,
+      };
+    case 'judge':
+      return {
+        ...basePermissions,
+        canAddScores: true,
+        canEditScores: true,
+        canExportData: true,
+      };
+    case 'scorer':
+      return {
+        ...basePermissions,
+        canAddScores: true,
+        canExportData: true,
+      };
+    default:
+      return basePermissions;
+  }
+}
+
+/**
+ * List all admins for an event with user details
+ */
+export async function listEventAdmins(eventId: string): Promise<any[]> {
+  const result = await sql`
+    SELECT 
+      ea.id,
+      ea.event_id,
+      ea.user_id,
+      ea.role,
+      ea.invited_by,
+      ea.invited_at,
+      ea.accepted_at,
+      ea.created_at,
+      ea.updated_at,
+      u.name as user_name,
+      u.email as user_email
+    FROM event_admins ea
+    JOIN users u ON ea.user_id = u.id
+    WHERE ea.event_id = ${eventId}
+    ORDER BY 
+      CASE ea.role 
+        WHEN 'owner' THEN 1
+        WHEN 'admin' THEN 2
+        WHEN 'judge' THEN 3
+        WHEN 'scorer' THEN 4
+      END,
+      ea.created_at ASC
+  `;
+  return result.rows;
+}
+
+/**
+ * Add a new admin to an event
+ */
+export async function addEventAdmin(
+  eventId: string,
+  userId: string,
+  role: string,
+  invitedBy: string
+): Promise<any> {
+  const result = await sql`
+    INSERT INTO event_admins (event_id, user_id, role, invited_by, accepted_at)
+    VALUES (${eventId}, ${userId}, ${role}, ${invitedBy}, CURRENT_TIMESTAMP)
+    RETURNING *
+  `;
+  return result.rows[0];
+}
+
+/**
+ * Remove an admin from an event
+ */
+export async function removeEventAdmin(eventId: string, userId: string): Promise<boolean> {
+  const result = await sql`
+    DELETE FROM event_admins
+    WHERE event_id = ${eventId} AND user_id = ${userId} AND role != 'owner'
+    RETURNING id
+  `;
+  return (result.rowCount ?? 0) > 0;
+}
+
+/**
+ * Create an admin invitation
+ */
+export async function createAdminInvitation(
+  eventId: string,
+  inviterId: string,
+  inviteeEmail: string,
+  role: string,
+  token: string,
+  expiresAt: Date
+): Promise<any> {
+  const result = await sql`
+    INSERT INTO admin_invitations (
+      event_id, inviter_id, invitee_email, role, token, expires_at
+    )
+    VALUES (${eventId}, ${inviterId}, ${inviteeEmail}, ${role}, ${token}, ${expiresAt.toISOString()})
+    RETURNING *
+  `;
+  return result.rows[0];
+}
+
+/**
+ * Get invitation by token
+ */
+export async function getInvitationByToken(token: string): Promise<any | null> {
+  const result = await sql`
+    SELECT 
+      ai.*,
+      u.name as inviter_name,
+      e.event_name
+    FROM admin_invitations ai
+    JOIN users u ON ai.inviter_id = u.id
+    JOIN events e ON ai.event_id = e.id
+    WHERE ai.token = ${token}
+  `;
+  return result.rows[0] || null;
+}
+
+/**
+ * Accept an admin invitation
+ */
+export async function acceptAdminInvitation(
+  invitationId: string,
+  userId: string
+): Promise<any> {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // Update invitation status
+    await client.query(
+      `UPDATE admin_invitations 
+       SET status = 'accepted', accepted_at = CURRENT_TIMESTAMP, invitee_user_id = $1
+       WHERE id = $2`,
+      [userId, invitationId]
+    );
+
+    // Get invitation details
+    const invResult = await client.query(
+      'SELECT event_id, role, inviter_id FROM admin_invitations WHERE id = $1',
+      [invitationId]
+    );
+    const invitation = invResult.rows[0];
+
+    // Add user as admin
+    await client.query(
+      `INSERT INTO event_admins (event_id, user_id, role, invited_by, accepted_at)
+       VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
+       ON CONFLICT (event_id, user_id) DO NOTHING`,
+      [invitation.event_id, userId, invitation.role, invitation.inviter_id]
+    );
+
+    await client.query('COMMIT');
+    return invitation;
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * List pending invitations for an event
+ */
+export async function listEventInvitations(eventId: string): Promise<any[]> {
+  const result = await sql`
+    SELECT 
+      ai.*,
+      u.name as inviter_name
+    FROM admin_invitations ai
+    JOIN users u ON ai.inviter_id = u.id
+    WHERE ai.event_id = ${eventId} AND ai.status = 'pending' AND ai.expires_at > CURRENT_TIMESTAMP
+    ORDER BY ai.created_at DESC
+  `;
+  return result.rows;
+}
+
+/**
+ * Revoke an invitation
+ */
+export async function revokeInvitation(invitationId: string): Promise<boolean> {
+  const result = await sql`
+    UPDATE admin_invitations
+    SET status = 'revoked'
+    WHERE id = ${invitationId} AND status = 'pending'
+    RETURNING id
+  `;
+  return (result.rowCount ?? 0) > 0;
+}
+
+/**
+ * Log admin activity
+ */
+export async function logAdminActivity(
+  eventId: string,
+  adminId: string,
+  adminRole: string,
+  action: string,
+  targetType: string | null,
+  targetId: string | null,
+  details: any,
+  ipAddress: string | null,
+  userAgent: string | null
+): Promise<void> {
+  await sql`
+    INSERT INTO admin_activity_log (
+      event_id, admin_id, admin_role, action, target_type, target_id, details, ip_address, user_agent
+    )
+    VALUES (
+      ${eventId}, ${adminId}, ${adminRole}, ${action}, ${targetType}, ${targetId},
+      ${details ? JSON.stringify(details) : null}, ${ipAddress}, ${userAgent}
+    )
+  `;
+}
+
+/**
+ * Get activity log for an event
+ */
+export async function getEventActivityLog(
+  eventId: string,
+  options: { page?: number; limit?: number } = {}
+): Promise<{ logs: any[]; total: number }> {
+  const { page = 1, limit = 50 } = options;
+  const offset = (page - 1) * limit;
+
+  const countResult = await sql`
+    SELECT COUNT(*) as total
+    FROM admin_activity_log
+    WHERE event_id = ${eventId}
+  `;
+
+  const result = await sql`
+    SELECT 
+      aal.*,
+      u.name as admin_name
+    FROM admin_activity_log aal
+    JOIN users u ON aal.admin_id = u.id
+    WHERE aal.event_id = ${eventId}
+    ORDER BY aal.created_at DESC
+    LIMIT ${limit} OFFSET ${offset}
+  `;
+
+  return {
+    logs: result.rows,
+    total: parseInt(countResult.rows[0].total, 10),
+  };
 }

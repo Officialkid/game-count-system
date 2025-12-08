@@ -1,0 +1,11 @@
+{
+  "buildCommand": "npm run build",
+  "devCommand": "npm run dev",
+  "installCommand": "npm ci",
+  "crons": [
+    {
+      "path": "/api/cron/update-event-statuses",
+      "schedule": "0 0 * * *"
+    }
+  ]
+}

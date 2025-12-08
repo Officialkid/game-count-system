@@ -12,7 +12,11 @@ export interface ToastMessage {
 }
 
 interface ToastContextType {
-  showToast: (message: string, type?: ToastMessage['type'], duration?: number) => void;
+  showToast: (
+    message: string,
+    type?: ToastMessage['type'],
+    options?: { duration?: number; learnMoreHref?: string }
+  ) => void;
 }
 
 const ToastContext = createContext<ToastContextType | undefined>(undefined);
@@ -24,63 +28,58 @@ export function useToast() {
 }
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {
-  const showToast = (message: string, type: ToastMessage['type'] = 'info', duration = 3000) => {
-    const toastOptions = {
-      duration,
-      style: {
-        borderRadius: '8px',
-        fontWeight: '500',
-      },
+  const showToast = (
+    message: string,
+    type: ToastMessage['type'] = 'info',
+    options: { duration?: number; learnMoreHref?: string } = {}
+  ) => {
+    const { duration, learnMoreHref } = options;
+    const content = (
+      <div className="flex flex-col gap-1">
+        <span>{message}</span>
+        {learnMoreHref && (
+          <a
+            href={learnMoreHref}
+            className="underline text-white/90 text-xs"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Learn more
+          </a>
+        )}
+      </div>
+    );
+
+    const sharedStyle = {
+      borderRadius: '12px',
+      fontWeight: 600,
+      whiteSpace: 'pre-line' as const,
+      boxShadow: '0 8px 30px rgba(0,0,0,0.12)',
+      padding: '14px 16px',
     };
 
-    switch (type) {
-      case 'success':
-        toast.success(message, {
-          ...toastOptions,
-          icon: '✅',
-          style: {
-            ...toastOptions.style,
-            background: '#10B981',
-            color: '#fff',
-          },
-        });
-        break;
-      case 'error':
-        toast.error(message, {
-          ...toastOptions,
-          duration: 4000,
-          icon: '❌',
-          style: {
-            ...toastOptions.style,
-            background: '#EF4444',
-            color: '#fff',
-          },
-        });
-        break;
-      case 'warning':
-        toast(message, {
-          ...toastOptions,
-          icon: '⚠️',
-          style: {
-            ...toastOptions.style,
-            background: '#F59E0B',
-            color: '#fff',
-          },
-        });
-        break;
-      case 'info':
-      default:
-        toast(message, {
-          ...toastOptions,
-          icon: 'ℹ️',
-          style: {
-            ...toastOptions.style,
-            background: '#3B82F6',
-            color: '#fff',
-          },
-        });
-        break;
-    }
+    const byType: Record<ToastMessage['type'], { icon: string; background: string; duration: number }> = {
+      success: { icon: '✅', background: '#10B981', duration: 5000 },
+      error: { icon: '❌', background: '#EF4444', duration: 8000 },
+      warning: { icon: '⚠️', background: '#F59E0B', duration: 6000 },
+      info: { icon: 'ℹ️', background: '#3B82F6', duration: 5000 },
+    };
+
+    const style = {
+      ...sharedStyle,
+      background: byType[type].background,
+      color: '#fff',
+    };
+
+    const toastOptions = {
+      duration: duration ?? byType[type].duration,
+      style,
+      icon: byType[type].icon,
+    };
+
+    if (type === 'success') return toast.success(content, toastOptions);
+    if (type === 'error') return toast.error(content, toastOptions);
+    return toast(content, toastOptions);
   };
 
   return (
@@ -89,10 +88,13 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
       <Toaster
         position="bottom-right"
         toastOptions={{
-          duration: 3000,
+          duration: 5000,
           style: {
-            background: '#363636',
+            background: '#3B82F6',
             color: '#fff',
+            borderRadius: '12px',
+            whiteSpace: 'pre-line',
+            boxShadow: '0 8px 30px rgba(0,0,0,0.12)',
           },
         }}
       />

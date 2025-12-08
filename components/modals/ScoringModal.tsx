@@ -7,6 +7,7 @@ import { useToast } from '@/components/ui/Toast';
 import { soundManager } from '@/lib/sound';
 import { triggerConfetti } from '@/lib/confetti';
 import { getPaletteById } from '@/lib/color-palettes';
+import { getFriendlyError } from '@/lib/error-messages';
 
 interface Team {
   id: number;
@@ -19,9 +20,10 @@ interface ScoringModalProps {
   isOpen: boolean;
   onClose: () => void;
   event?: { theme_color?: string };
+  onScoreAdded?: () => void;
 }
 
-export function ScoringModal({ eventId, isOpen, onClose, event }: ScoringModalProps) {
+export function ScoringModal({ eventId, isOpen, onClose, event, onScoreAdded }: ScoringModalProps) {
   const [teams, setTeams] = useState<Team[]>([]);
   const [selectedTeamId, setSelectedTeamId] = useState<string>('');
   const [gameNumber, setGameNumber] = useState<string>('');
@@ -50,33 +52,104 @@ export function ScoringModal({ eventId, isOpen, onClose, event }: ScoringModalPr
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedTeamId || !gameNumber || !points) {
-      showToast('Please fill in all fields', 'warning');
+    
+    // Client-side validation
+    if (!selectedTeamId) {
+      showToast('Please select a team', 'warning');
       return;
     }
+    if (!gameNumber || parseInt(gameNumber) < 1) {
+      showToast('Please enter a valid game number (1+)', 'warning');
+      return;
+    }
+    if (!points || isNaN(parseInt(points))) {
+      showToast('Please enter a valid score', 'warning');
+      return;
+    }
+    
+    const pointsValue = parseInt(points);
+    if (pointsValue < -1000 || pointsValue > 1000) {
+      showToast('Score must be between -1000 and 1000', 'warning');
+      return;
+    }
+    
     const token = localStorage.getItem('token');
+    if (!token) {
+      showToast('Authentication token missing. Please log in again.', 'error');
+      return;
+    }
+    
     setSubmitting(true);
-    const res = await fetch(`/api/events/${eventId}/scores`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-      body: JSON.stringify({ team_id: parseInt(selectedTeamId), game_number: parseInt(gameNumber), points: parseInt(points), game_name: gameName || null }),
-    });
-    setSubmitting(false);
-    if (res.ok) {
-      const team = teams.find(t => t.id === parseInt(selectedTeamId));
-      showToast(`Added ${points} to ${team?.team_name || 'team'}`, 'success');
-      soundManager?.playSuccess();
+    try {
+      const res = await fetch(`/api/events/${eventId}/scores`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ 
+          team_id: parseInt(selectedTeamId), 
+          game_number: parseInt(gameNumber), 
+          points: pointsValue, 
+          game_name: gameName || null 
+        }),
+      });
       
-      const confettiEnabled = localStorage.getItem('confetti_enabled');
-      if (parseInt(points) >= 50 && (confettiEnabled === null || confettiEnabled === 'true')) {
-        triggerConfetti();
+      const data = await res.json();
+      
+      if (res.ok && data.success) {
+        const team = teams.find(t => t.id === parseInt(selectedTeamId));
+        showToast(`✓ Added ${pointsValue} to ${team?.team_name || 'team'}`, 'success');
+        soundManager?.playSuccess();
+        
+        const confettiEnabled = localStorage.getItem('confetti_enabled');
+        if (Math.abs(pointsValue) >= 50 && (confettiEnabled === null || confettiEnabled === 'true')) {
+          triggerConfetti();
+        }
+        
+        setSelectedTeamId('');
+        setGameNumber('');
+        setGameName('');
+        setPoints('');
+        
+        // Notify parent to refresh team scores in real-time
+        if (onScoreAdded) {
+          onScoreAdded();
+        }
+        
+        onClose();
+      } else {
+        // Extract error message from response
+        const errorMsg = data.error?.message || data.message || 'Failed to add score';
+        const errorCode = data.error?.code || 'UNKNOWN';
+
+        const friendly = getFriendlyError({
+          status: res.status,
+          code: errorCode,
+          message: errorMsg,
+          context: 'score',
+        });
+
+        const combined = friendly.suggestion
+          ? `${friendly.message}\n${friendly.suggestion}`
+          : friendly.message;
+
+        showToast(combined, friendly.type === 'warning' ? 'warning' : 'error', {
+          learnMoreHref: friendly.learnMoreHref,
+          duration: friendly.type === 'warning' ? 6000 : 8000,
+        });
+        
+        console.error('Score submission error:', { status: res.status, errorCode, errorMsg });
+        soundManager?.playError();
       }
-      
-      setSelectedTeamId(''); setGameNumber(''); setGameName(''); setPoints('');
-      onClose();
-    } else {
-      showToast('Failed to add score', 'error');
+    } catch (error) {
+      console.error('Network error during score submission:', error);
+      showToast('Network error. Please check your connection and try again.', 'error', {
+        learnMoreHref: '/docs/troubleshooting',
+      });
       soundManager?.playError();
+    } finally {
+      setSubmitting(false);
     }
   };
 

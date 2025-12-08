@@ -1,7 +1,7 @@
 // app/api/scores/add/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
-import { requireAuth } from '@/lib/middleware';
+import * as db from '@/lib/db';
+import { requireEventPermission } from '@/lib/middleware';
 import { addScoreSchema } from '@/lib/validations';
 import { APIErrorCode } from '@/lib/errors';
 import { rateLimit } from '@/lib/rate-limiter';
@@ -13,14 +13,7 @@ export async function POST(request: NextRequest) {
   const rateLimitResponse = rateLimit(request, 5, 60000);
   if (rateLimitResponse) return rateLimitResponse;
   try {
-    // Authenticate user
-    const authResult = requireAuth(request);
-    if (!authResult.authenticated) {
-      return authResult.error;
-    }
-    const { user } = authResult;
-
-    // Parse and validate request body
+    // Parse and validate request body first to get event_id
     const body = await request.json();
     // Sanitize all string inputs
     if (body.event_id) body.event_id = sanitizeString(body.event_id, 64);
@@ -38,8 +31,13 @@ export async function POST(request: NextRequest) {
     }
     const { event_id, team_id, game_number, points, submission_id } = validation.data;
 
-    // Verify event exists and belongs to user
-    const event = await db.getEventById(event_id);
+    // Check if user has permission to add scores
+    const permissionResult = await requireEventPermission(request, event_id, 'canAddScores');
+    if (!permissionResult.authenticated) return permissionResult.error;
+    const { user, role, newToken } = permissionResult;
+
+    // Verify event exists
+    const event = await db.db.getEventById(event_id);
     if (!event) {
       return NextResponse.json({
         success: false,
@@ -50,18 +48,9 @@ export async function POST(request: NextRequest) {
         },
       }, { status: 404 });
     }
-    if (event.user_id !== user.userId) {
-      return NextResponse.json({
-        success: false,
-        error: {
-          code: APIErrorCode.FORBIDDEN,
-          message: 'Unauthorized - Event does not belong to user',
-        },
-      }, { status: 403 });
-    }
 
-    // Verify team exists and belongs to event
-    const team = await db.getTeamById(team_id);
+    // Verify team exists and belongs to the event
+    const team = await db.db.getTeamById(team_id);
     if (!team) {
       return NextResponse.json({
         success: false,
@@ -94,19 +83,29 @@ export async function POST(request: NextRequest) {
     }
 
     // Inline existingScoreCheck logic
-    const existing = await db.getScoresByTeam(team_id);
-    const wasUpdated = existing.some(s => s.game_number === game_number);
+    const existing = await db.db.getScoresByTeam(team_id);
+    const wasUpdated = existing.some((s: any) => s.game_number === game_number);
 
     // Add or update game score
-    const score = await db.addGameScore(event_id, team_id, game_number, points);
+    const score = await db.db.upsertGameScore(event_id, team_id, game_number, points, submission_id);
 
-    // Optionally update submission_id if provided (for compatibility)
-    if (submission_id) {
-      await db.upsertGameScore(event_id, team_id, game_number, points, submission_id);
-    }
+    // Log admin activity
+    const ipAddress = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || null;
+    const userAgent = request.headers.get('user-agent') || null;
+    await db.logAdminActivity(
+      event_id,
+      user.userId,
+      role,
+      wasUpdated ? 'update_score' : 'add_score',
+      'score',
+      score.id,
+      { team_id, game_number, points, previous_points: wasUpdated ? existing.find((s: any) => s.game_number === game_number)?.points : null },
+      ipAddress,
+      userAgent
+    );
 
     // Return consistent response
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       data: {
         score,
@@ -114,6 +113,12 @@ export async function POST(request: NextRequest) {
         action: wasUpdated ? 'updated' : 'created',
       },
     }, { status: 201 });
+
+    if (newToken) {
+      response.headers.set('X-Refreshed-Token', newToken);
+    }
+
+    return response;
   } catch (error: any) {
     logger.error('Add score error', error);
     return NextResponse.json({

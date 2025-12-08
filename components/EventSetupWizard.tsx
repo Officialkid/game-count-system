@@ -12,6 +12,9 @@ interface TeamInput {
   id: string;
   name: string;
   avatar_url: string;
+  isValidating?: boolean;
+  isDuplicate?: boolean;
+  suggestions?: string[];
 }
 
 interface EventSetupWizardProps {
@@ -126,6 +129,69 @@ export function EventSetupWizard({ onComplete }: EventSetupWizardProps) {
 
   const handleTeamChange = (id: string, field: 'name' | 'avatar_url', value: string) => {
     setTeams(teams.map(t => t.id === id ? { ...t, [field]: value } : t));
+    
+    // Trigger duplicate check for team names
+    if (field === 'name' && value.trim()) {
+      checkTeamNameAvailability(id, value.trim());
+    }
+  };
+
+  // Debounced duplicate check
+  const checkTeamNameAvailability = async (teamId: string, teamName: string) => {
+    // Mark as validating
+    setTeams(prev => prev.map(t => 
+      t.id === teamId ? { ...t, isValidating: true, isDuplicate: false, suggestions: [] } : t
+    ));
+
+    // Check for client-side duplicates first (within current form)
+    const localDuplicates = teams.filter(t => 
+      t.id !== teamId && t.name.trim().toLowerCase() === teamName.toLowerCase()
+    );
+    
+    if (localDuplicates.length > 0) {
+      setTeams(prev => prev.map(t => 
+        t.id === teamId ? { 
+          ...t, 
+          isValidating: false, 
+          isDuplicate: true,
+          suggestions: [`${teamName} 2`, `${teamName} (2)`, `${teamName} Alpha`]
+        } : t
+      ));
+      return;
+    }
+
+    // Debounce server check
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    try {
+      const response = await apiClient.post('/api/teams/check-name', {
+        event_id: createdEventId,
+        team_name: teamName,
+      });
+      
+      const result = await response.json();
+      
+      if (result.success && result.data) {
+        setTeams(prev => prev.map(t => 
+          t.id === teamId ? {
+            ...t,
+            isValidating: false,
+            isDuplicate: !result.data.available,
+            suggestions: result.data.suggestions || []
+          } : t
+        ));
+      } else {
+        // Clear validation state on error
+        setTeams(prev => prev.map(t => 
+          t.id === teamId ? { ...t, isValidating: false, isDuplicate: false, suggestions: [] } : t
+        ));
+      }
+    } catch (error) {
+      console.error('Error checking team name:', error);
+      setTeams(prev => prev.map(t => 
+        t.id === teamId ? { ...t, isValidating: false, isDuplicate: false, suggestions: [] } : t
+      ));
+    }
   };
 
   const generateAvatar = (teamName: string) => {
@@ -195,6 +261,27 @@ export function EventSetupWizard({ onComplete }: EventSetupWizardProps) {
         return;
       }
 
+      // Check for duplicate team names
+      const duplicateTeams = teams.filter(t => t.isDuplicate);
+      if (duplicateTeams.length > 0) {
+        setError('Please resolve duplicate team names before continuing');
+        setLoading(false);
+        return;
+      }
+
+      // Check for client-side duplicates (case-insensitive)
+      const nameMap = new Map<string, number>();
+      for (const team of teams) {
+        const lowerName = team.name.trim().toLowerCase();
+        nameMap.set(lowerName, (nameMap.get(lowerName) || 0) + 1);
+      }
+      const hasDuplicates = Array.from(nameMap.values()).some(count => count > 1);
+      if (hasDuplicates) {
+        setError('Multiple teams have the same name. Please use unique names.');
+        setLoading(false);
+        return;
+      }
+
       // Create all teams (parse JSON results)
       const teamPromises = teams.map(async team => {
         const response = await apiClient.post('/api/teams/add', {
@@ -214,7 +301,31 @@ export function EventSetupWizard({ onComplete }: EventSetupWizardProps) {
 
       const failedTeams = results.filter(r => !r?.success);
       if (failedTeams.length > 0) {
-        setError(`Failed to create ${failedTeams.length} team(s)`);
+        // Check if any failures were due to duplicates
+        const duplicateErrors = failedTeams.filter(r => 
+          r?.error?.includes('already exists') || r?.suggestions
+        );
+        
+        if (duplicateErrors.length > 0) {
+          setError('Duplicate team names detected. Please use unique names for all teams.');
+          
+          // Mark teams as duplicates in the UI
+          for (let i = 0; i < results.length; i++) {
+            const result = results[i];
+            if (!result?.success && (result?.error?.includes('already exists') || result?.suggestions)) {
+              const teamId = teams[i].id;
+              setTeams(prev => prev.map(t => 
+                t.id === teamId ? {
+                  ...t,
+                  isDuplicate: true,
+                  suggestions: result.suggestions || []
+                } : t
+              ));
+            }
+          }
+        } else {
+          setError(`Failed to create ${failedTeams.length} team(s). Please try again.`);
+        }
         setLoading(false);
         return;
       }
@@ -406,30 +517,79 @@ export function EventSetupWizard({ onComplete }: EventSetupWizardProps) {
       </p>
 
       <form onSubmit={handleStep2Submit} className="space-y-6">
-        <div className="space-y-3">
+        <div className="space-y-4">
           {teams.map((team, index) => (
-            <div key={team.id} className="flex items-center gap-3">
-              <span className="text-sm font-medium text-gray-500 w-8">#{index + 1}</span>
-              <Input
-                type="text"
-                value={team.name}
-                onChange={(e) => handleTeamChange(team.id, 'name', e.target.value)}
-                placeholder={`Team ${index + 1} name`}
-                required
-                className="flex-1"
-                aria-label={`Team ${index + 1} name`}
-                aria-required="true"
-              />
-              {teams.length > 2 && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => handleRemoveTeam(team.id)}
-                  className="text-red-600 hover:bg-red-50"
-                  aria-label={`Remove team ${index + 1}`}
-                >
-                  Remove
-                </Button>
+            <div key={team.id} className="space-y-2">
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-medium text-gray-500 w-8">#{index + 1}</span>
+                <div className="flex-1 relative">
+                  <Input
+                    type="text"
+                    value={team.name}
+                    onChange={(e) => handleTeamChange(team.id, 'name', e.target.value)}
+                    placeholder={`Team ${index + 1} name`}
+                    required
+                    data-tour={index === 0 ? 'team-name-input' : undefined}
+                    className={`pr-10 ${
+                      team.isDuplicate 
+                        ? 'border-red-500 focus:ring-red-500' 
+                        : team.name.trim() && !team.isValidating && !team.isDuplicate
+                        ? 'border-green-500 focus:ring-green-500'
+                        : ''
+                    }`}
+                    aria-label={`Team ${index + 1} name`}
+                    aria-required="true"
+                    aria-invalid={team.isDuplicate}
+                  />
+                  {/* Validation indicator */}
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                    {team.isValidating && (
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary-600" aria-label="Checking name availability"></div>
+                    )}
+                    {!team.isValidating && team.name.trim() && !team.isDuplicate && (
+                      <svg className="w-5 h-5 text-green-500" fill="currentColor" viewBox="0 0 20 20" aria-label="Name available">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                      </svg>
+                    )}
+                    {!team.isValidating && team.isDuplicate && (
+                      <svg className="w-5 h-5 text-red-500" fill="currentColor" viewBox="0 0 20 20" aria-label="Name already exists">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                      </svg>
+                    )}
+                  </div>
+                </div>
+                {teams.length > 2 && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => handleRemoveTeam(team.id)}
+                    className="text-red-600 hover:bg-red-50"
+                    aria-label={`Remove team ${index + 1}`}
+                  >
+                    Remove
+                  </Button>
+                )}
+              </div>
+              
+              {/* Duplicate warning with suggestions */}
+              {team.isDuplicate && team.suggestions && team.suggestions.length > 0 && (
+                <div className="ml-11 p-3 bg-red-50 border border-red-200 rounded-md" role="alert">
+                  <p className="text-sm text-red-700 font-medium mb-2">
+                    ⚠️ This team name already exists. Try one of these:
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {team.suggestions.map((suggestion, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => handleTeamChange(team.id, 'name', suggestion)}
+                        className="px-3 py-1 text-sm bg-white border border-red-300 rounded-md hover:bg-red-100 transition-colors"
+                      >
+                        {suggestion}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               )}
             </div>
           ))}

@@ -6,7 +6,6 @@ export { Input } from './Input';
 export { PasswordInput } from './PasswordInput';
 export { Card } from './Card';
 export { Navbar } from './Navbar';
-export { ThemeToggle } from './ThemeToggle';
 export { ColorPaletteSelector } from './ColorPaletteSelector';
 export { LogoUpload } from './LogoUpload';
 export { AuthForm } from './AuthForm';

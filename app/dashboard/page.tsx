@@ -2,15 +2,21 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { apiClient, auth, clearAuth } from '@/lib/api-client';
+import { apiClient } from '@/lib/api-client';
+import { useAuth } from '@/lib/auth-context';
 import { Navbar } from '@/components/Navbar';
 import { EventSetupWizard } from '@/components/EventSetupWizard';
+import { EventCard } from '@/components/EventCard';
+import { DeleteConfirmationModal } from '@/components/DeleteConfirmationModal';
 
 interface Event {
   id: string;
   event_name: string;
   status?: string;
   team_count?: number;
+  start_date?: string | null;
+  end_date?: string | null;
+  is_active?: boolean;
 }
 
 interface User {
@@ -21,6 +27,7 @@ interface User {
 
 export default function DashboardPage() {
   const router = useRouter();
+  const { isAuthenticated, isLoading: authLoading, user: authUser } = useAuth();
   const [mounted, setMounted] = useState(false);
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
@@ -28,22 +35,30 @@ export default function DashboardPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'inactive'>('all');
   const [showCreateWizard, setShowCreateWizard] = useState(false);
+  const [deleteModal, setDeleteModal] = useState<{ isOpen: boolean; eventId: string; eventName: string }>({
+    isOpen: false,
+    eventId: '',
+    eventName: '',
+  });
+  const [isDeleting, setIsDeleting] = useState(false);
 
+  // Redirect to login if not authenticated
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated) {
+      router.push('/login?returnUrl=/dashboard');
+    }
+  }, [authLoading, isAuthenticated, router]);
+
+  // Mark as mounted to enable rendering
   useEffect(() => {
     setMounted(true);
-    const token = auth.getToken();
-    if (!token) {
-      router.push('/login?returnUrl=/dashboard');
-      return;
-    }
-  }, [router]);
+  }, []);
 
   useEffect(() => {
-    if (!mounted) return;
+    if (!mounted || authLoading) return;
     
-    // Check if user is authenticated before making API calls
-    const token = auth.getToken();
-    if (!token) {
+    // Only load data if authenticated
+    if (!isAuthenticated) {
       setLoading(false);
       return;
     }
@@ -72,7 +87,7 @@ export default function DashboardPage() {
     };
 
     loadData();
-  }, [mounted]);
+  }, [mounted, authLoading, isAuthenticated]);
 
   const filteredEvents = events.filter((event) => {
     const matchesSearch = event.event_name.toLowerCase().includes(searchQuery.toLowerCase());
@@ -86,8 +101,55 @@ export default function DashboardPage() {
   };
 
   const handleLogout = () => {
-    clearAuth();
+    // Logout is now handled through the Navbar and auth context
     router.push('/login');
+  };
+
+  const handleViewEvent = (eventId: string) => {
+    router.push(`/event/${eventId}`);
+  };
+
+  const handleEditEvent = (eventId: string) => {
+    // TODO: Implement edit event functionality
+    router.push(`/event/${eventId}/edit`);
+  };
+
+  const handleDeleteClick = (eventId: string, eventName: string) => {
+    setDeleteModal({ isOpen: true, eventId, eventName });
+  };
+
+  const handleConfirmDelete = async () => {
+    setIsDeleting(true);
+    try {
+      const response = await apiClient.delete(`/api/events/${deleteModal.eventId}`);
+      if (response.ok) {
+        setEvents(events.filter((e) => e.id !== deleteModal.eventId));
+        setDeleteModal({ isOpen: false, eventId: '', eventName: '' });
+      } else {
+        console.error('Failed to delete event');
+      }
+    } catch (error) {
+      console.error('Delete event error:', error);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleDuplicateEvent = async (eventId: string) => {
+    try {
+      const response = await fetch(`/api/events/${eventId}/duplicate`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+      });
+      if (response.ok) {
+        const newEvent = await response.json();
+        setEvents([newEvent.data, ...events]);
+      } else {
+        console.error('Failed to duplicate event');
+      }
+    } catch (error) {
+      console.error('Duplicate event error:', error);
+    }
   };
 
   // Show create wizard modal
@@ -192,6 +254,7 @@ export default function DashboardPage() {
           </select>
           <button
             onClick={() => setShowCreateWizard(true)}
+            data-tour="create-event"
             className="px-6 py-3 bg-gradient-to-r from-purple-600 to-amber-500 text-white rounded-xl font-medium hover:shadow-lg transition-all transform hover:scale-105 whitespace-nowrap"
           >
             + New Event
@@ -210,6 +273,7 @@ export default function DashboardPage() {
                 </p>
                 <button
                   onClick={() => setShowCreateWizard(true)}
+                  data-tour="create-event"
                   className="px-8 py-3 bg-gradient-to-r from-purple-600 to-amber-500 text-white rounded-xl font-medium hover:shadow-lg transition-all transform hover:scale-105"
                 >
                   Create Your First Event
@@ -218,47 +282,26 @@ export default function DashboardPage() {
             </div>
           ) : (
             filteredEvents.map((event) => (
-              <div
+              <EventCard
                 key={event.id}
-                onClick={() => router.push(`/event/${event.id}`)}
-                className="group bg-white/40 backdrop-blur-xl rounded-2xl border border-white/20 p-6 shadow-lg hover:shadow-2xl hover:scale-105 transition-all cursor-pointer"
-              >
-                {/* Card Header */}
-                <div className="flex justify-between items-start mb-4">
-                  <h3 className="text-xl font-bold text-gray-900 group-hover:text-purple-600 transition-colors line-clamp-2">
-                    {event.event_name}
-                  </h3>
-                  <span
-                    className={`px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap ml-2 ${
-                      event.status === 'inactive'
-                        ? 'bg-red-100 text-red-700'
-                        : 'bg-green-100 text-green-700'
-                    }`}
-                  >
-                    {event.status === 'inactive' ? 'Inactive' : 'Active'}
-                  </span>
-                </div>
-
-                {/* Card Stats */}
-                <div className="grid grid-cols-2 gap-4 mb-6 py-4 border-t border-b border-white/20">
-                  <div>
-                    <p className="text-gray-600 text-xs font-medium">Teams</p>
-                    <p className="text-2xl font-bold text-purple-600">{event.team_count || 0}</p>
-                  </div>
-                  <div>
-                    <p className="text-gray-600 text-xs font-medium">Event ID</p>
-                    <p className="text-sm font-mono text-gray-600 truncate">{event.id.slice(0, 8)}...</p>
-                  </div>
-                </div>
-
-                {/* Card Actions */}
-                <button className="w-full py-2 bg-gradient-to-r from-purple-600 to-amber-500 text-white rounded-lg font-medium hover:shadow-lg transition-all transform group-hover:scale-105">
-                  View Event
-                </button>
-              </div>
+                event={event}
+                onView={handleViewEvent}
+                onEdit={handleEditEvent}
+                onDelete={(id) => handleDeleteClick(id, event.event_name)}
+                onDuplicate={handleDuplicateEvent}
+              />
             ))
           )}
         </div>
+
+        {/* Delete Confirmation Modal */}
+        <DeleteConfirmationModal
+          isOpen={deleteModal.isOpen}
+          eventName={deleteModal.eventName}
+          onConfirm={handleConfirmDelete}
+          onCancel={() => setDeleteModal({ isOpen: false, eventId: '', eventName: '' })}
+          isDeleting={isDeleting}
+        />
       </div>
     </div>
   );

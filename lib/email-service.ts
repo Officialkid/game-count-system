@@ -168,6 +168,128 @@ class EmailService {
     });
   }
 
+  /**
+   * Send admin invitation email
+   */
+  async sendAdminInvitation(
+    toEmail: string,
+    data: {
+      inviterName: string;
+      eventName: string;
+      role: string;
+      invitationUrl: string;
+      expiresAt: string;
+    }
+  ): Promise<boolean> {
+    const { inviterName, eventName, role, invitationUrl, expiresAt } = data;
+
+    const roleDescriptions: Record<string, string> = {
+      admin: 'manage teams, scores, and event settings',
+      judge: 'add and edit scores',
+      scorer: 'add scores',
+    };
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: linear-gradient(135deg, #8B5CF6 0%, #6D28D9 100%); color: white; padding: 30px; border-radius: 12px 12px 0 0; text-align: center; }
+          .header h1 { margin: 0; font-size: 28px; }
+          .content { background: white; padding: 30px; border: 1px solid #e5e7eb; border-top: none; }
+          .event-badge { background: #f3f4f6; border-left: 4px solid #8B5CF6; padding: 15px; margin: 20px 0; border-radius: 4px; }
+          .cta-button { display: inline-block; background: #8B5CF6; color: white; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: 600; margin: 20px 0; }
+          .footer { background: #f9fafb; padding: 20px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px; text-align: center; font-size: 12px; color: #6b7280; }
+          .expiry { background: #fef3c7; border: 1px solid #fcd34d; padding: 10px; border-radius: 6px; margin: 15px 0; font-size: 14px; }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h1>🎮 Event Administrator Invitation</h1>
+        </div>
+        <div class="content">
+          <p>Hi there!</p>
+          <p><strong>${inviterName}</strong> has invited you to be an <strong>${role}</strong> for their event:</p>
+          
+          <div class="event-badge">
+            <strong style="font-size: 18px; color: #8B5CF6;">${eventName}</strong>
+          </div>
+
+          <p>As a <strong>${role}</strong>, you'll be able to ${roleDescriptions[role] || 'manage event activities'}.</p>
+
+          <div class="expiry">
+            ⏰ This invitation expires on <strong>${new Date(expiresAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</strong>
+          </div>
+
+          <div style="text-align: center;">
+            <a href="${invitationUrl}" class="cta-button">Accept Invitation</a>
+          </div>
+
+          <p style="font-size: 14px; color: #6b7280; margin-top: 30px;">
+            If you don't have an account yet, you'll be able to create one when you accept the invitation.
+          </p>
+
+          <p style="font-size: 14px; color: #6b7280;">
+            If you weren't expecting this invitation, you can safely ignore this email.
+          </p>
+        </div>
+        <div class="footer">
+          <p>Game Count System - Professional Event Scoring & Management</p>
+        </div>
+      </body>
+      </html>
+    `;
+
+    return this.sendEmail({
+      to: toEmail,
+      subject: `You've been invited to manage "${eventName}"`,
+      html,
+    });
+  }
+
+  /**
+   * Send invitation acceptance confirmation
+   */
+  async sendInvitationAcceptedNotification(
+    toEmail: string,
+    accepterName: string,
+    eventName: string,
+    role: string
+  ): Promise<boolean> {
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; padding: 30px; border-radius: 12px 12px 0 0; text-align: center; }
+          .content { background: white; padding: 30px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px; }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h1>✅ Invitation Accepted</h1>
+        </div>
+        <div class="content">
+          <p>Good news!</p>
+          <p><strong>${accepterName}</strong> has accepted your invitation to be a <strong>${role}</strong> for <strong>${eventName}</strong>.</p>
+          <p>They now have access to manage the event according to their role permissions.</p>
+        </div>
+      </body>
+      </html>
+    `;
+
+    return this.sendEmail({
+      to: toEmail,
+      subject: `${accepterName} accepted your invitation to manage "${eventName}"`,
+      html,
+    });
+  }
+
   private htmlToText(html: string): string {
     return html
       .replace(/<[^>]*>/g, '')

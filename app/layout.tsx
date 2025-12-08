@@ -3,7 +3,8 @@ import type { Metadata } from 'next';
 import './globals-enhanced.css';
 import { Navbar } from '@/components/Navbar';
 import { ToastProvider } from '@/components/ui';
-import { ThemeProvider } from '@/contexts/ThemeContext';
+import { AuthProvider } from '@/lib/auth-context';
+import { OnboardingTutorial } from '@/components/onboarding/OnboardingTutorial';
 
 export const metadata: Metadata = {
   title: 'Game Count System - Event Scoring & Leaderboards',
@@ -24,27 +25,23 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      {/* suppressHydrationWarning prevents dark mode hydration mismatch */}
-      <body className="antialiased flex flex-col min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
-        <ThemeProvider>
+      <body className="antialiased flex flex-col min-h-screen bg-gray-50 text-gray-900">
+        <AuthProvider>
           <ToastProvider>
             <Navbar />
+            <OnboardingTutorial />
             {/* flex-1 makes main content grow to push footer to bottom */}
             <main className="flex-1">
               {children}
             </main>
-            <footer className="bg-white dark:bg-gray-800 border-t dark:border-gray-700 py-6 mt-8">
-              <div className="max-w-7xl mx-auto px-4 text-center text-gray-600 dark:text-gray-400">
-                <p className="text-sm sm:text-base">
-                  © 2025 Game Count System
-                </p>
-                <p className="text-xs sm:text-sm mt-2 text-gray-500 dark:text-gray-500">
-                  Professional Event Scoring Platform
-                </p>
-              </div>
-            </footer>
+          <footer className="bg-white border-t border-gray-200 py-6 mt-8 text-gray-700">
+            <div className="max-w-7xl mx-auto px-4 text-center">
+              <p className="text-sm sm:text-base font-semibold text-primary-700">© 2025 Game Count System</p>
+              <p className="text-xs sm:text-sm mt-2 text-gray-600">Professional Event Scoring Platform</p>
+            </div>
+          </footer>
           </ToastProvider>
-        </ThemeProvider>
+        </AuthProvider>
       </body>
     </html>
   );

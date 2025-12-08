@@ -45,6 +45,7 @@ export default function EventDetailPage() {
   const [activeTab, setActiveTab] = useState('teams');
   const [showScoringModal, setShowScoringModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   useEffect(() => {
     const token = auth.getToken();
@@ -244,7 +245,7 @@ export default function EventDetailPage() {
           </TabsList>
 
           <TabsContent value="teams">
-            <TeamsTab eventId={eventId} event={event} />
+            <TeamsTab eventId={eventId} event={event} refreshTrigger={refreshTrigger} />
           </TabsContent>
 
           <TabsContent value="scoring">
@@ -264,7 +265,13 @@ export default function EventDetailPage() {
           </TabsContent>
         </Tabs>
 
-        <ScoringModal eventId={eventId} isOpen={showScoringModal} onClose={() => setShowScoringModal(false)} event={event} />
+        <ScoringModal 
+          eventId={eventId} 
+          isOpen={showScoringModal} 
+          onClose={() => setShowScoringModal(false)} 
+          event={event} 
+          onScoreAdded={() => setRefreshTrigger(prev => prev + 1)}
+        />
         <EditEventModal
           eventId={eventId}
           isOpen={showEditModal}

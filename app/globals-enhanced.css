@@ -24,13 +24,6 @@
 }
 
 /* Dark mode variables */
-.dark {
-  --background: #111827;
-  --foreground: #f9fafb;
-  --primary-color: #8b5cf6; /* Lighter purple for dark mode */
-  --primary-500: #8b5cf6;
-  --primary-600: #8b5cf6;
-}
 
 @theme inline {
   --color-background: var(--background);
@@ -117,6 +110,11 @@
   .event-themed-text {
     color: var(--event-theme-color);
   }
+
+  /* Helper to render line breaks from \n */
+  .text-preserve {
+    white-space: pre-line;
+  }
   
   .event-themed-border {
     border-color: var(--event-theme-color);
@@ -193,7 +191,7 @@
   /* Toast notifications */
   .toast {
     /* Replaced tailwind-animate utilities with safe transitions */
-    @apply fixed bottom-4 right-4 p-4 rounded-lg shadow-lg z-50 bg-white dark:bg-gray-800 transition-transform transition-opacity duration-300 ease-out;
+    @apply fixed bottom-4 right-4 p-4 rounded-lg shadow-lg z-50 bg-white transition-transform transition-opacity duration-300 ease-out;
     transform: translateX(0);
     opacity: 1;
   }

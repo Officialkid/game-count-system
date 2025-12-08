@@ -54,7 +54,7 @@ export function PreferencesMenu() {
 
   if (!mounted) {
     return (
-      <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-gray-100 dark:bg-gray-800">
+      <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-gray-100">
         <div className="w-5 h-5 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
       </div>
     );
@@ -64,12 +64,12 @@ export function PreferencesMenu() {
     <div className="relative" ref={menuRef}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="w-10 h-10 rounded-lg flex items-center justify-center bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900"
+        className="w-10 h-10 rounded-lg flex items-center justify-center bg-gray-100 hover:bg-gray-200 transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2"
         aria-label="Preferences"
         title="Preferences"
       >
         <svg
-          className="w-5 h-5 text-gray-700 dark:text-gray-300"
+          className="w-5 h-5 text-gray-700"
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
@@ -90,21 +90,21 @@ export function PreferencesMenu() {
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-2 z-50">
-          <div className="px-4 py-2 border-b border-gray-200 dark:border-gray-700">
-            <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Preferences</h3>
+        <div className="absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
+          <div className="px-4 py-2 border-b border-gray-200">
+            <h3 className="text-sm font-semibold text-gray-900">Preferences</h3>
           </div>
 
           {/* Sound Toggle */}
-          <div className="px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+          <div className="px-4 py-3 hover:bg-gray-50 transition-colors">
             <label className="flex items-center justify-between cursor-pointer">
               <div className="flex items-center gap-3">
                 <span className="text-2xl">🔊</span>
                 <div>
-                  <div className="text-sm font-medium text-gray-900 dark:text-white">
+                  <div className="text-sm font-medium text-gray-900">
                     Sound Effects
                   </div>
-                  <div className="text-xs text-gray-500 dark:text-gray-400">
+                  <div className="text-xs text-gray-500">
                     Play sounds on actions
                   </div>
                 </div>
@@ -112,8 +112,8 @@ export function PreferencesMenu() {
               <button
                 type="button"
                 onClick={toggleSound}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 ${
-                  soundEnabled ? 'bg-primary-600' : 'bg-gray-300 dark:bg-gray-600'
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 ${
+                  soundEnabled ? 'bg-primary-600' : 'bg-gray-300'
                 }`}
                 aria-label="Toggle sound effects"
               >
@@ -127,15 +127,15 @@ export function PreferencesMenu() {
           </div>
 
           {/* Confetti Toggle */}
-          <div className="px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+          <div className="px-4 py-3 hover:bg-gray-50 transition-colors">
             <label className="flex items-center justify-between cursor-pointer">
               <div className="flex items-center gap-3">
                 <span className="text-2xl">🎉</span>
                 <div>
-                  <div className="text-sm font-medium text-gray-900 dark:text-white">
+                  <div className="text-sm font-medium text-gray-900">
                     Confetti
                   </div>
-                  <div className="text-xs text-gray-500 dark:text-gray-400">
+                  <div className="text-xs text-gray-500">
                     Celebrate big scores
                   </div>
                 </div>
@@ -143,8 +143,8 @@ export function PreferencesMenu() {
               <button
                 type="button"
                 onClick={toggleConfetti}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 ${
-                  confettiEnabled ? 'bg-primary-600' : 'bg-gray-300 dark:bg-gray-600'
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 ${
+                  confettiEnabled ? 'bg-primary-600' : 'bg-gray-300'
                 }`}
                 aria-label="Toggle confetti"
               >

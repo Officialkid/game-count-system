@@ -20,9 +20,10 @@ interface Team {
 interface TeamsTabProps {
   eventId: string;
   event: any;
+  refreshTrigger?: number;
 }
 
-export function TeamsTab({ eventId, event }: TeamsTabProps) {
+export function TeamsTab({ eventId, event, refreshTrigger }: TeamsTabProps) {
   const { showToast } = useToast();
   const [teams, setTeams] = useState<Team[]>([]);
   const [loading, setLoading] = useState(true);
@@ -30,7 +31,7 @@ export function TeamsTab({ eventId, event }: TeamsTabProps) {
 
   useEffect(() => {
     loadTeams();
-  }, [eventId]);
+  }, [eventId, refreshTrigger]);
 
   const loadTeams = async () => {
     try {
@@ -117,15 +118,11 @@ export function TeamsTab({ eventId, event }: TeamsTabProps) {
           return (
             <div key={team.id} className="space-y-3 animate-fade-in">
               {/* Team Card */}
-              <Card
-                className="transition-all duration-300 hover:shadow-2xl cursor-pointer hover:scale-101 border-0"
+              <div
+                className="transition-all duration-300 hover:shadow-2xl cursor-pointer hover:scale-101 border-0 rounded-lg bg-white border-l-4 p-4 shadow-sm"
                 onClick={() => setExpandedTeam(isExpanded ? null : team.id)}
-                style={{
-                  boxShadow: '0 4px 6px rgba(0,0,0,0.07)',
-                  borderLeft: `5px solid ${palette.primary}`
-                }}
+                style={{ borderLeftColor: palette.primary }}
               >
-                <CardContent className="py-4">
                   <TeamCard
                     rank={index + 1}
                     name={team.team_name}
@@ -134,19 +131,17 @@ export function TeamsTab({ eventId, event }: TeamsTabProps) {
                     highlight={isExpanded}
                     paletteColor={palette.primary}
                   />
-                </CardContent>
-              </Card>
+              </div>
 
               {/* Expanded History Section - Enhanced */}
               {isExpanded && team.histories && team.histories.length > 0 && (
-                <Card className="ml-2 bg-gradient-to-br from-slate-50 to-slate-100 border-l-4" style={{ borderLeftColor: palette.accent }}>
-                  <CardContent className="py-5">
-                    <h4 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
-                      <span className="text-lg">📊</span> Scoring History
-                    </h4>
-                    <div className="space-y-3">
-                      {team.histories.map((entry, i) => (
-                        <div key={i} className="flex justify-between items-center p-3 bg-white rounded-xl border border-slate-200 hover:border-slate-300 hover:shadow-md transition-all">
+                <div className="ml-2 bg-gradient-to-br from-slate-50 to-slate-100 border-l-4 rounded-lg p-5" style={{ borderLeftColor: palette.accent }}>
+                  <h4 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
+                    <span className="text-lg">📊</span> Scoring History
+                  </h4>
+                  <div className="space-y-3">
+                    {team.histories.map((entry, i) => (
+                      <div key={i} className="flex justify-between items-center p-3 bg-white rounded-xl border border-slate-200 hover:border-slate-300 hover:shadow-md transition-all">
                           <div className="flex-1">
                             <div className="font-bold text-gray-900 text-sm">
                               {entry.game_name ? `🎮 ${entry.game_name}` : `Game ${entry.game_number}`}
@@ -165,8 +160,7 @@ export function TeamsTab({ eventId, event }: TeamsTabProps) {
                         </div>
                       ))}
                     </div>
-                  </CardContent>
-                </Card>
+                </div>
               )}
             </div>
           );

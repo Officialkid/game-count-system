@@ -49,7 +49,7 @@ export const auth = {
 
   // Generate JWT access token (short-lived)
   generateToken(payload: JWTPayload, expiresIn: string = '15m'): string {
-    return jwt.sign(payload, JWT_SECRET, { expiresIn });
+    return jwt.sign(payload, JWT_SECRET, { expiresIn } as jwt.SignOptions);
   },
 
   // Generate refresh token (long-lived)
@@ -72,5 +72,31 @@ export const auth = {
       return null;
     }
     return authHeader.substring(7);
+  },
+
+  // Check if token is expired or expiring soon (within 5 minutes)
+  isTokenExpiring(token: string, thresholdMinutes: number = 5): boolean {
+    try {
+      const payload = jwt.decode(token) as JWTPayload | null;
+      if (!payload || !payload.exp) return true;
+      const now = Math.floor(Date.now() / 1000);
+      const expiresIn = payload.exp - now;
+      return expiresIn <= thresholdMinutes * 60;
+    } catch (error) {
+      return true;
+    }
+  },
+
+  // Refresh token if expiring soon
+  refreshTokenIfNeeded(token: string): string | null {
+    if (this.isTokenExpiring(token)) {
+      const payload = this.verifyToken(token);
+      if (payload) {
+        // Remove iat/exp before re-signing
+        const { iat, exp, ...rest } = payload;
+        return this.generateToken(rest as JWTPayload);
+      }
+    }
+    return null;
   },
 };

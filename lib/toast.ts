@@ -4,7 +4,7 @@ import toast, { Toaster as HotToaster } from 'react-hot-toast';
 // Toast configuration
 const toastConfig = {
   success: {
-    duration: 3000,
+    duration: 5000,
     icon: '✅',
     style: {
       background: '#10B981',
@@ -12,7 +12,7 @@ const toastConfig = {
     },
   },
   error: {
-    duration: 4000,
+    duration: 8000,
     icon: '❌',
     style: {
       background: '#EF4444',
@@ -27,7 +27,7 @@ const toastConfig = {
     },
   },
   info: {
-    duration: 3000,
+    duration: 5000,
     icon: 'ℹ️',
     style: {
       background: '#3B82F6',

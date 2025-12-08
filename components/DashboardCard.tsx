@@ -18,7 +18,7 @@ export function DashboardCard({ isEmpty = false, onCreateEvent }: DashboardCardP
           Create your first event to start tracking scores!
         </p>
         {onCreateEvent && (
-          <Button onClick={onCreateEvent} size="lg">
+          <Button onClick={onCreateEvent} size="lg" data-tour="create-event">
             + Create Event
           </Button>
         )}

@@ -11,6 +11,7 @@ import { SaveTemplateModal } from '../modals';
 import { EditEventModal } from '../modals/EditEventModal';
 import { auth } from '@/lib/api-client';
 import { getPaletteById } from '@/lib/color-palettes';
+import { getFriendlyError } from '@/lib/error-messages';
 
 interface ShareLink {
   share_token: string;
@@ -45,6 +46,15 @@ export function SettingsTab({ eventId, eventName }: SettingsTabProps) {
   const [showDeleteEvent, setShowDeleteEvent] = useState(false);
   const { showToast } = useToast();
 
+  const showFriendlyError = (input: { status?: number; message?: string; code?: string; context?: 'event' | 'share' | 'general' }) => {
+    const friendly = getFriendlyError({ ...input, context: input.context || 'general' });
+    const body = friendly.suggestion ? `${friendly.message}\n${friendly.suggestion}` : friendly.message;
+    showToast(body, friendly.type === 'warning' ? 'warning' : 'error', {
+      learnMoreHref: friendly.learnMoreHref,
+      duration: friendly.type === 'warning' ? 6000 : 8000,
+    });
+  };
+
   useEffect(() => {
     loadData();
   }, [eventId]);
@@ -61,6 +71,8 @@ export function SettingsTab({ eventId, eventName }: SettingsTabProps) {
       if (eventResponse.ok) {
         const eventData = await eventResponse.json();
         setEvent(eventData.event);
+      } else {
+        showFriendlyError({ status: eventResponse.status, context: 'event' });
       }
 
       // Load share link
@@ -71,10 +83,12 @@ export function SettingsTab({ eventId, eventName }: SettingsTabProps) {
         const linkData = await linkResponse.json();
         console.log('Share link response:', linkData);
         setShareLink(linkData.data?.shareLink || linkData.shareLink || null);
+      } else {
+        showFriendlyError({ status: linkResponse.status, context: 'share' });
       }
     } catch (error) {
       console.error('Error loading data:', error);
-      showToast('Failed to load settings', 'error');
+      showFriendlyError({ message: (error as Error).message, context: 'event' });
     } finally {
       setLoading(false);
     }
@@ -88,7 +102,8 @@ export function SettingsTab({ eventId, eventName }: SettingsTabProps) {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to export CSV');
+        showFriendlyError({ status: response.status, context: 'event' });
+        return;
       }
 
       const blob = await response.blob();
@@ -104,7 +119,7 @@ export function SettingsTab({ eventId, eventName }: SettingsTabProps) {
       showToast('CSV exported successfully', 'success');
     } catch (error) {
       console.error('CSV export error:', error);
-      showToast('Failed to export CSV', 'error');
+      showFriendlyError({ message: (error as Error).message, context: 'event' });
     }
   };
 
@@ -116,7 +131,8 @@ export function SettingsTab({ eventId, eventName }: SettingsTabProps) {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to export PDF');
+        showFriendlyError({ status: response.status, context: 'event' });
+        return;
       }
 
       const blob = await response.blob();
@@ -132,7 +148,7 @@ export function SettingsTab({ eventId, eventName }: SettingsTabProps) {
       showToast('PDF exported successfully', 'success');
     } catch (error) {
       console.error('PDF export error:', error);
-      showToast('Failed to export PDF', 'error');
+      showFriendlyError({ message: (error as Error).message, context: 'event' });
     }
   };
 
@@ -163,14 +179,17 @@ export function SettingsTab({ eventId, eventName }: SettingsTabProps) {
         body: JSON.stringify({ regenerate: true }),
       });
 
-      if (!response.ok) throw new Error('Failed to regenerate link');
+      if (!response.ok) {
+        showFriendlyError({ status: response.status, context: 'share' });
+        return;
+      }
       const data = await response.json();
       console.log('Regenerate response:', data);
       setShareLink(data.data?.shareLink || data.shareLink);
       showToast('Share link regenerated successfully!', 'success');
     } catch (error) {
       console.error('Error regenerating link:', error);
-      showToast('Failed to regenerate link', 'error');
+      showFriendlyError({ message: (error as Error).message, context: 'share' });
     } finally {
       setRegenerating(false);
     }
@@ -185,13 +204,16 @@ export function SettingsTab({ eventId, eventName }: SettingsTabProps) {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
 
-      if (!response.ok) throw new Error('Failed to delete link');
+      if (!response.ok) {
+        showFriendlyError({ status: response.status, context: 'share' });
+        return;
+      }
       setShareLink(null);
       showToast('Share link deleted successfully', 'success');
       setShowDeleteConfirm(false);
     } catch (error) {
       console.error('Error deleting link:', error);
-      showToast('Failed to delete link', 'error');
+      showFriendlyError({ message: (error as Error).message, context: 'share' });
     } finally {
       setDeleting(false);
     }
@@ -234,13 +256,16 @@ export function SettingsTab({ eventId, eventName }: SettingsTabProps) {
         }),
       });
 
-      if (!response.ok) throw new Error('Failed to save template');
+      if (!response.ok) {
+        showFriendlyError({ status: response.status, context: 'event' });
+        return;
+      }
       
       showToast('Template saved successfully!', 'success');
       setShowSaveTemplate(false);
     } catch (error) {
       console.error('Error saving template:', error);
-      showToast('Failed to save template', 'error');
+      showFriendlyError({ message: (error as Error).message, context: 'event' });
     } finally {
       setSavingTemplate(false);
     }
@@ -254,7 +279,10 @@ export function SettingsTab({ eventId, eventName }: SettingsTabProps) {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
 
-      if (!response.ok) throw new Error('Failed to delete event');
+      if (!response.ok) {
+        showFriendlyError({ status: response.status, context: 'event' });
+        return;
+      }
 
       showToast('Event deleted successfully', 'success');
       setShowDeleteEvent(false);
@@ -264,7 +292,7 @@ export function SettingsTab({ eventId, eventName }: SettingsTabProps) {
       }, 1000);
     } catch (error) {
       console.error('Error deleting event:', error);
-      showToast('Failed to delete event', 'error');
+      showFriendlyError({ message: (error as Error).message, context: 'event' });
     }
   };
 
@@ -335,6 +363,7 @@ export function SettingsTab({ eventId, eventName }: SettingsTabProps) {
                   <Button 
                     variant="secondary" 
                     onClick={handleCopyLink}
+                    data-tour="share-leaderboard"
                     className="whitespace-nowrap"
                   >
                     📋 Copy
