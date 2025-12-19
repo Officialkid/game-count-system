@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { Home, LogOut, Calendar, Menu, X, LogIn, UserPlus } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/lib/auth-context';
-import { eventsService } from '@/lib/services';
+import { eventsService, recapsService } from '@/lib/services';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -27,6 +27,7 @@ export function Navbar() {
   const { user, logout, isAuthenticated, authReady } = useAuth();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [hasRecap, setHasRecap] = useState(false);
+  const [showNewBadge, setShowNewBadge] = useState(false);
 
   const now = useMemo(() => new Date(), []);
   const hour = now.getHours();
@@ -36,7 +37,8 @@ export function Navbar() {
   const authNavLinks: NavLink[] = [
     { label: 'Dashboard', href: '/dashboard', icon: <Home className="w-5 h-5" /> },
     { label: 'Events', href: '/events', icon: <Calendar className="w-5 h-5" /> },
-    ...(hasRecap ? [{ label: 'Recap', href: '/recap', icon: <Home className="w-5 h-5" /> }] : []),
+    // Recap entry points to Dashboard with recap context (not a separate page)
+    ...(hasRecap ? [{ label: 'Your Recap', href: '/dashboard?recap=1', icon: <Home className="w-5 h-5" /> }] : []),
   ];
 
   // Navigation for public pages
@@ -58,19 +60,37 @@ export function Navbar() {
   // Determine which nav links to show
   const navLinks = isAuthenticated ? authNavLinks : publicNavLinks;
 
-  // Check if recap is available (at least one event exists)
+  // Check recap eligibility: has ≥1 completed event OR recap data exists
   useEffect(() => {
     let active = true;
     (async () => {
       try {
         // Wait for auth to be fully ready to avoid 401s during initialization
         if (!authReady || !isAuthenticated || !user?.id) return;
-        const res = await eventsService.getEvents(user.id);
-        const events = res?.data?.events || [];
-        if (active) setHasRecap(Array.isArray(events) && events.length > 0);
+        const [eventsRes, recapSummary] = await Promise.all([
+          eventsService.getEvents(user.id, { status: 'completed', limit: 1 }),
+          recapsService.getSummary(user.id),
+        ]);
+        const completedCount = (eventsRes?.data?.events || []).length;
+        const recapExists = !!(recapSummary?.success && recapSummary?.data && (
+          (recapSummary.data.totalGames ?? 0) > 0 || !!recapSummary.data.mvpTeam || !!recapSummary.data.topTeam
+        ));
+        const eligible = (completedCount > 0) || recapExists;
+        if (active) setHasRecap(eligible);
+        // One-time NEW badge per user
+        if (eligible) {
+          const key = `recap_new_badge_shown_${user.id}`;
+          const shown = typeof window !== 'undefined' ? window.localStorage.getItem(key) : '1';
+          if (active) setShowNewBadge(!shown);
+        } else {
+          if (active) setShowNewBadge(false);
+        }
       } catch {
         // keep hidden if error
-        if (active) setHasRecap(false);
+        if (active) {
+          setHasRecap(false);
+          setShowNewBadge(false);
+        }
       }
     })();
     return () => {
@@ -98,25 +118,37 @@ export function Navbar() {
               <Link
                 key={link.href}
                 href={link.href}
-                data-tour={link.label === 'Recap' ? 'recap-feature' : undefined}
+                title={link.label === 'Your Recap' ? 'Your GameScore Recap' : undefined}
+                data-tour={link.label === 'Your Recap' ? 'recap-feature' : undefined}
                 className={`relative flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
                   isActive(link.href)
                     ? 'bg-purple-100 text-purple-700'
                     : 'text-neutral-600 hover:bg-neutral-100'
                 }`}
+                onClick={() => {
+                  if (link.label === 'Your Recap' && user?.id) {
+                    try {
+                      window.localStorage.setItem(`recap_new_badge_shown_${user.id}`, '1');
+                      setShowNewBadge(false);
+                    } catch {}
+                  }
+                }}
               >
                 {link.icon}
-                <span className={link.label === 'Recap' && hasRecap ? 'relative' : ''}>
+                <span className={link.label === 'Your Recap' && hasRecap ? 'relative' : ''}>
                   {link.label}
-                  {link.label === 'Recap' && hasRecap ? (
+                  {link.label === 'Your Recap' && hasRecap ? (
                     <span
                       aria-hidden
                       className="absolute -bottom-1 left-0 right-0 h-0.5 rounded-full bg-gradient-to-r from-purple-500 via-amber-500 to-purple-500 opacity-80"
                     />
                   ) : null}
                 </span>
-                {link.label === 'Recap' && hasRecap ? (
-                  <span aria-hidden className="absolute -top-1 -right-1 w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+                {link.label === 'Your Recap' && hasRecap ? (
+                  <span aria-hidden className="absolute -top-1.5 -right-1.5 w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                ) : null}
+                {link.label === 'Your Recap' && hasRecap && showNewBadge ? (
+                  <span className="ml-1 inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-700 border border-amber-200">NEW</span>
                 ) : null}
               </Link>
             ))}
@@ -209,7 +241,15 @@ export function Navbar() {
                 }`}
               >
                 {link.icon}
-                {link.label}
+                <span className="relative">
+                  {link.label}
+                  {link.label === 'Your Recap' && hasRecap ? (
+                    <span aria-hidden className="absolute -top-1.5 -right-2 w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                  ) : null}
+                  {link.label === 'Your Recap' && hasRecap && showNewBadge ? (
+                    <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-700 border border-amber-200">NEW</span>
+                  ) : null}
+                </span>
               </Link>
             ))}
 

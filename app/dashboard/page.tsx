@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import { eventsService, recapsService, scoresService } from '@/lib/services';
 import type { Event as AppwriteEvent } from '@/lib/services/appwriteEvents';
@@ -10,6 +10,7 @@ import { Home, Trophy, Settings as SettingsIcon, Plus, Sparkles, Users } from 'l
 import { EventSetupWizard } from '@/components/EventSetupWizard';
 import { EventCard } from '@/components/EventCard';
 import { DeleteConfirmationModal } from '@/components/DeleteConfirmationModal';
+import { RecapIntroModal } from '@/components/RecapIntroModal';
 import { Button } from '@/components/Button';
 import { EmptyState } from '@/components/EmptyState';
 import React from 'react';
@@ -36,6 +37,7 @@ const convertEventForCard = (event: AppwriteEvent) => ({
 // Inner component - no auth checks needed, wrapped by AuthGuard
 function DashboardContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user: authUser } = useAuth();
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
@@ -51,6 +53,13 @@ function DashboardContent() {
     eventName: '',
   });
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showRecapIntro, setShowRecapIntro] = useState(false);
+  const [recapSummary, setRecapSummary] = useState<{
+    gamesPlayed?: number;
+    teamsCompeted?: number;
+    winnersCount?: number;
+    topTeam?: string;
+  } | undefined>();
 
   // Load dashboard data (auth is already verified by AuthGuard)
   useEffect(() => {
@@ -85,6 +94,38 @@ function DashboardContent() {
       } catch {}
     });
   }, []);
+
+  // Handle ?recap=1 query param - show intro modal on first visit
+  useEffect(() => {
+    const shouldShowRecap = searchParams?.get('recap') === '1';
+    if (!shouldShowRecap || !authUser?.id) return;
+
+    const recapIntroKey = `recap_intro_shown_${authUser.id}`;
+    const alreadyShown = typeof window !== 'undefined' ? window.localStorage.getItem(recapIntroKey) : '1';
+
+    if (!alreadyShown) {
+      // Fetch recap summary for modal stats
+      (async () => {
+        try {
+          const [eventsRes, recapRes] = await Promise.all([
+            eventsService.getEvents(authUser.id, { status: 'completed' }),
+            recapsService.getSummary(authUser.id),
+          ]);
+          const completedEvents = eventsRes?.data?.events || [];
+          const summary = recapRes?.data;
+          setRecapSummary({
+            gamesPlayed: summary?.totalGames ?? 0,
+            teamsCompeted: completedEvents.reduce((acc, e) => acc + (e.num_teams || 0), 0),
+            winnersCount: completedEvents.length,
+            topTeam: summary?.topTeam,
+          });
+          setShowRecapIntro(true);
+        } catch (err) {
+          console.error('Failed to load recap summary:', err);
+        }
+      })();
+    }
+  }, [searchParams, authUser?.id]);
 
   const filteredEvents = useMemo(() => {
     const term = (searchQuery || '').toLowerCase();
@@ -244,6 +285,28 @@ function DashboardContent() {
     }
   }, []);
 
+  const handlePlayRecap = useCallback(() => {
+    if (authUser?.id) {
+      try {
+        window.localStorage.setItem(`recap_intro_shown_${authUser.id}`, '1');
+      } catch {}
+    }
+    setShowRecapIntro(false);
+    // Navigate to dedicated recap view or scroll to highlights
+    router.push('/recap');
+  }, [authUser?.id, router]);
+
+  const handleCloseRecapIntro = useCallback(() => {
+    if (authUser?.id) {
+      try {
+        window.localStorage.setItem(`recap_intro_shown_${authUser.id}`, '1');
+      } catch {}
+    }
+    setShowRecapIntro(false);
+    // Remove query param
+    router.replace('/dashboard');
+  }, [authUser?.id, router]);
+
   // Show create/edit wizard modal
   if (showCreateWizard) {
     const editEvent = editEventId ? events.find(e => e.$id === editEventId) : null;
@@ -329,29 +392,53 @@ function DashboardContent() {
             </div>
           </div>
 
-          {/* Highlights Module (Recap discovery) */}
+          {/* Recap Highlights Widget (R5.1) */}
           {recap && (recap.mvpTeam || recap.totalGames || recap.topTeam) ? (
-            <div className="mb-6 sm:mb-8">
-              <div className="rounded-lg border border-neutral-200 bg-white p-4 shadow-sm">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-neutral-900">
-                    <Trophy className="w-5 h-5 text-amber-500" />
-                    <h2 className="font-semibold">Highlights</h2>
+            <div className="mb-6 sm:mb-8 animate-fade-in">
+              <div className="relative overflow-hidden rounded-xl border-2 border-amber-200/40 bg-gradient-to-br from-amber-50/80 via-white to-orange-50/30 p-5 shadow-sm transition-shadow hover:shadow-md">
+                {/* Subtle background accent */}
+                <div className="absolute -right-16 -top-16 h-32 w-32 rounded-full bg-gradient-to-br from-amber-200/10 to-orange-200/5 blur-3xl pointer-events-none" />
+                
+                <div className="relative z-10">
+                  {/* Header with Trophy Icon */}
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-amber-100/60 rounded-lg">
+                        <Trophy className="w-5 h-5 text-amber-600" />
+                      </div>
+                      <div>
+                        <h2 className="font-bold text-neutral-900">Recap Highlights</h2>
+                        <p className="text-xs text-neutral-500">Your latest event summary</p>
+                      </div>
+                    </div>
+                    <Button 
+                      variant="secondary" 
+                      onClick={() => router.push('/recap')}
+                      className="text-xs sm:text-sm"
+                    >
+                      View Recap →
+                    </Button>
                   </div>
-                  <Button variant="secondary" onClick={() => router.push('/recap')}>View Full Recap →</Button>
-                </div>
-                <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm text-neutral-700">
-                  <div className="rounded-md border border-neutral-100 bg-neutral-50 p-3">
-                    <p className="text-xs text-neutral-500">MVP Team</p>
-                    <p className="mt-1 font-medium">{recap.mvpTeam ?? '—'}</p>
-                  </div>
-                  <div className="rounded-md border border-neutral-100 bg-neutral-50 p-3">
-                    <p className="text-xs text-neutral-500">Total Games Played</p>
-                    <p className="mt-1 font-medium">{recap.totalGames ?? 0}</p>
-                  </div>
-                  <div className="rounded-md border border-neutral-100 bg-neutral-50 p-3">
-                    <p className="text-xs text-neutral-500">Top-Ranked Team</p>
-                    <p className="mt-1 font-medium">{recap.topTeam ?? '—'}</p>
+
+                  {/* Winner & Stats Grid */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    {/* Winner Card - Large */}
+                    <div className="sm:col-span-1 rounded-lg border border-amber-200/50 bg-white/80 backdrop-blur-sm p-4 shadow-xs hover:shadow-sm transition-all duration-300 hover:scale-[1.02] hover:translate-y-[-2px] transform-gpu">
+                      <p className="text-xs font-semibold text-amber-600 uppercase tracking-wide">🏆 Winner</p>
+                      <p className="mt-2 text-lg font-bold text-neutral-900 truncate">{recap.mvpTeam ?? '—'}</p>
+                    </div>
+
+                    {/* Games Card */}
+                    <div className="rounded-lg border border-neutral-200/50 bg-white/80 backdrop-blur-sm p-4 shadow-xs hover:shadow-sm transition-all duration-300 hover:scale-[1.02] hover:translate-y-[-2px] transform-gpu">
+                      <p className="text-xs font-semibold text-neutral-600 uppercase tracking-wide">📊 Games</p>
+                      <p className="mt-2 text-2xl font-bold text-neutral-900">{recap.totalGames ?? 0}</p>
+                    </div>
+
+                    {/* Top Team Card */}
+                    <div className="rounded-lg border border-neutral-200/50 bg-white/80 backdrop-blur-sm p-4 shadow-xs hover:shadow-sm transition-all duration-300 hover:scale-[1.02] hover:translate-y-[-2px] transform-gpu">
+                      <p className="text-xs font-semibold text-neutral-600 uppercase tracking-wide">⭐ Top Team</p>
+                      <p className="mt-2 text-lg font-bold text-neutral-900 truncate">{recap.topTeam ?? '—'}</p>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -486,6 +573,14 @@ function DashboardContent() {
             onConfirm={handleConfirmDelete}
             onCancel={() => setDeleteModal({ isOpen: false, eventId: '', eventName: '' })}
             isDeleting={isDeleting}
+          />
+
+          {/* Recap Intro Modal */}
+          <RecapIntroModal
+            isOpen={showRecapIntro}
+            onClose={handleCloseRecapIntro}
+            onPlayRecap={handlePlayRecap}
+            summary={recapSummary}
           />
         </div>
       </div>

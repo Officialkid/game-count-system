@@ -6,6 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { TeamCard, TeamList } from '@/components/TeamCard';
 import { EmptyState } from '@/components/EmptyState';
 import { RecapSlides } from '@/components/RecapSlides';
+import { RecapPlayer as RecapPlayerLegacy, type RecapSlide } from '@/components/RecapPlayer';
+import { RecapPlayer, type RecapData } from '@/components/RecapPlayerNew';
 import * as appwriteEvents from '@/lib/services/appwriteEvents';
 import * as appwriteTeams from '@/lib/services/appwriteTeams';
 import * as appwriteRecaps from '@/lib/services/appwriteRecaps';
@@ -105,6 +107,9 @@ export default function RecapPage() {
   const [verification, setVerification] = useState<VerificationResult | null>(null);
   const [verificationLoading, setVerificationLoading] = useState(false);
   const [verificationError, setVerificationError] = useState<string | null>(null);
+  const [showFullscreenPlayer, setShowFullscreenPlayer] = useState(false);
+  const [playerSlides, setPlayerSlides] = useState<RecapSlide[]>([]);
+  const [recapData, setRecapData] = useState<RecapData | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -322,6 +327,58 @@ export default function RecapPage() {
       }
     : undefined;
 
+  // Build new-format RecapData for mandatory slide order
+  useEffect(() => {
+    if (!mounted) return;
+
+    const newRecapData: RecapData = {
+      userName: user?.name,
+      gamesCount: totalGames || 0,
+      eventName: recapEvent?.event_name,
+      teams: rankedTeams.map((team) => ({
+        id: team.id,
+        name: team.team_name,
+        avatar: team.avatar_url || undefined,
+        points: team.total_points,
+      })),
+      rankings: rankedTeams.map((team) => ({
+        id: team.id,
+        name: team.team_name,
+        points: team.total_points,
+        rank: team.rank,
+        avatar: team.avatar_url || undefined,
+      })),
+      winner: winner
+        ? {
+            name: winner.name,
+            points: winner.points || 0,
+            avatar: topScorer?.avatar_url || undefined,
+          }
+        : { name: 'No Winner Yet', points: 0 },
+    };
+
+    setRecapData(newRecapData);
+  }, [totalGames, recapEvent, rankedTeams, winner, topScorer, user?.name, mounted]);
+
+  if (showFullscreenPlayer && recapData) {
+    return (
+      <RecapPlayer
+        recapData={recapData}
+        autoplayDuration={6000}
+        onClose={() => setShowFullscreenPlayer(false)}
+        onShare={() => {
+          const url = window.location.href;
+          if (navigator.share) {
+            navigator.share({ title: 'My GameScore Recap', url }).catch(() => {});
+          } else {
+            navigator.clipboard.writeText(url).catch(() => {});
+          }
+        }}
+        onReplay={() => setShowFullscreenPlayer(true)}
+      />
+    );
+  }
+
   if (showSlides) {
     return (
       <RecapSlides
@@ -366,13 +423,15 @@ export default function RecapPage() {
                 </select>
               </div>
             </div>
-            <button
-              onClick={() => setShowSlides(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-lg transition-colors shadow-md"
-            >
-              <Play className="w-5 h-5" />
-              <span className="hidden sm:inline">Play Slides</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowFullscreenPlayer(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-amber-500 hover:from-purple-700 hover:to-amber-600 text-white font-semibold rounded-lg transition-all shadow-lg hover:shadow-xl"
+              >
+                <Play className="w-5 h-5" />
+                <span className="hidden sm:inline">Play Recap</span>
+              </button>
+            </div>
           </div>
         </div>
 

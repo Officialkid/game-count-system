@@ -1,5 +1,6 @@
 // app/layout.tsx
 import type { Metadata, Viewport } from 'next';
+import './animations.css';
 import './globals-enhanced.css';
 import './mobile-optimized.css';
 import { Navbar } from '@/components/Navbar';
