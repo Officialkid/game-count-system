@@ -28,7 +28,7 @@ export function SaveTemplateModal({ isOpen, onClose, onSave, currentEventName }:
     <Modal isOpen={isOpen} onClose={onClose} title="Save as Template">
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label htmlFor="template-name" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+          <label htmlFor="template-name" className="block text-sm font-medium text-gray-700 mb-2">
             Template Name
           </label>
           <input
@@ -37,16 +37,16 @@ export function SaveTemplateModal({ isOpen, onClose, onSave, currentEventName }:
             value={templateName}
             onChange={(e) => setTemplateName(e.target.value)}
             placeholder="e.g., Weekly Game Night"
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white text-gray-900"
             required
           />
-          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+          <p className="mt-1 text-xs text-gray-500">
             A descriptive name for this template
           </p>
         </div>
 
         <div>
-          <label htmlFor="event-prefix" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+          <label htmlFor="event-prefix" className="block text-sm font-medium text-gray-700 mb-2">
             Default Event Name
           </label>
           <input
@@ -55,16 +55,16 @@ export function SaveTemplateModal({ isOpen, onClose, onSave, currentEventName }:
             value={eventPrefix}
             onChange={(e) => setEventPrefix(e.target.value)}
             placeholder="e.g., Game Night"
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white text-gray-900"
             required
           />
-          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+          <p className="mt-1 text-xs text-gray-500">
             The default name for events created from this template
           </p>
         </div>
 
-        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
-          <p className="text-sm text-blue-700 dark:text-blue-300">
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+          <p className="text-sm text-blue-700">
             ℹ️ This template will save the current event's theme color, logo, scoring settings, and display mode.
           </p>
         </div>
@@ -73,13 +73,13 @@ export function SaveTemplateModal({ isOpen, onClose, onSave, currentEventName }:
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
           >
             Cancel
           </button>
           <button
             type="submit"
-            className="px-4 py-2 text-sm font-medium text-white bg-primary-600 dark:bg-primary-500 rounded-lg hover:bg-primary-700 dark:hover:bg-primary-600 transition-colors"
+            className="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 transition-colors"
           >
             Save Template
           </button>

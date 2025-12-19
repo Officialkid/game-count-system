@@ -14,7 +14,6 @@ interface EditEventModalProps {
   initial: {
     event_name: string;
     theme_color: string;
-    logo_url: string | null;
     allow_negative: boolean;
     display_mode: string;
   };
@@ -25,7 +24,7 @@ const PALETTE_OPTIONS = ['purple', 'blue', 'green', 'orange', 'red', 'pink', 'te
 export function EditEventModal({ eventId, isOpen, onClose, onSave, initial }: EditEventModalProps) {
   const [name, setName] = useState(initial.event_name);
   const [theme, setTheme] = useState(initial.theme_color);
-  const [logo, setLogo] = useState(initial.logo_url || '');
+  // logo removed for MVP
   const [allowNegative, setAllowNegative] = useState(initial.allow_negative);
   const [displayMode, setDisplayMode] = useState(initial.display_mode || 'standard');
   const [saving, setSaving] = useState(false);
@@ -40,7 +39,7 @@ export function EditEventModal({ eventId, isOpen, onClose, onSave, initial }: Ed
     if (isOpen) {
       setName(initial.event_name);
       setTheme(initial.theme_color);
-      setLogo(initial.logo_url || '');
+      // logo removed for MVP
       setAllowNegative(initial.allow_negative);
       setDisplayMode(initial.display_mode || 'standard');
     }
@@ -64,7 +63,7 @@ export function EditEventModal({ eventId, isOpen, onClose, onSave, initial }: Ed
         body: JSON.stringify({
           event_name: name,
           theme_color: theme,
-          logo_url: logo || null,
+          // logo removed for MVP
           allow_negative: allowNegative,
           display_mode: displayMode,
         }),
@@ -181,24 +180,7 @@ export function EditEventModal({ eventId, isOpen, onClose, onSave, initial }: Ed
               <p className="text-xs text-gray-500 mt-2">{palette.name} - {palette.description}</p>
             </div>
 
-            {/* Logo URL */}
-            <div>
-              <label className="block text-sm font-bold text-gray-700 mb-3 uppercase tracking-wide">Logo URL</label>
-              <div className="flex gap-3">
-                <input
-                  type="text"
-                  value={logo}
-                  onChange={(e) => setLogo(e.target.value)}
-                  className="flex-1 px-4 py-3 border-2 rounded-xl focus:outline-none transition-colors"
-                  style={{ borderColor: `${palette.primary}80`, "--tw-ring-color": palette.primary } as React.CSSProperties}
-                  placeholder="https://example.com/logo.png"
-                />
-                {logo && (
-                  <img src={logo} alt="Logo preview" className="w-12 h-12 rounded-xl object-cover border-2 border-gray-200" />
-                )}
-              </div>
-              <p className="text-xs text-gray-500 mt-2">Enter a URL to a PNG, JPG, or SVG image</p>
-            </div>
+            {/* Logo removed for MVP */}
 
             {/* Options Section */}
             <div className="space-y-4 pt-4 border-t-2 border-gray-100">

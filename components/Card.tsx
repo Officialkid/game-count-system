@@ -36,7 +36,7 @@ export function Card({
 
   return (
     <div
-      className={`bg-white dark:bg-gray-800 dark:border dark:border-gray-700 rounded-lg shadow-md ${paddings[padding]} ${hoverClass} ${className}`}
+      className={`bg-white rounded-lg shadow-md ${paddings[padding]} ${hoverClass} ${className}`}
       role={role}
       aria-live={ariaLive}
       aria-label={ariaLabel}

@@ -68,7 +68,7 @@ export function PasswordInput({
           <button
             type="button"
             onClick={() => setShowPassword(!showPassword)}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 transition-colors"
             aria-label={showPassword ? 'Hide password' : 'Show password'}
             tabIndex={-1}
           >
@@ -90,12 +90,12 @@ export function PasswordInput({
       {showStrengthMeter && value && validation && (
         <div className="space-y-2">
           <div className="flex justify-between items-center text-sm">
-            <span className="text-gray-600 dark:text-gray-400">Password Strength:</span>
+            <span className="text-gray-600">Password Strength:</span>
             <span className={`font-medium capitalize ${getPasswordStrengthColor(validation.strength)}`}>
               {validation.strength}
             </span>
           </div>
-          <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+          <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
             <div
               className={`h-full transition-all duration-300 ${getPasswordStrengthBgColor(validation.strength)}`}
               style={{ width: `${strengthPercentage}%` }}
@@ -106,8 +106,8 @@ export function PasswordInput({
 
       {/* Password Requirements */}
       {showRequirements && touched && value && validation && (
-        <div className="space-y-2 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-          <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Password must have:</p>
+        <div className="space-y-2 p-3 bg-gray-50 rounded-lg border border-gray-200">
+          <p className="text-sm font-medium text-gray-700">Password must have:</p>
           <ul className="space-y-1">
             {validation.requirements.map((req, index) => (
               <li key={index} className="flex items-start gap-2 text-sm">
@@ -120,14 +120,14 @@ export function PasswordInput({
                     <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
                   </svg>
                 )}
-                <span className={req.met ? 'text-gray-700 dark:text-gray-300' : 'text-gray-500 dark:text-gray-400'}>
+                <span className={req.met ? 'text-gray-700' : 'text-gray-500'}>
                   {req.message}
                 </span>
               </li>
             ))}
           </ul>
           {validation.errors.length > 0 && (
-            <div className="pt-2 border-t border-gray-300 dark:border-gray-600 text-sm text-red-600 dark:text-red-400">
+            <div className="pt-2 border-t border-gray-300 text-sm text-red-600">
               {validation.errors.filter(err => !passwordRequirements.some(req => req.message === err)).join('. ')}
             </div>
           )}

@@ -15,7 +15,7 @@ import { HistoryTab } from '@/components/event-tabs/HistoryTab';
 import { AnalyticsTab } from '@/components/event-tabs/AnalyticsTab';
 import { SettingsTab } from '@/components/event-tabs/SettingsTab';
 import { EditEventModal } from '@/components/modals/EditEventModal';
-import { auth } from '@/lib/api-client';
+import { useAuth } from '@/lib/auth-context';
 
 // Helper function to convert hex color to RGB
 function hexToRgb(hex: string): string {
@@ -38,23 +38,36 @@ export default function EventDetailPage() {
   const router = useRouter();
   const params = useParams();
   const eventId = params?.eventId as string;
+  const { isAuthenticated, isLoading: authLoading, getToken } = useAuth();
 
   const [event, setEvent] = useState<Event | null>(null);
   const [shareToken, setShareToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string>('');
+  const [errorType, setErrorType] = useState<'none' | 'network' | 'server' | 'not_found' | 'auth' | 'forbidden'>('none');
+  const [retryCount, setRetryCount] = useState(0);
   const [activeTab, setActiveTab] = useState('teams');
   const [showScoringModal, setShowScoringModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
+  // ✅ FIXED: Use useAuth hook instead of direct localStorage access
   useEffect(() => {
-    const token = auth.getToken();
-    if (!token) {
-      router.push('/login');
+    // Wait for auth check
+    if (authLoading) {
+      setLoading(true);
       return;
     }
+
+    // Redirect if not authenticated
+    if (!isAuthenticated) {
+      router.push('/login?returnUrl=/event/' + eventId);
+      return;
+    }
+
+    // Load event data
     if (eventId) {
-      loadEvent(token);
+      loadEvent();
     }
     
     // Check for tab query parameter
@@ -65,11 +78,21 @@ export default function EventDetailPage() {
         setActiveTab(tabParam);
       }
     }
-  }, [eventId, router]);
+  }, [eventId, isAuthenticated, authLoading, router]);
 
-  const loadEvent = async (token: string) => {
+  const loadEvent = async () => {
     try {
       setLoading(true);
+      setError('');
+      setErrorType('none');
+      const token = getToken();
+      if (!token) {
+        // Authorization failure → redirect to login
+        setErrorType('auth');
+        router.push('/login?returnUrl=/event/' + eventId);
+        return;
+      }
+
       const response = await fetch(`/api/events/${eventId}`, {
         headers: { Authorization: `Bearer ${token}` },
         credentials: 'include',
@@ -78,8 +101,26 @@ export default function EventDetailPage() {
       const data = await response.json();
       
       if (!response.ok || !data.success) {
-        console.error('Failed to load event:', data.error);
-        throw new Error(data.error || 'Failed to load event');
+        // Classify error by status code
+        if (response.status === 401) {
+          setErrorType('auth');
+          // Redirect only for 401 Unauthorized
+          router.push('/login?returnUrl=/event/' + eventId);
+          return;
+        }
+        if (response.status === 403) {
+          setErrorType('forbidden');
+          setError(data.error || 'You do not have permission to view this event');
+          return;
+        }
+        if (response.status === 404) {
+          setErrorType('not_found');
+          setError(data.error || 'Event not found');
+        } else {
+          setErrorType('server');
+          setError(data.error || `Failed to load event (HTTP ${response.status})`);
+        }
+        return;
       }
 
       // API returns { success: true, data: { event: {...}, teams: [...] } }
@@ -103,11 +144,18 @@ export default function EventDetailPage() {
         throw new Error('Event data not found in response');
       }
     } catch (err: any) {
+      // Network/unknown error → show UI and allow retry
       console.error('Error loading event:', err);
-      router.push('/dashboard');
+      setErrorType('network');
+      setError(err?.message || 'Network error. Please check your connection and try again.');
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleRetry = () => {
+    setRetryCount(prev => prev + 1);
+    loadEvent();
   };
 
   const handleEditEvent = () => {
@@ -115,7 +163,8 @@ export default function EventDetailPage() {
     alert('Edit event functionality coming soon!');
   };
 
-  if (loading) {
+  // ✅ FIXED: Show loading during auth check or event loading
+  if (authLoading || loading) {
     return (
       <div className="max-w-7xl mx-auto px-4 py-16">
         <LoadingSkeleton variant="card" />
@@ -123,15 +172,63 @@ export default function EventDetailPage() {
     );
   }
 
+  // Error state handling UI
+  if (errorType === 'not_found') {
+    return (
+      <div className="max-w-7xl mx-auto px-4 py-16 text-center">
+        <p className="text-gray-500">{error || 'Event not found'}</p>
+        <div className="mt-4 flex justify-center gap-3">
+          <Link href="/dashboard">
+            <Button variant="primary">Return to Dashboard</Button>
+          </Link>
+          <Button variant="secondary" onClick={handleRetry}>Retry</Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (errorType === 'network' || errorType === 'server') {
+    return (
+      <div className="max-w-7xl mx-auto px-4 py-16">
+        <div className="p-4 border border-red-200 bg-red-50 rounded-md">
+          <p className="text-red-700 font-medium">{error || 'An error occurred while loading the event.'}</p>
+          <div className="mt-4 flex gap-3">
+            <Button onClick={handleRetry} variant="primary">Retry</Button>
+            <Link href="/dashboard">
+              <Button variant="secondary">Back to Dashboard</Button>
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (errorType === 'forbidden') {
+    return (
+      <div className="max-w-7xl mx-auto px-4 py-16">
+        <div className="p-4 border border-yellow-200 bg-yellow-50 rounded-md">
+          <p className="text-yellow-800 font-medium">{error || 'You do not have permission to view this event.'}</p>
+          <div className="mt-4 flex gap-3">
+            <Link href="/dashboard">
+              <Button variant="secondary">Back to Dashboard</Button>
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // If we reached here and no event, show a generic fallback
   if (!event) {
     return (
       <div className="max-w-7xl mx-auto px-4 py-16 text-center">
-        <p className="text-gray-500">Event not found</p>
-        <Link href="/dashboard">
-          <Button variant="primary" className="mt-4">
-            Return to Dashboard
-          </Button>
-        </Link>
+        <p className="text-gray-500">Event data unavailable</p>
+        <div className="mt-4 flex justify-center gap-3">
+          <Button variant="primary" onClick={handleRetry}>Retry</Button>
+          <Link href="/dashboard">
+            <Button variant="secondary">Return to Dashboard</Button>
+          </Link>
+        </div>
       </div>
     );
   }

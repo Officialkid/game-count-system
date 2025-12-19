@@ -80,6 +80,7 @@ export function ScoringModal({ eventId, isOpen, onClose, event, onScoreAdded }: 
     }
     
     setSubmitting(true);
+    const submissionId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
     try {
       const res = await fetch(`/api/events/${eventId}/scores`, {
         method: 'POST',
@@ -91,7 +92,8 @@ export function ScoringModal({ eventId, isOpen, onClose, event, onScoreAdded }: 
           team_id: parseInt(selectedTeamId), 
           game_number: parseInt(gameNumber), 
           points: pointsValue, 
-          game_name: gameName || null 
+          game_name: gameName || null,
+          submission_id: submissionId,
         }),
       });
       

@@ -4,7 +4,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
-import { apiClient, auth } from '@/lib/api-client';
+import { scoresService, teamsService } from '@/lib/services';
 
 interface Score {
   id: string;
@@ -25,26 +25,37 @@ export default function EventHistoryPage() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    const token = auth.getToken();
-    if (!token) {
-      router.push('/login');
-      return;
-    }
     if (eventId) {
-      loadScores(token);
+      loadScores();
     }
-  }, [eventId, router]);
+  }, [eventId]);
 
-  const loadScores = async (token: string) => {
+  const loadScores = async () => {
     try {
-      const response = await apiClient.getScoresByEvent(token, eventId);
-      if (response.success) {
-        setScores(response.data?.scores || []);
+      const [scoresRes, teamsRes] = await Promise.all([
+        scoresService.getScores(eventId as string),
+        teamsService.getTeams(eventId as string),
+      ]);
+
+      if (scoresRes.success && teamsRes.success) {
+        const teams = teamsRes.data?.teams || [];
+        const teamMap = new Map(teams.map((t) => [t.$id, t]));
+        const mapped = (scoresRes.data?.scores || []).map((s: any) => ({
+          id: s.$id,
+          team_name: teamMap.get(s.team_id)?.team_name || 'Unknown Team',
+          avatar_url: teamMap.get(s.team_id)?.avatar_path || null,
+          game_number: s.game_number,
+          points: s.points,
+          created_at: s.created_at,
+        }));
+        setScores(mapped);
       } else {
-        setError(response.error || 'Failed to load scores');
+        // In mock mode, response is a plain object without HTTP status codes
+        setError(scoresRes.error || teamsRes.error || 'Failed to load scores');
       }
     } catch (err) {
-      setError('Failed to load scores');
+      // Network error: stay on page + message (no redirect)
+      setError('Network error. Please check your connection and try again.');
     } finally {
       setLoading(false);
     }

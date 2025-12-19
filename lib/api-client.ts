@@ -1,323 +1,85 @@
-// lib/api-client.ts
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
+// Appwrite-first API client: thin wrappers around fetch and Appwrite Functions.
+import { functions } from '@/lib/appwrite';
 
-interface ApiResponse<T = any> {
-  success: boolean;
-  data?: T;
-  error?: string;
-}
+type ApiResponse<T = any> = { success: boolean; data?: T; error?: string };
 
-interface RetryOptions {
-  maxRetries?: number;
-  initialDelay?: number;
-  maxDelay?: number;
-  shouldRetry?: (error: any, attempt: number) => boolean;
-}
-
-const defaultRetryOptions: RetryOptions = {
-  maxRetries: 3,
-  initialDelay: 1000,
-  maxDelay: 10000,
-  shouldRetry: (error, attempt) => {
-    // Retry on network errors or 5xx status codes
-    if (error.name === 'TypeError' || error.message?.includes('fetch')) {
-      return true;
-    }
-    if (error.status >= 500 && error.status < 600) {
-      return true;
-    }
-    // Don't retry on 4xx errors (client errors)
-    return false;
-  },
-};
-
-/**
- * Fetch with exponential backoff retry logic
- */
-async function fetchWithRetry(
-  url: string,
-  options: RequestInit = {},
-  retryOptions: RetryOptions = {}
-): Promise<Response> {
-  const opts = { ...defaultRetryOptions, ...retryOptions };
-  let lastError: any;
-
-  for (let attempt = 0; attempt <= (opts.maxRetries || 0); attempt++) {
-    try {
-      const response = await fetch(url, { credentials: 'include', ...options });
-      
-      // If successful or non-retryable error, return immediately
-      if (response.ok || !opts.shouldRetry?.(response, attempt)) {
-        return response;
-      }
-
-      // Store error for potential retry
-      lastError = { status: response.status, statusText: response.statusText };
-      
-      // If this was the last attempt, return the failed response
-      if (attempt === opts.maxRetries) {
-        return response;
-      }
-
-      // Calculate exponential backoff delay
-      const delay = Math.min(
-        (opts.initialDelay || 1000) * Math.pow(2, attempt),
-        opts.maxDelay || 10000
-      );
-      
-      console.warn(`Request failed (attempt ${attempt + 1}/${opts.maxRetries}), retrying in ${delay}ms...`);
-      await new Promise(resolve => setTimeout(resolve, delay));
-      
-    } catch (error: any) {
-      lastError = error;
-      
-      // If this was the last attempt or shouldn't retry, throw the error
-      if (attempt === opts.maxRetries || !opts.shouldRetry?.(error, attempt)) {
-        throw error;
-      }
-
-      // Calculate exponential backoff delay
-      const delay = Math.min(
-        (opts.initialDelay || 1000) * Math.pow(2, attempt),
-        opts.maxDelay || 10000
-      );
-      
-      console.warn(`Network error (attempt ${attempt + 1}/${opts.maxRetries}), retrying in ${delay}ms...`, error.message);
-      await new Promise(resolve => setTimeout(resolve, delay));
-    }
-  }
-
-  throw lastError;
+function buildHeaders(token?: string): HeadersInit {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (token) headers.Authorization = `Bearer ${token}`;
+  return headers;
 }
 
 export const apiClient = {
-  async register(name: string, email: string, password: string) {
-    const res = await fetch(`${API_BASE_URL}/api/auth/register`, {
+  // Thin GET wrapper (expects Next.js API to return JSON)
+  async get(endpoint: string, token?: string): Promise<Response> {
+    return fetch(endpoint, { headers: buildHeaders(token) });
+  },
+
+  // Thin POST wrapper
+  async post(endpoint: string, data?: any, token?: string): Promise<Response> {
+    return fetch(endpoint, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, email, password }),
-      credentials: 'include',
+      headers: buildHeaders(token),
+      body: data instanceof FormData ? (data as any) : JSON.stringify(data ?? {}),
     });
-    const data = await res.json();
-    if (!res.ok && !data.success) {
-      return { success: false, error: data.error || 'Registration failed' };
-    }
-    return data as ApiResponse;
   },
 
-  async login(email: string, password: string) {
-    const res = await fetch(`${API_BASE_URL}/api/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password }),
-      credentials: 'include',
-    });
-    const data = await res.json();
-    if (!res.ok && !data.success) {
-      return { success: false, error: data.error || 'Login failed' };
-    }
-    return data as ApiResponse;
+  // Thin DELETE wrapper
+  async delete(endpoint: string, token?: string): Promise<Response> {
+    return fetch(endpoint, { method: 'DELETE', headers: buildHeaders(token) });
   },
 
-  async createEvent(token: string, event_name: string) {
-    const res = await fetch(`${API_BASE_URL}/api/events/create`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-      },
-      body: JSON.stringify({ event_name }),
-      credentials: 'include',
-    });
-    return res.json() as Promise<ApiResponse>;
-  },
-
-  async listEvents(token: string) {
-    const res = await fetch(`${API_BASE_URL}/api/events/list`, {
-      headers: { 'Authorization': `Bearer ${token}` },
-      credentials: 'include',
-    });
-    return res.json() as Promise<ApiResponse>;
-  },
-
-  async addTeam(token: string, event_id: string, team_name: string, avatar_url?: string) {
-    const res = await fetch(`${API_BASE_URL}/api/teams/add`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-      },
-      body: JSON.stringify({ event_id, team_name, avatar_url }),
-      credentials: 'include',
-    });
-    return res.json() as Promise<ApiResponse>;
-  },
-
-  async listTeams(token: string, event_id: string) {
-    const res = await fetch(`${API_BASE_URL}/api/teams/list?event_id=${event_id}`, {
-      headers: { 'Authorization': `Bearer ${token}` },
-      credentials: 'include',
-    });
-    return res.json() as Promise<ApiResponse>;
-  },
-
-  async addScore(token: string, event_id: string, team_id: string, game_number: number, points: number) {
-    const res = await fetch(`${API_BASE_URL}/api/scores/add`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-      },
-      body: JSON.stringify({ event_id, team_id, game_number, points }),
-      credentials: 'include',
-    });
-    return res.json() as Promise<ApiResponse>;
-  },
-
-  async getScoresByEvent(token: string, event_id: string) {
-    const res = await fetch(`${API_BASE_URL}/api/scores/by-event?event_id=${event_id}`, {
-      headers: { 'Authorization': `Bearer ${token}` },
-      credentials: 'include',
-    });
-    return res.json() as Promise<ApiResponse>;
-  },
-
-  async getPublicScoreboard(token: string) {
-    const res = await fetch(`${API_BASE_URL}/api/public/${token}`);
-    return res.json() as Promise<ApiResponse>;
-  },
-
-  // Generic POST method - automatically includes auth token from localStorage with retry logic
-  async post(endpoint: string, data: any, token?: string, retryOptions?: RetryOptions) {
-    // Use provided token or get from localStorage
-    const authToken = token || auth.getToken();
-    
-    const headers: HeadersInit = {
-      'Content-Type': 'application/json',
-    };
-    
-    if (authToken) {
-      headers['Authorization'] = `Bearer ${authToken}`;
-    }
-    
-    const res = await fetchWithRetry(`${API_BASE_URL}${endpoint}`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(data),
-    }, retryOptions);
-    
-    // Check for refreshed token in response headers
-    const refreshedToken = res.headers.get('X-Refreshed-Token');
-    if (refreshedToken) {
-      auth.setToken(refreshedToken);
-    }
-    
-    return res;
-  },
-
-  // Generic GET method with retry logic
-  async get(endpoint: string, token?: string, retryOptions?: RetryOptions) {
-    const headers: HeadersInit = {};
-    // Use provided token or get from localStorage
-    const authToken = token || auth.getToken();
-    if (authToken) {
-      headers['Authorization'] = `Bearer ${authToken}`;
-    }
-    
-    const res = await fetchWithRetry(`${API_BASE_URL}${endpoint}`, {
-      headers,
-    }, retryOptions);
-    
-    // Check for refreshed token in response headers
-    const refreshedToken = res.headers.get('X-Refreshed-Token');
-    if (refreshedToken) {
-      auth.setToken(refreshedToken);
-    }
-    
-    return res;
-  },
-
-  // Generic DELETE method with retry logic
-  async delete(endpoint: string, token?: string, retryOptions?: RetryOptions) {
-    const headers: HeadersInit = {};
-    // Use provided token or get from localStorage
-    const authToken = token || auth.getToken();
-    if (authToken) {
-      headers['Authorization'] = `Bearer ${authToken}`;
-    }
-    
-    const res = await fetchWithRetry(`${API_BASE_URL}${endpoint}`, {
-      method: 'DELETE',
-      headers,
-    }, retryOptions);
-    
-    // Check for refreshed token in response headers
-    const refreshedToken = res.headers.get('X-Refreshed-Token');
-    if (refreshedToken) {
-      auth.setToken(refreshedToken);
-    }
-    
-    return res;
-  },
-
-  // Generic PATCH method with retry logic
-  async patch(endpoint: string, data: any, token?: string, retryOptions?: RetryOptions) {
-    const authToken = token || auth.getToken();
-    
-    const headers: HeadersInit = {
-      'Content-Type': 'application/json',
-    };
-    
-    if (authToken) {
-      headers['Authorization'] = `Bearer ${authToken}`;
-    }
-    
-    const res = await fetchWithRetry(`${API_BASE_URL}${endpoint}`, {
+  // Thin PATCH wrapper
+  async patch(endpoint: string, data?: any, token?: string): Promise<Response> {
+    return fetch(endpoint, {
       method: 'PATCH',
-      headers,
-      body: JSON.stringify(data),
-    }, retryOptions);
-    
-    // Check for refreshed token in response headers
-    const refreshedToken = res.headers.get('X-Refreshed-Token');
-    if (refreshedToken) {
-      auth.setToken(refreshedToken);
+      headers: buildHeaders(token),
+      body: JSON.stringify(data ?? {}),
+    });
+  },
+
+  // Optional helper: submit score via Appwrite Function when configured
+  async addScore(
+    _token: string | undefined,
+    event_id: string,
+    team_id: string,
+    game_number: number,
+    points: number
+  ): Promise<ApiResponse<{ submitted: boolean; executionId?: string }>> {
+    const fnId = process.env.NEXT_PUBLIC_APPWRITE_FUNCTION_SUBMIT_SCORE;
+    if (!fnId) {
+      return { success: false, error: 'Submit score function not configured' };
     }
-    
-    return res;
+    try {
+      const clientScoreId = (typeof crypto !== 'undefined' && (crypto as any).randomUUID)
+        ? (crypto as any).randomUUID()
+        : `score-${Date.now()}`;
+      const payload = { event_id, team_id, game_number, points, clientScoreId };
+      const exec = await functions.createExecution(fnId, JSON.stringify(payload), true);
+      return { success: true, data: { submitted: true, executionId: exec.$id } };
+    } catch (err: any) {
+      return { success: false, error: err?.message || 'Failed to submit score' };
+    }
   },
 };
 
-// Auth utilities
+// Minimal auth shim retained for callers that read a token. Appwrite uses session cookies.
 export const auth = {
-  setToken(token: string) {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('auth_token', token);
-    }
+  setToken(_token: string) {
+    // No-op in Appwrite session mode
   },
-
   getToken(): string | null {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('auth_token');
-    }
-    return null;
+    return null; // No bearer token needed with Appwrite sessions
   },
-
   removeToken() {
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('auth_token');
-    }
+    // No-op
   },
-
   isAuthenticated(): boolean {
-    return !!this.getToken();
+    return true; // Components should rely on useAuth for real status
   },
 };
 
-// Export clearAuth function for logout functionality
 export function clearAuth() {
   auth.removeToken();
-  if (typeof window !== 'undefined') {
-    window.location.href = '/login';
-  }
 }
+

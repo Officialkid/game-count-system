@@ -1,0 +1,399 @@
+{
+  "projectId": "${APPWRITE_PROJECT_ID}",
+  "projectName": "Camp Countdown System",
+  "databases": [
+    {
+      "databaseId": "main",
+      "name": "Main Database",
+      "collections": [
+        {
+          "collectionId": "events",
+          "name": "Events",
+          "permissions": [
+            "read(\"users\")",
+            "create(\"users\")",
+            "update(\"users\")",
+            "delete(\"users\")"
+          ],
+          "documentSecurity": true,
+          "attributes": [
+            {
+              "key": "user_id",
+              "type": "string",
+              "size": 255,
+              "required": true
+            },
+            {
+              "key": "event_name",
+              "type": "string",
+              "size": 255,
+              "required": true
+            },
+            {
+              "key": "num_teams",
+              "type": "integer",
+              "required": true,
+              "min": 1,
+              "max": 100
+            },
+            {
+              "key": "num_games",
+              "type": "integer",
+              "required": true,
+              "min": 1,
+              "max": 100
+            },
+            {
+              "key": "is_active",
+              "type": "boolean",
+              "required": true,
+              "default": true
+            },
+            {
+              "key": "created_at",
+              "type": "datetime",
+              "required": true
+            },
+            {
+              "key": "updated_at",
+              "type": "datetime",
+              "required": false
+            }
+          ],
+          "indexes": [
+            {
+              "key": "user_id_idx",
+              "type": "key",
+              "attributes": ["user_id"],
+              "orders": ["ASC"]
+            },
+            {
+              "key": "created_at_idx",
+              "type": "key",
+              "attributes": ["created_at"],
+              "orders": ["DESC"]
+            },
+            {
+              "key": "is_active_idx",
+              "type": "key",
+              "attributes": ["is_active"],
+              "orders": ["ASC"]
+            }
+          ]
+        },
+        {
+          "collectionId": "teams",
+          "name": "Teams",
+          "permissions": [
+            "read(\"users\")",
+            "create(\"users\")",
+            "update(\"users\")",
+            "delete(\"users\")"
+          ],
+          "documentSecurity": true,
+          "attributes": [
+            {
+              "key": "event_id",
+              "type": "string",
+              "size": 255,
+              "required": true
+            },
+            {
+              "key": "team_name",
+              "type": "string",
+              "size": 255,
+              "required": true
+            },
+            {
+              "key": "color",
+              "type": "string",
+              "size": 7,
+              "required": true
+            },
+            {
+              "key": "total_points",
+              "type": "integer",
+              "required": true,
+              "default": 0
+            },
+            {
+              "key": "rank",
+              "type": "integer",
+              "required": false
+            },
+            {
+              "key": "is_active",
+              "type": "boolean",
+              "required": true,
+              "default": true
+            }
+          ],
+          "indexes": [
+            {
+              "key": "event_id_idx",
+              "type": "key",
+              "attributes": ["event_id"],
+              "orders": ["ASC"]
+            },
+            {
+              "key": "total_points_idx",
+              "type": "key",
+              "attributes": ["total_points"],
+              "orders": ["DESC"]
+            }
+          ]
+        },
+        {
+          "collectionId": "scores",
+          "name": "Scores",
+          "permissions": [
+            "read(\"users\")",
+            "create(\"users\")",
+            "update(\"users\")"
+          ],
+          "documentSecurity": true,
+          "attributes": [
+            {
+              "key": "event_id",
+              "type": "string",
+              "size": 255,
+              "required": true
+            },
+            {
+              "key": "team_id",
+              "type": "string",
+              "size": 255,
+              "required": true
+            },
+            {
+              "key": "game_number",
+              "type": "integer",
+              "required": true,
+              "min": 1
+            },
+            {
+              "key": "points",
+              "type": "integer",
+              "required": true,
+              "default": 0
+            },
+            {
+              "key": "client_score_id",
+              "type": "string",
+              "size": 255,
+              "required": false
+            },
+            {
+              "key": "submitted_by",
+              "type": "string",
+              "size": 255,
+              "required": true
+            },
+            {
+              "key": "submitted_at",
+              "type": "datetime",
+              "required": true
+            }
+          ],
+          "indexes": [
+            {
+              "key": "event_game_idx",
+              "type": "key",
+              "attributes": ["event_id", "game_number"],
+              "orders": ["ASC", "ASC"]
+            },
+            {
+              "key": "team_idx",
+              "type": "key",
+              "attributes": ["team_id"],
+              "orders": ["ASC"]
+            },
+            {
+              "key": "client_score_idx",
+              "type": "unique",
+              "attributes": ["client_score_id"],
+              "orders": ["ASC"]
+            }
+          ]
+        },
+        {
+          "collectionId": "share_links",
+          "name": "Share Links",
+          "permissions": [
+            "read(\"role:any\")",
+            "create(\"users\")",
+            "update(\"users\")"
+          ],
+          "documentSecurity": false,
+          "attributes": [
+            {
+              "key": "event_id",
+              "type": "string",
+              "size": 255,
+              "required": true
+            },
+            {
+              "key": "token",
+              "type": "string",
+              "size": 255,
+              "required": true
+            },
+            {
+              "key": "created_by",
+              "type": "string",
+              "size": 255,
+              "required": true
+            },
+            {
+              "key": "is_active",
+              "type": "boolean",
+              "required": true,
+              "default": true
+            },
+            {
+              "key": "created_at",
+              "type": "datetime",
+              "required": true
+            }
+          ],
+          "indexes": [
+            {
+              "key": "token_idx",
+              "type": "unique",
+              "attributes": ["token"],
+              "orders": ["ASC"]
+            },
+            {
+              "key": "event_id_idx",
+              "type": "key",
+              "attributes": ["event_id"],
+              "orders": ["ASC"]
+            }
+          ]
+        },
+        {
+          "collectionId": "audit_logs",
+          "name": "Audit Logs",
+          "permissions": [
+            "read(\"users\")",
+            "create(\"users\")"
+          ],
+          "documentSecurity": false,
+          "attributes": [
+            {
+              "key": "user_id",
+              "type": "string",
+              "size": 255,
+              "required": true
+            },
+            {
+              "key": "action",
+              "type": "string",
+              "size": 100,
+              "required": true
+            },
+            {
+              "key": "entity",
+              "type": "string",
+              "size": 50,
+              "required": true
+            },
+            {
+              "key": "record_id",
+              "type": "string",
+              "size": 255,
+              "required": true
+            },
+            {
+              "key": "details",
+              "type": "string",
+              "size": 10000,
+              "required": false
+            },
+            {
+              "key": "ip_address",
+              "type": "string",
+              "size": 45,
+              "required": false
+            },
+            {
+              "key": "user_agent",
+              "type": "string",
+              "size": 500,
+              "required": false
+            },
+            {
+              "key": "timestamp",
+              "type": "datetime",
+              "required": true
+            }
+          ],
+          "indexes": [
+            {
+              "key": "user_id_idx",
+              "type": "key",
+              "attributes": ["user_id"],
+              "orders": ["ASC"]
+            },
+            {
+              "key": "timestamp_idx",
+              "type": "key",
+              "attributes": ["timestamp"],
+              "orders": ["DESC"]
+            },
+            {
+              "key": "action_idx",
+              "type": "key",
+              "attributes": ["action"],
+              "orders": ["ASC"]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "storage": {
+    "buckets": []
+  },
+  "functions": [
+    {
+      "functionId": "submitScoreHandler",
+      "name": "Submit Score Handler",
+      "runtime": "node-18.0",
+      "execute": ["users"],
+      "events": [],
+      "schedule": "",
+      "timeout": 15,
+      "enabled": true,
+      "entrypoint": "index.js",
+      "commands": "npm install",
+      "path": "appwrite/functions/submitScoreHandler"
+    },
+    {
+      "functionId": "generateRecap",
+      "name": "Generate Recap",
+      "runtime": "node-18.0",
+      "execute": ["users"],
+      "events": [],
+      "schedule": "",
+      "timeout": 30,
+      "enabled": true,
+      "entrypoint": "index.js",
+      "commands": "npm install",
+      "path": "appwrite/functions/generateRecap"
+    },
+    {
+      "functionId": "logAudit",
+      "name": "Log Audit",
+      "runtime": "node-18.0",
+      "execute": ["users"],
+      "events": [],
+      "schedule": "",
+      "timeout": 10,
+      "enabled": true,
+      "entrypoint": "index.js",
+      "commands": "npm install",
+      "path": "appwrite/functions/logAudit"
+    }
+  ]
+}

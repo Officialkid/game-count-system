@@ -4,7 +4,8 @@
 import { useState, useRef, ChangeEvent } from 'react';
 import { Button } from './Button';
 import { useToast } from './Toast';
-import { apiClient } from '@/lib/api-client';
+import { storageService } from '@/lib/services';
+import { useAuth } from '@/lib/auth-context';
 
 interface ImageUploadProps {
   currentUrl?: string | null;
@@ -22,6 +23,7 @@ export function ImageUpload({
   className = '',
 }: ImageUploadProps) {
   const { showToast } = useToast();
+  const { user } = useAuth();
   const [uploading, setUploading] = useState(false);
   const [preview, setPreview] = useState<string | null>(currentUrl || null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -49,21 +51,16 @@ export function ImageUpload({
     };
     reader.readAsDataURL(file);
 
-    // Upload to server
+    // Upload to Appwrite Storage
     setUploading(true);
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('folder', folder);
-
-      const response = await apiClient.post('/api/upload', formData);
-      const data = await response.json();
-
-      if (data.success && data.data?.url) {
+      const uid = user?.id || 'anonymous';
+      const upload = await storageService.uploadEventLogo(file, uid);
+      if (upload.success && upload.data?.fileUrl) {
         showToast('Image uploaded successfully', 'success');
-        onUploadComplete(data.data.url);
+        onUploadComplete(upload.data.fileUrl);
       } else {
-        throw new Error(data.error || 'Upload failed');
+        throw new Error(upload.error || 'Upload failed');
       }
     } catch (error: any) {
       console.error('Upload error:', error);
@@ -101,7 +98,7 @@ export function ImageUpload({
           <img
             src={preview}
             alt="Preview"
-            className="w-full h-48 object-cover rounded-lg border-2 border-gray-200 dark:border-gray-700"
+            className="w-full h-48 object-cover rounded-lg border-2 border-gray-200"
           />
           <div className="absolute top-2 right-2 flex gap-2">
             <Button
@@ -125,7 +122,7 @@ export function ImageUpload({
       ) : (
         <div
           onClick={handleButtonClick}
-          className="w-full h-48 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-primary-500 transition-colors"
+          className="w-full h-48 border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-primary-500 transition-colors"
         >
           <svg
             className="w-12 h-12 text-gray-400 mb-2"
@@ -146,7 +143,7 @@ export function ImageUpload({
       )}
 
       {uploading && (
-        <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+        <div className="flex items-center gap-2 text-sm text-gray-600">
           <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary-600"></div>
           <span>Uploading...</span>
         </div>

@@ -1,18 +1,23 @@
 // app/login/page.tsx
 // FIXED: Now uses centralized auth context for consistent login flow
 // FIXED: Added validation visual feedback (red/green borders) and ARIA attributes
+// ENHANCED: Added submission lock to prevent duplicate login attempts
 'use client';
 
-import React, { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { useState, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
-import { Navbar } from '@/components/Navbar';
+import { useSubmissionLock } from '@/lib/hooks/useSubmissionLock';
+import { PublicAuthPage } from '@/components/AuthGuard';
 import { getFriendlyError } from '@/lib/error-messages';
 
-export default function LoginPage() {
+// Inner login form component
+function LoginForm() {
   const router = useRouter();
-  const { login, isLoading: authLoading } = useAuth();
+  const searchParams = useSearchParams();
+  const { login, loginWithGoogle, isLoading: authLoading } = useAuth();
+  const { lock: lockSubmit, unlock: unlockSubmit, isSubmitting } = useSubmissionLock();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({});
@@ -25,24 +30,26 @@ export default function LoginPage() {
   const [formData, setFormData] = useState({
     email: '',
     password: '',
+    showPassword: false,
   });
 
   // Load saved credentials and returnUrl on mount
-  React.useEffect(() => {
+  useEffect(() => {
+    if (typeof window === 'undefined') return; // SSR safety
+    
     const savedEmail = localStorage.getItem('remembered_email');
     const savedRemember = localStorage.getItem('remember_me');
     if (savedEmail && savedRemember === 'true') {
-      setFormData({ ...formData, email: savedEmail });
+      setFormData(prev => ({ ...prev, email: savedEmail }));
       setRememberMe(true);
     }
     
     // Get returnUrl from query params
-    const params = new URLSearchParams(window.location.search);
-    const returnUrlParam = params.get('returnUrl');
+    const returnUrlParam = searchParams.get('returnUrl');
     if (returnUrlParam) {
       setReturnUrl(returnUrlParam);
     }
-  }, []);
+  }, [searchParams]);
 
   const validateEmail = (email: string): string | undefined => {
     if (!email) return 'Email is required';
@@ -73,13 +80,17 @@ export default function LoginPage() {
     
     const hasError = fieldErrors[field];
     if (hasError) {
-      return 'input-field border-red-500 dark:border-red-600 focus:ring-red-500 dark:focus:ring-red-600';
+      return 'input-field border-red-500 focus:ring-red-500';
     }
-    return 'input-field border-green-500 dark:border-green-600 focus:ring-green-500 dark:focus:ring-green-600';
+    return 'input-field border-green-500 focus:ring-green-500';
   };
 
   const handleSubmit = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();
+    
+    // Prevent duplicate submissions
+    if (!lockSubmit()) return;
+    
     setLoading(true);
     setError('');
     setFieldErrors({});
@@ -92,6 +103,7 @@ export default function LoginPage() {
       setFieldErrors({ email: emailError, password: passwordError });
       setTouched({ email: true, password: true });
       setLoading(false);
+      unlockSubmit();
       return;
     }
 
@@ -100,38 +112,55 @@ export default function LoginPage() {
       await login(formData.email, formData.password);
 
       // Store or clear credentials based on Remember Me
-      if (rememberMe) {
-        localStorage.setItem('remembered_email', formData.email);
-        localStorage.setItem('remember_me', 'true');
-      } else {
-        localStorage.removeItem('remembered_email');
-        localStorage.removeItem('remember_me');
+      if (typeof window !== 'undefined') {
+        if (rememberMe) {
+          localStorage.setItem('remembered_email', formData.email);
+          localStorage.setItem('remember_me', 'true');
+        } else {
+          localStorage.removeItem('remembered_email');
+          localStorage.removeItem('remember_me');
+        }
       }
       
-      // Delay redirect slightly to ensure auth state is updated
-      setTimeout(() => {
-        router.push(returnUrl);
-      }, 100);
+      // Redirect happens automatically via useEffect watching isAuthenticated
+      router.push(returnUrl);
     } catch (err: any) {
       const errorMessage = err instanceof Error ? err.message : 'Login failed';
       const friendly = getFriendlyError({ status: err?.status, message: errorMessage, context: 'auth' });
       setError(`${friendly.title}: ${friendly.message}${friendly.suggestion ? ` — ${friendly.suggestion}` : ''}`);
+      unlockSubmit();
     } finally {
       setLoading(false);
     }
   };
 
+  const handleGoogleLogin = async () => {
+    if (!lockSubmit()) return;
+    setLoading(true);
+    setError('');
+    try {
+      await loginWithGoogle();
+      // Appwrite will redirect; no need to push manually
+    } catch (err: any) {
+      const errorMessage = err instanceof Error ? err.message : 'Google login failed';
+      const friendly = getFriendlyError({ status: err?.status, message: errorMessage, context: 'auth' });
+      setError(`${friendly.title}: ${friendly.message}${friendly.suggestion ? ` — ${friendly.suggestion}` : ''}`);
+      unlockSubmit();
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Show login form
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-purple-50 to-amber-50">
-      <Navbar />
-
       <div className="max-w-md mx-auto px-4 pt-24 pb-16">
-        <div className="card dark:bg-gray-800 dark:border-gray-700">
-        <h1 className="text-3xl font-bold mb-6 text-center dark:text-gray-100">Login</h1>
+        <div className="card">
+          <h1 className="text-3xl font-bold mb-6 text-center">Login</h1>
 
         {error && (
           <div 
-            className="bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 p-3 rounded-lg mb-4"
+            className="bg-red-50 text-red-600 border border-red-200 p-3 rounded-lg mb-4"
             role="alert"
             aria-live="assertive"
           >
@@ -141,7 +170,7 @@ export default function LoginPage() {
 
         <form onSubmit={handleSubmit} className="space-y-4" noValidate>
           <div>
-            <label htmlFor="email" className="block text-sm font-medium mb-2 dark:text-gray-200">
+            <label htmlFor="email" className="block text-sm font-medium mb-2">
               Email
             </label>
             <input
@@ -156,66 +185,97 @@ export default function LoginPage() {
               required
             />
             {touched.email && fieldErrors.email && (
-              <p id="email-error" className="text-sm text-red-600 dark:text-red-400 mt-1" role="alert">
+              <p id="email-error" className="text-sm text-red-600 mt-1" role="alert">
                 {fieldErrors.email}
               </p>
             )}
           </div>
 
           <div>
-            <label htmlFor="password" className="block text-sm font-medium mb-2 dark:text-gray-200">
+            <label htmlFor="password" className="block text-sm font-medium mb-2">
               Password
             </label>
-            <input
-              id="password"
-              type="password"
-              className={getFieldClassName('password')}
-              value={formData.password}
-              onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-              onBlur={() => handleBlur('password')}
-              aria-invalid={touched.password && !!fieldErrors.password}
-              aria-describedby={touched.password && fieldErrors.password ? 'password-error' : undefined}
-              required
-            />
+            <div className="relative">
+              <input
+                id="password"
+                type={formData.showPassword ? 'text' : 'password'}
+                className={getFieldClassName('password') + ' pr-10'}
+                value={formData.password}
+                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                onBlur={() => handleBlur('password')}
+                aria-invalid={touched.password && !!fieldErrors.password}
+                aria-describedby={touched.password && fieldErrors.password ? 'password-error' : undefined}
+                required
+              />
+              <button
+                type="button"
+                onClick={() => setFormData({ ...formData, showPassword: !formData.showPassword })}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-600 hover:text-neutral-900"
+              >
+                {formData.showPassword ? '👁️' : '👁️‍🗨️'}
+              </button>
+            </div>
             {touched.password && fieldErrors.password && (
-              <p id="password-error" className="text-sm text-red-600 dark:text-red-400 mt-1" role="alert">
+              <p id="password-error" className="text-sm text-red-600 mt-1" role="alert">
                 {fieldErrors.password}
               </p>
             )}
           </div>
 
-          <div className="flex items-center">
+          <label className="flex items-center gap-2 text-sm text-neutral-700">
             <input
               id="remember-me"
               type="checkbox"
               checked={rememberMe}
               onChange={(e) => setRememberMe(e.target.checked)}
-              className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500 dark:bg-gray-700 dark:border-gray-600"
-              aria-label="Remember me on this device"
+              className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
             />
-            <label htmlFor="remember-me" className="ml-2 text-sm text-gray-600 dark:text-gray-400 cursor-pointer">
-              Remember me on this device
-            </label>
-          </div>
+            Remember me on this device
+          </label>
 
           <button
             type="submit"
             className="btn-primary w-full"
-            disabled={loading}
-            aria-busy={loading}
+            disabled={loading || isSubmitting}
+            aria-busy={loading || isSubmitting}
           >
-            {loading ? 'Logging in...' : 'Login'}
+            {isSubmitting || loading ? 'Logging in...' : 'Login'}
+          </button>
+
+          <button
+            type="button"
+            onClick={handleGoogleLogin}
+            className="btn-secondary w-full flex items-center justify-center gap-2"
+            disabled={loading || isSubmitting}
+            aria-busy={loading || isSubmitting}
+          >
+            <span aria-hidden="true">🟦</span>
+            <span>Continue with Google</span>
           </button>
         </form>
 
-        <p className="text-center mt-6 text-gray-600 dark:text-gray-400">
+        <p className="text-center mt-6 text-gray-600">
           Don't have an account?{' '}
-          <Link href="/register" className="text-primary-600 dark:text-primary-400 hover:underline">
+          <Link href="/register" className="text-primary-600 hover:underline">
             Register
+          </Link>
+        </p>
+        <p className="text-center mt-2 text-sm text-gray-600">
+          <Link href="/forgot-password" className="text-primary-600 hover:underline">
+            Forgot your password?
           </Link>
         </p>
         </div>
       </div>
     </div>
+  );
+}
+
+// Wrap with PublicAuthPage to redirect already-authenticated users
+export default function LoginPage() {
+  return (
+    <PublicAuthPage>
+      <LoginForm />
+    </PublicAuthPage>
   );
 }

@@ -203,7 +203,7 @@ export function HistoryList({
                 <div className="flex gap-1">
                   {onEdit && (
                     <Button
-                      variant="outline"
+                      variant="secondary"
                       size="sm"
                       onClick={() => onEdit(score)}
                       className="p-1"
@@ -216,7 +216,7 @@ export function HistoryList({
                   )}
                   {onDelete && (
                     <Button
-                      variant="outline"
+                      variant="secondary"
                       size="sm"
                       onClick={() => onDelete(score.id)}
                       className="p-1 text-red-600 hover:bg-red-50"
@@ -306,7 +306,7 @@ export function HistoryFilter({
 
         {(selectedTeam || selectedGame) && (
           <Button
-            variant="outline"
+            variant="secondary"
             onClick={() => {
               onTeamChange(undefined);
               onGameChange(undefined);

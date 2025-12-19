@@ -1,61 +1,23 @@
 // lib/event-utils.ts
 // Utility functions for event management including auto-deactivation
-
-import { db } from './db';
+// NOTE: Database layer removed; deactivation functions are no-ops.
 
 /**
  * Check and deactivate events that have passed their end date
  * Returns the number of events that were deactivated
  */
 export async function deactivateExpiredEvents(): Promise<number> {
-  try {
-    const client = await db.pool.connect();
-    try {
-      const result = await client.query(`
-        UPDATE events
-        SET status = 'inactive'
-        WHERE status = 'active'
-          AND end_date IS NOT NULL
-          AND end_date < CURRENT_DATE
-        RETURNING id
-      `);
-      
-      return result.rows.length;
-    } finally {
-      client.release();
-    }
-  } catch (error) {
-    console.error('Error deactivating expired events:', error);
-    return 0;
-  }
+  // No-op: managed by Appwrite and client logic now
+  return 0;
 }
 
 /**
  * Check if a specific event should be deactivated based on its end date
  * Returns true if the event was deactivated
  */
-export async function checkAndDeactivateEvent(eventId: string): Promise<boolean> {
-  try {
-    const client = await db.pool.connect();
-    try {
-      const result = await client.query(`
-        UPDATE events
-        SET status = 'inactive'
-        WHERE id = $1
-          AND status = 'active'
-          AND end_date IS NOT NULL
-          AND end_date < CURRENT_DATE
-        RETURNING id
-      `, [eventId]);
-      
-      return result.rows.length > 0;
-    } finally {
-      client.release();
-    }
-  } catch (error) {
-    console.error('Error checking event expiration:', error);
-    return false;
-  }
+export async function checkAndDeactivateEvent(_eventId: string): Promise<boolean> {
+  // No-op: managed by Appwrite and client logic now
+  return false;
 }
 
 /**

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import { useAuth } from '@/lib/auth-context';
-import { auth as clientAuth } from '@/lib/api-client';
+// Server sync disabled for session-based auth diagnostics
 
 interface TutorialStep {
   id: string;
@@ -20,33 +20,28 @@ const LOCAL_STORAGE_KEY = 'gcs_onboarding_status_v1';
 
 const tutorialSteps: TutorialStep[] = [
   {
-    id: 'welcome',
-    title: 'Welcome to Game Count',
-    description: 'Quick walkthrough to create an event, add teams, enter scores, and share your leaderboard.',
-  },
-  {
     id: 'create-event',
-    title: 'Create your first event',
-    description: 'Use any "+ New Event" button to launch the event setup wizard. You can always add more events later.',
+    title: 'Create an event',
+    description: 'Start by launching the event wizard. You can add teams and set rules in a few clicks.',
     targetSelector: '[data-tour="create-event"]',
   },
   {
-    id: 'add-teams',
-    title: 'Add teams',
-    description: 'Name your teams in the setup wizard. Start with at least two teams to enable scoring.',
-    targetSelector: '[data-tour="team-name-input"]',
+    id: 'event-card',
+    title: 'Dashboard event card',
+    description: 'Each card shows status, teams, and quick actions. Open one to manage scoring.',
+    targetSelector: '[data-tour="event-card"]',
   },
   {
-    id: 'add-scores',
-    title: 'Record scores',
-    description: 'Open any event and use the Add Score form to log results for each game or round.',
+    id: 'score-entry',
+    title: 'Score entry',
+    description: 'Use Add Score inside an event to log points for each game or round.',
     targetSelector: '[data-tour="add-score-button"]',
   },
   {
-    id: 'share-leaderboard',
-    title: 'Share the live leaderboard',
-    description: 'Copy your public scoreboard link to share real-time standings with players and spectators.',
-    targetSelector: '[data-tour="share-leaderboard"]',
+    id: 'recap-feature',
+    title: 'Recap highlights',
+    description: 'Visit Recap to see wrapped-style highlights once an event is completed.',
+    targetSelector: '[data-tour="recap-feature"]',
   },
 ];
 
@@ -72,24 +67,7 @@ async function persistStatus(status: TutorialStatus, isAuthenticated: boolean) {
   } catch (error) {
     console.warn('Failed to persist onboarding status locally:', error);
   }
-
-  if (!isAuthenticated) return;
-
-  const token = clientAuth.getToken?.() || localStorage.getItem('token');
-  if (!token) return;
-
-  try {
-    await fetch('/api/user/tutorial', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ completed: status.completed, step: status.step }),
-    });
-  } catch (error) {
-    console.warn('Failed to persist onboarding status to server:', error);
-  }
+  // In Appwrite session mode, skip server sync on client
 }
 
 export function OnboardingTutorial() {
@@ -108,41 +86,8 @@ export function OnboardingTutorial() {
     setStatus(local);
 
     const fetchServerStatus = async () => {
-      if (!isAuthenticated) {
-        setLoaded(true);
-        return;
-      }
-
-      const token = clientAuth.getToken?.() || localStorage.getItem('token');
-      if (!token) {
-        setLoaded(true);
-        return;
-      }
-
-      try {
-        const res = await fetch('/api/user/tutorial', {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!res.ok) {
-          setLoaded(true);
-          return;
-        }
-        const data = await res.json();
-        const serverStatus: TutorialStatus = {
-          completed: Boolean(data?.data?.onboarding_completed),
-          step: Number.isFinite(data?.data?.onboarding_step)
-            ? Math.max(0, Math.min(data.data.onboarding_step, tutorialSteps.length - 1))
-            : 0,
-        };
-        setStatus((prev) => ({
-          completed: serverStatus.completed,
-          step: serverStatus.step ?? prev.step,
-        }));
-      } catch (error) {
-        console.warn('Failed to load onboarding status:', error);
-      } finally {
-        setLoaded(true);
-      }
+      // Skip server sync in diagnostics phase; rely on local state
+      setLoaded(true);
     };
 
     fetchServerStatus();
@@ -152,7 +97,8 @@ export function OnboardingTutorial() {
   useEffect(() => {
     if (!loaded) return;
     if (!isAuthenticated) return;
-    if (!status.completed) {
+    const onDashboard = typeof window !== 'undefined' && window.location.pathname.startsWith('/dashboard');
+    if (onDashboard && !status.completed) {
       setIsOpen(true);
     }
   }, [loaded, isAuthenticated, status.completed]);

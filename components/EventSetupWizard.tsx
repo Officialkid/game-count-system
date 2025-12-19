@@ -5,13 +5,16 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { apiClient } from '@/lib/api-client';
-import { Button, Input, Card, ColorPaletteSelector, LogoUpload } from '@/components';
+import { eventsService, teamsService } from '@/lib/services';
+import { useAuth } from '@/lib/auth-context';
+import { useSubmissionLock } from '@/lib/hooks/useSubmissionLock';
+import { Button, Input, Card, ColorPaletteSelector } from '@/components';
 
 interface TeamInput {
   id: string;
   name: string;
-  avatar_url: string;
+  // avatar removed for MVP
+  // avatar_url: string;
   isValidating?: boolean;
   isDuplicate?: boolean;
   suggestions?: string[];
@@ -19,6 +22,20 @@ interface TeamInput {
 
 interface EventSetupWizardProps {
   onComplete?: (eventId: string) => void;
+  onCancel?: () => void;
+  editEventId?: string;
+  initialData?: {
+    id: string;
+    event_name: string;
+    start_date?: string | null;
+    end_date?: string | null;
+    theme_color?: string;
+    // logo removed for MVP
+    // logo_url?: string;
+    allow_negative?: boolean;
+    display_mode?: 'cumulative' | 'per_day';
+    team_count?: number;
+  };
 }
 
 // Progress Stepper Component
@@ -31,7 +48,7 @@ function ProgressStepper({ currentStep, totalSteps }: { currentStep: number; tot
   return (
     <div className="mb-8" role="navigation" aria-label="Event creation progress">
       {/* Step Indicator Text */}
-      <p className="text-sm text-gray-600 dark:text-gray-400 text-center mb-4 font-medium">
+      <p className="text-sm text-gray-600 text-center mb-4 font-medium">
         Step {currentStep} of {totalSteps}
       </p>
       
@@ -44,10 +61,10 @@ function ProgressStepper({ currentStep, totalSteps }: { currentStep: number; tot
               <div
                 className={`w-10 h-10 rounded-full flex items-center justify-center font-semibold transition-all ${
                   step.number === currentStep
-                    ? 'bg-primary-600 dark:bg-primary-500 text-white ring-4 ring-primary-200 dark:ring-primary-900/50'
+                    ? 'bg-primary-600 text-white ring-4 ring-primary-200'
                     : step.number < currentStep
-                    ? 'bg-green-500 dark:bg-green-600 text-white'
-                    : 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400'
+                    ? 'bg-green-500 text-white'
+                    : 'bg-gray-200 text-gray-500'
                 }`}
                 aria-current={step.number === currentStep ? 'step' : undefined}
               >
@@ -62,10 +79,10 @@ function ProgressStepper({ currentStep, totalSteps }: { currentStep: number; tot
               <p
                 className={`mt-2 text-xs sm:text-sm font-medium whitespace-nowrap ${
                   step.number === currentStep
-                    ? 'text-primary-600 dark:text-primary-400'
+                    ? 'text-primary-600'
                     : step.number < currentStep
-                    ? 'text-green-600 dark:text-green-400'
-                    : 'text-gray-500 dark:text-gray-400'
+                    ? 'text-green-600'
+                    : 'text-gray-500'
                 }`}
               >
                 {step.label}
@@ -77,8 +94,8 @@ function ProgressStepper({ currentStep, totalSteps }: { currentStep: number; tot
               <div
                 className={`w-16 sm:w-24 h-1 mx-2 transition-all ${
                   step.number < currentStep
-                    ? 'bg-green-500 dark:bg-green-600'
-                    : 'bg-gray-200 dark:bg-gray-700'
+                    ? 'bg-green-500'
+                    : 'bg-gray-200'
                 }`}
                 aria-hidden="true"
               />
@@ -90,34 +107,38 @@ function ProgressStepper({ currentStep, totalSteps }: { currentStep: number; tot
   );
 }
 
-export function EventSetupWizard({ onComplete }: EventSetupWizardProps) {
+export function EventSetupWizard({ onComplete, onCancel, editEventId, initialData }: EventSetupWizardProps) {
   const router = useRouter();
+  const { user } = useAuth();
+  const { lock: lockStep1, unlock: unlockStep1, isSubmitting: isStep1Submitting } = useSubmissionLock();
+  const { lock: lockStep2, unlock: unlockStep2, isSubmitting: isStep2Submitting } = useSubmissionLock();
   const [step, setStep] = useState<1 | 2>(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  
+  const isEditMode = !!editEventId;
 
-  // Step 1: Event Details
-  const [eventName, setEventName] = useState('');
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
-  const [brandColor, setBrandColor] = useState('purple'); // Palette ID
-  const [logoUrl, setLogoUrl] = useState('');
-  const [logoFile, setLogoFile] = useState<File | null>(null);
-  const [allowNegative, setAllowNegative] = useState(false);
-  const [displayMode, setDisplayMode] = useState<'cumulative' | 'per_day'>('cumulative');
-  const [numTeams, setNumTeams] = useState(3);
+  // Step 1: Event Details - Initialize with edit data if available
+  const [eventName, setEventName] = useState(initialData?.event_name || '');
+  const [startDate, setStartDate] = useState(initialData?.start_date || '');
+  const [endDate, setEndDate] = useState(initialData?.end_date || '');
+  const [brandColor, setBrandColor] = useState(initialData?.theme_color || 'purple'); // Palette ID
+  // Branding logo removed for MVP stability
+  const [allowNegative, setAllowNegative] = useState(initialData?.allow_negative || false);
+  const [displayMode, setDisplayMode] = useState<'cumulative' | 'per_day'>(initialData?.display_mode || 'cumulative');
+  const [numTeams, setNumTeams] = useState(initialData?.team_count || 3);
 
   // Step 2: Team Names
   const [teams, setTeams] = useState<TeamInput[]>([
-    { id: '1', name: '', avatar_url: '' },
-    { id: '2', name: '', avatar_url: '' },
-    { id: '3', name: '', avatar_url: '' },
+    { id: '1', name: '' },
+    { id: '2', name: '' },
+    { id: '3', name: '' },
   ]);
   const [createdEventId, setCreatedEventId] = useState('');
 
   const handleAddTeam = () => {
     if (teams.length < 20) {
-      setTeams([...teams, { id: Date.now().toString(), name: '', avatar_url: '' }]);
+      setTeams([...teams, { id: Date.now().toString(), name: '' }]);
     }
   };
 
@@ -127,7 +148,7 @@ export function EventSetupWizard({ onComplete }: EventSetupWizardProps) {
     }
   };
 
-  const handleTeamChange = (id: string, field: 'name' | 'avatar_url', value: string) => {
+  const handleTeamChange = (id: string, field: 'name', value: string) => {
     setTeams(teams.map(t => t.id === id ? { ...t, [field]: value } : t));
     
     // Trigger duplicate check for team names
@@ -164,20 +185,18 @@ export function EventSetupWizard({ onComplete }: EventSetupWizardProps) {
     await new Promise(resolve => setTimeout(resolve, 500));
 
     try {
-      const response = await apiClient.post('/api/teams/check-name', {
-        event_id: createdEventId,
-        team_name: teamName,
-      });
-      
-      const result = await response.json();
-      
-      if (result.success && result.data) {
+      if (!createdEventId) {
+        setTeams(prev => prev.map(t => t.id === teamId ? { ...t, isValidating: false } : t));
+        return;
+      }
+      const result = await teamsService.checkTeamName(createdEventId, teamName);
+      if (result.success && (result as any).data) {
         setTeams(prev => prev.map(t => 
           t.id === teamId ? {
             ...t,
             isValidating: false,
-            isDuplicate: !result.data.available,
-            suggestions: result.data.suggestions || []
+            isDuplicate: !(result as any).data.available,
+            suggestions: (result as any).data.suggestions || []
           } : t
         ));
       } else {
@@ -194,61 +213,117 @@ export function EventSetupWizard({ onComplete }: EventSetupWizardProps) {
     }
   };
 
-  const generateAvatar = (teamName: string) => {
-    const seed = teamName.toLowerCase().replace(/\s+/g, '-');
-    return `https://api.dicebear.com/7.x/shapes/svg?seed=${seed}`;
-  };
+  // avatar generation removed for MVP
 
   const handleStep1Submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Prevent duplicate submissions
+    if (!lockStep1()) return;
+    
     setError('');
     setLoading(true);
 
     try {
       // Only accept http/https URLs under 500 chars. Drop data: URLs to avoid validation errors.
-      const isHttpUrl = (u: string) => /^https?:\/\//i.test(u);
-      const safeLogoUrl = logoUrl && isHttpUrl(logoUrl) && logoUrl.length <= 500 ? logoUrl : null;
-
-      const response = await apiClient.post('/api/events/create', {
+      const eventData = {
         event_name: eventName,
         start_date: startDate || null,
         end_date: endDate || null,
         theme_color: brandColor,
-        logo_url: safeLogoUrl,
         allow_negative: allowNegative,
         display_mode: displayMode,
         num_teams: numTeams,
-      });
-      const result = await response.json();
+      };
 
-      if (result.success && result.data?.event) {
-        setCreatedEventId(result.data.event.id);
-        
-        // Initialize teams array based on num_teams
-        const initialTeams: TeamInput[] = [];
-        for (let i = 1; i <= numTeams; i++) {
-          initialTeams.push({
-            id: i.toString(),
-            name: '',
-            avatar_url: '',
-          });
+      let createdId = '';
+
+      if (isEditMode && editEventId) {
+        // Update existing event
+        const result = await eventsService.updateEvent(editEventId, {
+          event_name: eventData.event_name,
+          theme_color: eventData.theme_color || undefined,
+          allow_negative: eventData.allow_negative,
+          display_mode: (eventData as any).display_mode === 'per_day' ? 'cumulative' : (eventData as any).display_mode,
+          num_teams: eventData.num_teams || undefined,
+        });
+
+        if (result.success && result.data) {
+          // In edit mode, we can skip to completion or load teams for step 2
+          // For now, let's complete the edit after step 1
+          setCreatedEventId(editEventId);
+          
+          // Load existing teams if any
+          const teamsData = await teamsService.getTeams(editEventId);
+          if (teamsData.success && teamsData.data?.teams) {
+            const existingTeams: TeamInput[] = (teamsData.data.teams as any[]).map((t: any, idx: number) => ({
+              id: t.id || (idx + 1).toString(),
+              name: t.team_name || '',
+            }));
+            setTeams(existingTeams);
+          } else {
+            // No existing teams, initialize empty ones
+            const initialTeams: TeamInput[] = [];
+            for (let i = 1; i <= numTeams; i++) {
+              initialTeams.push({
+                id: i.toString(),
+                name: '',
+              });
+            }
+            setTeams(initialTeams);
+          }
+          
+          setStep(2);
+        } else {
+          setError(result.error || 'Failed to update event');
         }
-        setTeams(initialTeams);
-        
-        setStep(2);
       } else {
-        setError(result.error || 'Failed to create event');
+        // Create new event
+        if (!user?.id) throw new Error('Not authenticated');
+        const result = await eventsService.createEvent(user.id, {
+          event_name: eventData.event_name,
+          theme_color: eventData.theme_color || undefined,
+          allow_negative: !!eventData.allow_negative,
+          display_mode: (eventData as any).display_mode === 'per_day' ? 'cumulative' : (eventData as any).display_mode,
+          num_teams: eventData.num_teams || 3,
+          status: 'active',
+        });
+
+        if (result.success && result.data?.event) {
+          createdId = result.data.event.$id;
+          setCreatedEventId(createdId);
+          
+          // Initialize teams array based on num_teams
+          const initialTeams: TeamInput[] = [];
+          for (let i = 1; i <= numTeams; i++) {
+            initialTeams.push({
+              id: i.toString(),
+              name: '',
+            });
+          }
+          setTeams(initialTeams);
+          
+          setStep(2);
+        } else {
+          setError(result.error || 'Failed to create event');
+        }
       }
     } catch (err) {
       setError('An unexpected error occurred');
-      console.error('Event creation error:', err);
+      console.error('Event creation/update error:', err);
+      unlockStep1();
     } finally {
       setLoading(false);
+      unlockStep1();
     }
   };
 
   const handleStep2Submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Prevent duplicate submissions
+    if (!lockStep2()) return;
+    
     setError('');
     setLoading(true);
 
@@ -282,28 +357,22 @@ export function EventSetupWizard({ onComplete }: EventSetupWizardProps) {
         return;
       }
 
-      // Create all teams (parse JSON results)
-      const teamPromises = teams.map(async team => {
-        const response = await apiClient.post('/api/teams/add', {
-          event_id: createdEventId,
-          team_name: team.name.trim(),
-          avatar_url: team.avatar_url || generateAvatar(team.name),
-        });
-        try {
-          const json = await response.json();
-          return json;
-        } catch (e) {
-          return { success: false, error: 'Invalid server response' };
-        }
-      });
-
-      const results = await Promise.all(teamPromises);
+      // Create all teams via Appwrite
+      const results = await Promise.all(
+        teams.map(async team => {
+          const resp = await teamsService.createTeam(user?.id || '', {
+            event_id: createdEventId,
+            team_name: team.name.trim(),
+          } as any);
+          return resp;
+        })
+      );
 
       const failedTeams = results.filter(r => !r?.success);
       if (failedTeams.length > 0) {
         // Check if any failures were due to duplicates
         const duplicateErrors = failedTeams.filter(r => 
-          r?.error?.includes('already exists') || r?.suggestions
+          r?.error && typeof r.error === 'string' && r.error.includes('already exists')
         );
         
         if (duplicateErrors.length > 0) {
@@ -311,14 +380,14 @@ export function EventSetupWizard({ onComplete }: EventSetupWizardProps) {
           
           // Mark teams as duplicates in the UI
           for (let i = 0; i < results.length; i++) {
-            const result = results[i];
-            if (!result?.success && (result?.error?.includes('already exists') || result?.suggestions)) {
+            const result = results[i] as any;
+            if (!result?.success) {
               const teamId = teams[i].id;
               setTeams(prev => prev.map(t => 
                 t.id === teamId ? {
                   ...t,
                   isDuplicate: true,
-                  suggestions: result.suggestions || []
+                  suggestions: []
                 } : t
               ));
             }
@@ -339,16 +408,18 @@ export function EventSetupWizard({ onComplete }: EventSetupWizardProps) {
     } catch (err) {
       setError('An unexpected error occurred while creating teams');
       console.error('Team creation error:', err);
+      unlockStep2();
     } finally {
       setLoading(false);
+      unlockStep2();
     }
   };
 
   if (step === 1) {
     return (
-      <Card className="max-w-2xl mx-auto dark:bg-gray-800 dark:border-gray-700">
+      <Card className="max-w-2xl mx-auto">
         <ProgressStepper currentStep={1} totalSteps={2} />
-        <h2 className="text-2xl font-bold mb-6 text-primary-700 dark:text-primary-400">Create New Event</h2>
+        <h2 className="text-2xl font-bold mb-6 text-primary-700">{isEditMode ? 'Edit Event' : 'Create New Event'}</h2>
         
         <form onSubmit={handleStep1Submit} className="space-y-6">
           {/* Event Name */}
@@ -427,15 +498,7 @@ export function EventSetupWizard({ onComplete }: EventSetupWizardProps) {
           />
 
           {/* Event Logo (Optional) */}
-          <LogoUpload
-            currentLogoUrl={logoUrl}
-            onLogoChange={(file, previewUrl) => {
-              setLogoFile(file);
-              setLogoUrl(previewUrl || '');
-            }}
-            label="Event Logo (Optional)"
-            maxSizeMB={10}
-          />
+          {/* Logo upload removed for MVP */}
 
           {/* Allow Negative Points */}
           <div className="flex items-center gap-3">
@@ -498,8 +561,8 @@ export function EventSetupWizard({ onComplete }: EventSetupWizardProps) {
           )}
 
           <div className="flex gap-3 justify-end">
-            <Button type="submit" disabled={loading} aria-label="Continue to team setup">
-              {loading ? 'Creating...' : 'Next: Add Teams'}
+            <Button type="submit" disabled={loading || isStep1Submitting} aria-label="Continue to team setup">
+              {isStep1Submitting ? 'Creating...' : loading ? 'Creating...' : 'Next: Add Teams'}
             </Button>
           </div>
         </form>
@@ -509,11 +572,11 @@ export function EventSetupWizard({ onComplete }: EventSetupWizardProps) {
 
   // Step 2: Team Names
   return (
-    <Card className="max-w-2xl mx-auto dark:bg-gray-800 dark:border-gray-700">
+    <Card className="max-w-2xl mx-auto">
       <ProgressStepper currentStep={2} totalSteps={2} />
-      <h2 className="text-2xl font-bold mb-2 text-primary-700 dark:text-primary-400">Add Teams</h2>
-      <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
-        Event: <strong className="dark:text-gray-200">{eventName}</strong> • {numTeams} teams
+      <h2 className="text-2xl font-bold mb-2 text-primary-700">Add Teams</h2>
+      <p className="text-sm text-gray-600 mb-6">
+        Event: <strong>{eventName}</strong> • {numTeams} teams
       </p>
 
       <form onSubmit={handleStep2Submit} className="space-y-6">
@@ -561,7 +624,7 @@ export function EventSetupWizard({ onComplete }: EventSetupWizardProps) {
                 {teams.length > 2 && (
                   <Button
                     type="button"
-                    variant="outline"
+                    variant="secondary"
                     onClick={() => handleRemoveTeam(team.id)}
                     className="text-red-600 hover:bg-red-50"
                     aria-label={`Remove team ${index + 1}`}
@@ -598,7 +661,7 @@ export function EventSetupWizard({ onComplete }: EventSetupWizardProps) {
         {teams.length < 20 && (
           <Button
             type="button"
-            variant="outline"
+            variant="secondary"
             onClick={handleAddTeam}
             className="w-full"
             aria-label="Add another team"
@@ -616,15 +679,15 @@ export function EventSetupWizard({ onComplete }: EventSetupWizardProps) {
         <div className="flex gap-3 justify-between">
           <Button
             type="button"
-            variant="outline"
+            variant="secondary"
             onClick={() => setStep(1)}
-            disabled={loading}
+            disabled={loading || isStep2Submitting}
             aria-label="Go back to event details"
           >
             Back
           </Button>
-          <Button type="submit" disabled={loading} aria-label="Create event with teams">
-            {loading ? 'Creating Teams...' : 'Create Event'}
+          <Button type="submit" disabled={loading || isStep2Submitting} aria-label={isEditMode ? 'Update event with teams' : 'Create event with teams'}>
+            {isStep2Submitting ? (isEditMode ? 'Updating...' : 'Creating Teams...') : loading ? (isEditMode ? 'Updating...' : 'Creating Teams...') : (isEditMode ? 'Update Event' : 'Create Event')}
           </Button>
         </div>
       </form>

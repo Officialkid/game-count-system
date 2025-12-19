@@ -2,6 +2,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { apiClient, auth } from '@/lib/api-client';
 import { Card, CardContent, Avatar, Badge, Button, LoadingSkeleton, useToast } from '@/components/ui';
 import { TeamCardSkeletonList } from '@/components/skeletons';
@@ -11,7 +12,8 @@ import { getPaletteById } from '@/lib/color-palettes';
 interface Team {
   id: string | number;
   team_name: string;
-  avatar_url?: string | null;
+  // avatar removed for MVP
+  // avatar_url?: string | null;
   total_points?: number;
   total_score?: number;
   histories?: Array<{ game_name: string; game_number: number; points: number; created_at: string }>;
@@ -25,8 +27,11 @@ interface TeamsTabProps {
 
 export function TeamsTab({ eventId, event, refreshTrigger }: TeamsTabProps) {
   const { showToast } = useToast();
+  const router = useRouter();
   const [teams, setTeams] = useState<Team[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string>('');
+  const [errorType, setErrorType] = useState<'none' | 'network' | 'server' | 'forbidden'>('none');
   const [expandedTeam, setExpandedTeam] = useState<string | number | null>(null);
 
   useEffect(() => {
@@ -36,13 +41,29 @@ export function TeamsTab({ eventId, event, refreshTrigger }: TeamsTabProps) {
   const loadTeams = async () => {
     try {
       setLoading(true);
+      setError('');
+      setErrorType('none');
       const token = auth.getToken();
       const response = await fetch(`/api/events/${eventId}/teams`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
-
       if (!response.ok) {
-        throw new Error('Failed to load teams');
+        if (response.status === 401) {
+          router.push(`/login?returnUrl=/event/${eventId}`);
+          return;
+        }
+        if (response.status === 403) {
+          setErrorType('forbidden');
+          setError('You do not have permission to view teams for this event.');
+          return;
+        }
+        if (response.status >= 500) {
+          setErrorType('server');
+          setError('Server error loading teams. Please retry later.');
+          return;
+        }
+        setError('Failed to load teams');
+        return;
       }
 
       const data = await response.json();
@@ -62,7 +83,8 @@ export function TeamsTab({ eventId, event, refreshTrigger }: TeamsTabProps) {
       setTeams(sortedTeams);
     } catch (error) {
       console.error('Error loading teams:', error);
-      showToast('Failed to load teams', 'error');
+      setErrorType('network');
+      setError('Network error. Please check your connection and try again.');
     } finally {
       setLoading(false);
     }
@@ -79,6 +101,23 @@ export function TeamsTab({ eventId, event, refreshTrigger }: TeamsTabProps) {
 
   if (loading) {
     return <TeamCardSkeletonList count={4} />;
+  }
+
+  if (errorType === 'server' || errorType === 'network' || errorType === 'forbidden') {
+    return (
+      <Card>
+        <CardContent className="py-12 text-center">
+          <div className="text-5xl mb-3">{errorType === 'forbidden' ? '🚫' : '⚠️'}</div>
+          <h3 className="text-xl font-bold text-gray-900 mb-2">
+            {errorType === 'forbidden' ? 'Permission Denied' : 'Unable to load teams'}
+          </h3>
+          <p className="text-gray-600 mb-6">{error || 'Please try again later.'}</p>
+          {errorType !== 'forbidden' && (
+            <Button onClick={() => loadTeams()}>Retry</Button>
+          )}
+        </CardContent>
+      </Card>
+    );
   }
 
   if (teams.length === 0) {
@@ -127,7 +166,8 @@ export function TeamsTab({ eventId, event, refreshTrigger }: TeamsTabProps) {
                     rank={index + 1}
                     name={team.team_name}
                     score={points}
-                    avatarUrl={team.avatar_url}
+                    // avatar removed for MVP
+                    avatarUrl={undefined}
                     highlight={isExpanded}
                     paletteColor={palette.primary}
                   />

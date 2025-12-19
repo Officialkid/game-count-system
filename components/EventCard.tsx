@@ -2,7 +2,7 @@
 'use client';
 
 import React from 'react';
-import { Trash2, Edit, Copy, Eye } from 'lucide-react';
+import { Trash2, Edit, Copy, Eye, Users, Clock } from 'lucide-react';
 import { getEventStatus, STATUS_BADGE_CONFIG, formatDateRange, type EventStatus } from '@/lib/dateUtils';
 
 export interface EventCardProps {
@@ -14,6 +14,7 @@ export interface EventCardProps {
     start_date?: string | null;
     end_date?: string | null;
     is_active?: boolean;
+    updated_at?: string | null;
   };
   onView: (eventId: string) => void;
   onEdit: (eventId: string) => void;
@@ -21,7 +22,7 @@ export interface EventCardProps {
   onDuplicate: (eventId: string) => void;
 }
 
-export function EventCard({
+export const EventCard = React.memo(function EventCard({
   event,
   onView,
   onEdit,
@@ -38,59 +39,63 @@ export function EventCard({
   const statusConfig = STATUS_BADGE_CONFIG[calculatedStatus];
   const hasDateRange = event.start_date && event.end_date;
 
+  const lastUpdated = event.updated_at
+    ? new Date(event.updated_at)
+    : null;
+
+  const isActive = calculatedStatus === 'active';
+  const cardBase = 'group bg-white rounded-xl border transition-transform transition-opacity duration-200 overflow-hidden';
+  const stateClasses = isActive
+    ? 'border-purple-300 hover:-translate-y-0.5 hover:opacity-95 shadow-sm hover:shadow-md'
+    : 'border-neutral-200 opacity-95 hover:opacity-100';
+
   return (
-    <div className="group bg-white/50 backdrop-blur-xl rounded-2xl border border-white/30 shadow-lg hover:shadow-2xl transition-all duration-300 overflow-hidden">
-      {/* Card Header with Status Badge */}
-      <div className="bg-gradient-to-r from-purple-600/10 to-amber-500/10 border-b border-white/20 p-6">
-        <div className="flex justify-between items-start gap-4 mb-2">
-          <h3 className="text-lg font-bold text-gray-900 line-clamp-2 group-hover:text-purple-600 transition-colors flex-1">
+    <div
+      className={`${cardBase} ${stateClasses}`}
+      style={isActive ? { boxShadow: '0 0 0 2px rgba(107,70,193,0.15) inset' } : undefined}
+      data-tour="event-card"
+    >
+      {/* Compact Header with status badge */}
+      <div className="p-3 sm:p-4">
+        <div className="flex items-start justify-between gap-2 mb-2">
+          <h3 className="text-sm sm:text-base font-semibold text-neutral-900 line-clamp-2 group-hover:text-purple-600 transition-colors flex-1">
             {event.event_name}
           </h3>
-          <span className={`px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap border ${statusConfig.bgColor} ${statusConfig.borderColor} ${statusConfig.textColor}`}>
-            <span className={`inline-block mr-1 ${statusConfig.dotColor}`}>●</span>
+          <span className={`px-2 py-0.5 rounded-full text-xs font-semibold whitespace-nowrap border flex-shrink-0 ${statusConfig.bgColor} ${statusConfig.borderColor} ${statusConfig.textColor}`}>
+            <span className={`inline-block mr-0.5 ${statusConfig.dotColor}`}>●</span>
             {statusConfig.label}
           </span>
         </div>
-        <p className="text-sm text-gray-500 font-mono">ID: {event.id.slice(0, 12)}...</p>
-      </div>
-
-      {/* Card Body - Stats & Date Range */}
-      <div className="p-6 space-y-4">
-        <div className="grid grid-cols-2 gap-4">
-          <div className="bg-purple-50/50 rounded-lg p-3 border border-purple-100/50">
-            <p className="text-xs font-medium text-gray-600 uppercase tracking-wide">Teams</p>
-            <p className="text-2xl font-bold text-purple-600 mt-1">{event.team_count || 0}</p>
-          </div>
-          <div className={`${statusConfig.bgColor} rounded-lg p-3 border ${statusConfig.borderColor}`}>
-            <p className="text-xs font-medium text-gray-600 uppercase tracking-wide">Status</p>
-            <p className={`text-sm font-semibold ${statusConfig.textColor} mt-1 capitalize`}>
-              {statusConfig.label}
-            </p>
-          </div>
+        
+        {/* Metadata row - Single line, truncated */}
+        <div className={`flex items-center gap-3 text-xs sm:text-sm ${isActive ? 'text-neutral-600' : 'text-neutral-500'}`}>
+          <span className="inline-flex items-center gap-1 whitespace-nowrap">
+            <Users className="w-3.5 h-3.5 text-neutral-500 flex-shrink-0" />
+            {event.team_count ?? 0} teams
+          </span>
+          {lastUpdated && (
+            <span className="inline-flex items-center gap-1 whitespace-nowrap hidden sm:inline-flex">
+              <Clock className="w-3.5 h-3.5 text-neutral-500 flex-shrink-0" />
+              {lastUpdated.toLocaleDateString()}
+            </span>
+          )}
         </div>
-
-        {/* Date Range Display */}
-        {hasDateRange && (
-          <div className="bg-blue-50/50 rounded-lg p-3 border border-blue-100/50">
-            <p className="text-xs font-medium text-gray-600 uppercase tracking-wide">Dates</p>
-            <p className="text-sm font-semibold text-blue-700 mt-1">
-              {formatDateRange(event.start_date!, event.end_date!)}
-            </p>
-          </div>
-        )}
       </div>
 
-      {/* Card Footer - Action Buttons */}
-      <div className="bg-gray-50/50 border-t border-white/20 p-4 flex gap-2">
+      {/* Card Footer - Compact Action Buttons (Icons only on mobile) */}
+      <div className="bg-neutral-50 border-t border-neutral-200 p-2 sm:p-3 flex gap-1.5 sm:gap-2" role="toolbar" aria-label="Event actions">
         <button
           onClick={(e) => {
             e.stopPropagation();
             onView(event.id);
           }}
-          className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium rounded-lg transition-colors"
+          className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 sm:px-3 sm:py-2 bg-purple-600 hover:bg-purple-700 text-white text-xs sm:text-sm font-medium rounded transition-colors"
           title="View event details"
+          aria-label="View event"
+          onKeyDown={(ke) => { if (ke.key === 'Enter' || ke.key === ' ') { ke.preventDefault(); onView(event.id); } }}
         >
-          <Eye size={16} />
+          <Eye size={14} className="sm:hidden" />
+          <Eye size={16} className="hidden sm:block" />
           <span className="hidden sm:inline">View</span>
         </button>
         <button
@@ -98,10 +103,13 @@ export function EventCard({
             e.stopPropagation();
             onEdit(event.id);
           }}
-          className="flex items-center justify-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
+          className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 sm:px-3 sm:py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-medium rounded transition-colors"
           title="Edit event"
+          aria-label="Edit event"
+          onKeyDown={(ke) => { if (ke.key === 'Enter' || ke.key === ' ') { ke.preventDefault(); onEdit(event.id); } }}
         >
-          <Edit size={16} />
+          <Edit size={14} className="sm:hidden" />
+          <Edit size={16} className="hidden sm:block" />
           <span className="hidden sm:inline">Edit</span>
         </button>
         <button
@@ -109,10 +117,13 @@ export function EventCard({
             e.stopPropagation();
             onDuplicate(event.id);
           }}
-          className="flex items-center justify-center gap-2 px-3 py-2 bg-amber-600 hover:bg-amber-700 text-white text-sm font-medium rounded-lg transition-colors"
+          className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 sm:px-3 sm:py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs sm:text-sm font-medium rounded transition-colors"
           title="Duplicate event"
+          aria-label="Duplicate event"
+          onKeyDown={(ke) => { if (ke.key === 'Enter' || ke.key === ' ') { ke.preventDefault(); onDuplicate(event.id); } }}
         >
-          <Copy size={16} />
+          <Copy size={14} className="sm:hidden" />
+          <Copy size={16} className="hidden sm:block" />
           <span className="hidden sm:inline">Copy</span>
         </button>
         <button
@@ -120,16 +131,19 @@ export function EventCard({
             e.stopPropagation();
             onDelete(event.id);
           }}
-          className="flex items-center justify-center gap-2 px-3 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg transition-colors"
+          className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 sm:px-3 sm:py-2 bg-red-600 hover:bg-red-700 text-white text-xs sm:text-sm font-medium rounded transition-colors"
           title="Delete event"
+          aria-label="Delete event"
+          onKeyDown={(ke) => { if (ke.key === 'Enter' || ke.key === ' ') { ke.preventDefault(); onDelete(event.id); } }}
         >
-          <Trash2 size={16} />
+          <Trash2 size={14} className="sm:hidden" />
+          <Trash2 size={16} className="hidden sm:block" />
           <span className="hidden sm:inline">Delete</span>
         </button>
       </div>
     </div>
   );
-}
+});
 
 interface EventGridProps {
   children: React.ReactNode;

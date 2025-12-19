@@ -9,7 +9,8 @@ import { LoadingSkeleton } from '../ui/LoadingSkeleton';
 import { ConfirmDialog } from '../ui/Modal';
 import { SaveTemplateModal } from '../modals';
 import { EditEventModal } from '../modals/EditEventModal';
-import { auth } from '@/lib/api-client';
+import { useAuth } from '@/lib/auth-context';
+import { eventsService, shareLinksService, templatesService, recapsService, teamsService, scoresService } from '@/lib/services';
 import { getPaletteById } from '@/lib/color-palettes';
 import { getFriendlyError } from '@/lib/error-messages';
 
@@ -23,7 +24,6 @@ interface Event {
   event_id: number;
   event_name: string;
   theme_color: string;
-  logo_url: string | null;
   allow_negative: boolean;
   display_mode: string;
 }
@@ -34,6 +34,7 @@ interface SettingsTabProps {
 }
 
 export function SettingsTab({ eventId, eventName }: SettingsTabProps) {
+  const { user } = useAuth();
   const [shareLink, setShareLink] = useState<ShareLink | null>(null);
   const [event, setEvent] = useState<Event | null>(null);
   const [loading, setLoading] = useState(true);
@@ -44,6 +45,7 @@ export function SettingsTab({ eventId, eventName }: SettingsTabProps) {
   const [savingTemplate, setSavingTemplate] = useState(false);
   const [showEditEvent, setShowEditEvent] = useState(false);
   const [showDeleteEvent, setShowDeleteEvent] = useState(false);
+  const [generatingRecap, setGeneratingRecap] = useState(false);
   const { showToast } = useToast();
 
   const showFriendlyError = (input: { status?: number; message?: string; code?: string; context?: 'event' | 'share' | 'general' }) => {
@@ -62,29 +64,30 @@ export function SettingsTab({ eventId, eventName }: SettingsTabProps) {
   const loadData = async () => {
     try {
       setLoading(true);
-      const token = auth.getToken();
-      
-      // Load event data
-      const eventResponse = await fetch(`/api/events/${eventId}`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
-      if (eventResponse.ok) {
-        const eventData = await eventResponse.json();
-        setEvent(eventData.event);
-      } else {
-        showFriendlyError({ status: eventResponse.status, context: 'event' });
+      // Load event data via Appwrite
+      const ev = await eventsService.getEvent(eventId);
+      if (ev.success && ev.data) {
+        const e = ev.data.event as any;
+        setEvent({
+          event_id: e.$id,
+          event_name: e.event_name,
+          theme_color: e.theme_color,
+          allow_negative: !!e.allow_negative,
+          display_mode: e.display_mode,
+        });
       }
 
-      // Load share link
-      const linkResponse = await fetch(`/api/events/${eventId}/share-link`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
-      if (linkResponse.ok) {
-        const linkData = await linkResponse.json();
-        console.log('Share link response:', linkData);
-        setShareLink(linkData.data?.shareLink || linkData.shareLink || null);
+      // Load share link via Appwrite
+      const link = await shareLinksService.getShareLinkByEvent(eventId);
+      if (link.success && link.data) {
+        const sl = link.data.shareLink;
+        setShareLink({
+          share_token: sl.token,
+          is_active: sl.is_active,
+          created_at: sl.created_at,
+        });
       } else {
-        showFriendlyError({ status: linkResponse.status, context: 'share' });
+        setShareLink(null);
       }
     } catch (error) {
       console.error('Error loading data:', error);
@@ -96,17 +99,20 @@ export function SettingsTab({ eventId, eventName }: SettingsTabProps) {
 
   const handleExportCSV = async () => {
     try {
-      const token = auth.getToken();
-      const response = await fetch(`/api/export/csv/${eventId}`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
+      // Client-side CSV export: fetch teams and scores
+      const teamsRes = await teamsService.getTeams(eventId);
+      const teams = teamsRes.success && teamsRes.data ? (teamsRes.data.teams as any[]) : [];
+      const scoresRes = await scoresService.getScores(eventId);
+      const scores = scoresRes.success && scoresRes.data ? (scoresRes.data.scores as any[]) : [];
 
-      if (!response.ok) {
-        showFriendlyError({ status: response.status, context: 'event' });
-        return;
+      const rows: string[] = [];
+      rows.push('team_id,team_name,game_number,points');
+      for (const s of scores) {
+        const teamName = teams.find(t => t.$id === s.team_id)?.team_name || '';
+        rows.push(`${s.team_id},"${teamName}",${s.game_number},${s.points}`);
       }
-
-      const blob = await response.blob();
+      const csv = rows.join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -115,7 +121,6 @@ export function SettingsTab({ eventId, eventName }: SettingsTabProps) {
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
-
       showToast('CSV exported successfully', 'success');
     } catch (error) {
       console.error('CSV export error:', error);
@@ -125,27 +130,8 @@ export function SettingsTab({ eventId, eventName }: SettingsTabProps) {
 
   const handleExportPDF = async () => {
     try {
-      const token = auth.getToken();
-      const response = await fetch(`/api/export/pdf/${eventId}`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
-
-      if (!response.ok) {
-        showFriendlyError({ status: response.status, context: 'event' });
-        return;
-      }
-
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${eventName.replace(/[^a-z0-9]/gi, '_')}_report.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-
-      showToast('PDF exported successfully', 'success');
+      // PDF export requires a server function; fallback to CSV guidance
+      showToast('PDF export not available without a server. Use CSV instead.', 'warning');
     } catch (error) {
       console.error('PDF export error:', error);
       showFriendlyError({ message: (error as Error).message, context: 'event' });
@@ -169,23 +155,14 @@ export function SettingsTab({ eventId, eventName }: SettingsTabProps) {
   const handleRegenerateLink = async () => {
     try {
       setRegenerating(true);
-      const token = auth.getToken();
-      const response = await fetch(`/api/events/${eventId}/share-link`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({ regenerate: true }),
-      });
-
-      if (!response.ok) {
-        showFriendlyError({ status: response.status, context: 'share' });
+      if (!user?.id) return;
+      const res = await shareLinksService.createShareLink(eventId, user.id, true);
+      if (!res.success || !res.data) {
+        showFriendlyError({ message: res.error || 'Failed to regenerate link', context: 'share' });
         return;
       }
-      const data = await response.json();
-      console.log('Regenerate response:', data);
-      setShareLink(data.data?.shareLink || data.shareLink);
+      const sl = res.data.shareLink;
+      setShareLink({ share_token: sl.token, is_active: sl.is_active, created_at: sl.created_at });
       showToast('Share link regenerated successfully!', 'success');
     } catch (error) {
       console.error('Error regenerating link:', error);
@@ -198,14 +175,10 @@ export function SettingsTab({ eventId, eventName }: SettingsTabProps) {
   const handleDeleteLink = async () => {
     try {
       setDeleting(true);
-      const token = auth.getToken();
-      const response = await fetch(`/api/events/${eventId}/share-link`, {
-        method: 'DELETE',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
-
-      if (!response.ok) {
-        showFriendlyError({ status: response.status, context: 'share' });
+      if (!user?.id) return;
+      const resp = await shareLinksService.deleteShareLink(eventId, user.id);
+      if (!resp.success) {
+        showFriendlyError({ message: resp.error || 'Failed to delete link', context: 'share' });
         return;
       }
       setShareLink(null);
@@ -239,28 +212,18 @@ export function SettingsTab({ eventId, eventName }: SettingsTabProps) {
 
     try {
       setSavingTemplate(true);
-      const token = auth.getToken();
-      const response = await fetch('/api/templates', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({
-          template_name: templateName,
-          event_name_prefix: event.event_name,
-          theme_color: event.theme_color,
-          logo_url: event.logo_url,
-          allow_negative: event.allow_negative,
-          display_mode: event.display_mode,
-        }),
+      if (!user?.id) { showFriendlyError({ message: 'Not authenticated', context: 'event' }); return; }
+      const resp = await templatesService.saveTemplate(user.id, {
+        template_name: templateName,
+        event_name_prefix: event.event_name,
+        theme_color: event.theme_color,
+        allow_negative: event.allow_negative,
+        display_mode: event.display_mode,
       });
-
-      if (!response.ok) {
-        showFriendlyError({ status: response.status, context: 'event' });
+      if (!resp.success) {
+        showFriendlyError({ message: resp.error, context: 'event' });
         return;
       }
-      
       showToast('Template saved successfully!', 'success');
       setShowSaveTemplate(false);
     } catch (error) {
@@ -273,14 +236,9 @@ export function SettingsTab({ eventId, eventName }: SettingsTabProps) {
 
   const handleDeleteEvent = async () => {
     try {
-      const token = auth.getToken();
-      const response = await fetch(`/api/events/${eventId}`, {
-        method: 'DELETE',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
-
-      if (!response.ok) {
-        showFriendlyError({ status: response.status, context: 'event' });
+      const response = await eventsService.deleteEvent(eventId);
+      if (!response.success) {
+        showFriendlyError({ message: response.error, context: 'event' });
         return;
       }
 
@@ -300,6 +258,55 @@ export function SettingsTab({ eventId, eventName }: SettingsTabProps) {
     setShowEditEvent(false);
     loadData();
     showToast('Event updated successfully', 'success');
+  };
+
+  const handleGenerateRecap = async () => {
+    try {
+      setGeneratingRecap(true);
+      if (!user?.id) { showFriendlyError({ message: 'Not authenticated', context: 'event' }); return; }
+
+      // Build recap snapshot client-side
+      const teamsRes = await teamsService.getTeams(eventId);
+      const scoresRes = await scoresService.getScores(eventId);
+      const teams = (teamsRes.success && teamsRes.data ? teamsRes.data.teams : []) as any[];
+      const scores = (scoresRes.success && scoresRes.data ? scoresRes.data.scores : []) as any[];
+
+      const totals: Record<string, number> = {};
+      for (const s of scores) {
+        totals[s.team_id] = (totals[s.team_id] || 0) + (s.points || 0);
+      }
+      const final_leaderboard = teams
+        .map(t => ({ team_id: t.$id, team_name: t.team_name, total_points: totals[t.$id] || 0 }))
+        .sort((a, b) => b.total_points - a.total_points)
+        .map((t, idx) => ({ ...t, rank: idx + 1 }));
+
+      const snapshot = {
+        event_id: eventId,
+        event_name: eventName,
+        total_games: scores.length ? Math.max(...scores.map((s: any) => s.game_number || 0)) : 0,
+        total_teams: teams.length,
+        final_leaderboard,
+        top_scorer: final_leaderboard[0]
+          ? { team_id: final_leaderboard[0].team_id, team_name: final_leaderboard[0].team_name, total_points: final_leaderboard[0].total_points }
+          : undefined,
+        winner: final_leaderboard[0]
+          ? { team_id: final_leaderboard[0].team_id, team_name: final_leaderboard[0].team_name, total_points: final_leaderboard[0].total_points }
+          : undefined,
+        highlights: [],
+      } as any;
+
+      const create = await recapsService.createRecap(user.id, eventId, snapshot);
+      if (!create.success) {
+        showFriendlyError({ message: create.error || 'Failed to generate recap', context: 'event' });
+        return;
+      }
+      showToast('Event recap generated successfully!', 'success');
+    } catch (error) {
+      console.error('Error generating recap:', error);
+      showFriendlyError({ message: (error as Error).message, context: 'event' });
+    } finally {
+      setGeneratingRecap(false);
+    }
   };
 
   if (loading) {
@@ -470,24 +477,7 @@ export function SettingsTab({ eventId, eventName }: SettingsTabProps) {
                   </div>
                 </div>
 
-                {event.logo_url && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Logo
-                    </label>
-                    <div className="flex items-center gap-3">
-                      <img
-                        src={event.logo_url}
-                        alt="Event logo"
-                        className="w-12 h-12 rounded-lg object-cover border border-gray-200"
-                      />
-                      <div>
-                        <p className="font-medium text-gray-900">Logo Set</p>
-                        <p className="text-sm text-gray-500">Displayed in event header</p>
-                      </div>
-                    </div>
-                  </div>
-                )}
+                {/* Logo display removed for MVP */}
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
@@ -533,6 +523,14 @@ export function SettingsTab({ eventId, eventName }: SettingsTabProps) {
               ✏️ Edit Event Details
             </Button>
             <Button
+              variant="secondary"
+              onClick={handleGenerateRecap}
+              disabled={generatingRecap}
+              className="w-full"
+            >
+              {generatingRecap ? '⏳ Generating...' : '📊 Generate Recap'}
+            </Button>
+            <Button
               variant="danger"
               onClick={() => setShowDeleteEvent(true)}
               className="w-full"
@@ -543,7 +541,7 @@ export function SettingsTab({ eventId, eventName }: SettingsTabProps) {
 
           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
             <div className="text-sm text-yellow-800">
-              <strong>💡 Note:</strong> Edit event details including name, theme color, logo, and scoring options.
+              <strong>💡 Note:</strong> Edit event details including name, theme color, and scoring options.
             </div>
           </div>
         </CardContent>
@@ -555,7 +553,7 @@ export function SettingsTab({ eventId, eventName }: SettingsTabProps) {
           <CardTitle>Export Data</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+          <p className="text-sm text-gray-600 mb-4">
             Download event data, team standings, and game history in your preferred format.
           </p>
           <div className="flex flex-wrap gap-3">
@@ -648,7 +646,6 @@ export function SettingsTab({ eventId, eventName }: SettingsTabProps) {
           initial={{
             event_name: event.event_name,
             theme_color: event.theme_color,
-            logo_url: event.logo_url,
             allow_negative: event.allow_negative,
             display_mode: event.display_mode,
           }}

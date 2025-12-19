@@ -1,7 +1,6 @@
 // lib/email-service.ts
 // Email sending service for verification and password reset
-
-import nodemailer from 'nodemailer';
+// NOTE: Nodemailer was removed. This module now logs instead of sending.
 
 interface EmailOptions {
   to: string;
@@ -11,7 +10,6 @@ interface EmailOptions {
 }
 
 class EmailService {
-  private transporter: nodemailer.Transporter | null = null;
   private enabled: boolean = false;
 
   constructor() {
@@ -19,54 +17,20 @@ class EmailService {
   }
 
   private initialize() {
-    const {
-      SMTP_HOST,
-      SMTP_PORT,
-      SMTP_USER,
-      SMTP_PASSWORD,
-      SMTP_FROM,
-    } = process.env;
-
-    // Only initialize if SMTP credentials are provided
-    if (SMTP_HOST && SMTP_PORT && SMTP_USER && SMTP_PASSWORD) {
-      this.transporter = nodemailer.createTransport({
-        host: SMTP_HOST,
-        port: parseInt(SMTP_PORT),
-        secure: parseInt(SMTP_PORT) === 465,
-        auth: {
-          user: SMTP_USER,
-          pass: SMTP_PASSWORD,
-        },
-      });
-      this.enabled = true;
-      console.log('✅ Email service initialized');
-    } else {
-      console.warn('⚠️  Email service not configured. Email features will be disabled.');
-      console.warn('   Set SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD in .env');
-    }
+    // Email service disabled (nodemailer dependency removed). Leave disabled.
+    this.enabled = false;
+    console.warn('⚠️  Email service disabled. Skipping email initialization.');
   }
 
   async sendEmail(options: EmailOptions): Promise<boolean> {
-    if (!this.enabled || !this.transporter) {
+    if (!this.enabled) {
       console.log('📧 Email would be sent to:', options.to);
       console.log('   Subject:', options.subject);
       console.log('   (Email service not configured - check console for content)');
       return false;
     }
-
-    try {
-      await this.transporter.sendMail({
-        from: process.env.SMTP_FROM || process.env.SMTP_USER,
-        to: options.to,
-        subject: options.subject,
-        html: options.html,
-        text: options.text || this.htmlToText(options.html),
-      });
-      return true;
-    } catch (error) {
-      console.error('Failed to send email:', error);
-      return false;
-    }
+    // Should never reach here since enabled=false, but keep fallback
+    return false;
   }
 
   async sendVerificationEmail(email: string, token: string): Promise<boolean> {

@@ -25,11 +25,11 @@ export const TeamCard = memo(function TeamCard({
     
     switch (rank) {
       case 1:
-        return 'bg-gradient-to-br from-yellow-50 to-yellow-100 dark:from-yellow-900/20 dark:to-yellow-800/20 border-2 border-yellow-400 dark:border-yellow-600';
+        return 'bg-gradient-to-br from-yellow-50 to-yellow-100 border-2 border-yellow-400';
       case 2:
-        return 'bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-700 border-2 border-gray-400 dark:border-gray-600';
+        return 'bg-gradient-to-br from-gray-50 to-gray-100 border-2 border-gray-400';
       case 3:
-        return 'bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-900/20 dark:to-orange-800/20 border-2 border-orange-400 dark:border-orange-600';
+        return 'bg-gradient-to-br from-orange-50 to-orange-100 border-2 border-orange-400';
       default:
         return '';
     }
@@ -38,13 +38,13 @@ export const TeamCard = memo(function TeamCard({
   const getRankColor = () => {
     switch (rank) {
       case 1:
-        return 'text-yellow-600 dark:text-yellow-400';
+        return 'text-yellow-600';
       case 2:
-        return 'text-gray-600 dark:text-gray-400';
+        return 'text-gray-600';
       case 3:
-        return 'text-orange-600 dark:text-orange-400';
+        return 'text-orange-600';
       default:
-        return 'text-gray-400 dark:text-gray-500';
+        return 'text-gray-400';
     }
   };
 
@@ -81,7 +81,7 @@ export const TeamCard = memo(function TeamCard({
             />
           ) : (
             <div 
-              className="w-10 h-10 sm:w-12 sm:h-12 lg:w-16 lg:h-16 rounded-full bg-primary-200 dark:bg-primary-700 flex items-center justify-center text-lg sm:text-xl lg:text-2xl font-bold flex-shrink-0 text-primary-700 dark:text-primary-200"
+              className="w-10 h-10 sm:w-12 sm:h-12 lg:w-16 lg:h-16 rounded-full bg-primary-200 flex items-center justify-center text-lg sm:text-xl lg:text-2xl font-bold flex-shrink-0 text-primary-700"
               aria-label={`${teamName} initials`}
             >
               {teamName[0]?.toUpperCase()}
@@ -89,18 +89,18 @@ export const TeamCard = memo(function TeamCard({
           )}
 
           <div className="min-w-0 flex-1">
-            <h3 className="font-bold text-base sm:text-lg truncate dark:text-gray-100">{teamName}</h3>
+            <h3 className="font-bold text-base sm:text-lg truncate">{teamName}</h3>
             {isPublic && getRankBadge() && (
-              <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">{getRankBadge()}</p>
+              <p className="text-xs sm:text-sm text-gray-600">{getRankBadge()}</p>
             )}
           </div>
         </div>
 
         <div className="text-right ml-2 flex-shrink-0">
-          <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-primary-600 dark:text-primary-400">
+          <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-primary-600">
             {totalPoints}
           </div>
-          <div className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">points</div>
+          <div className="text-xs sm:text-sm text-gray-500">points</div>
         </div>
       </div>
     </Card>

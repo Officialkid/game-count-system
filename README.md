@@ -1,12 +1,15 @@
-# Game Count System - Backend API
+# Game Count System
 
-A complete Next.js backend for managing game scoring events with authentication, teams, and live scoreboards.
+A complete Next.js application for managing game scoring events with authentication, teams, and live scoreboards.
+
+**Status:** Migrating from PostgreSQL to Appwrite  
+**Current Mode:** Frontend fully functional with mock data (isolation mode)
 
 ## 🚀 Quick Start
 
 ### Prerequisites
 - Node.js 18+ 
-- PostgreSQL database (Vercel Postgres or Neon)
+- Appwrite account (Cloud or self-hosted)
 
 ### Installation
 
@@ -15,18 +18,117 @@ A complete Next.js backend for managing game scoring events with authentication,
 npm install
 
 # Copy environment variables
-cp .env.example .env
+cp .env.example .env.local
 
-# Update .env with your database credentials
-# POSTGRES_URL="postgres://username:password@host:5432/database"
-# JWT_SECRET="your-super-secret-jwt-key"
-
-# Run the database schema
-# Execute schema.sql against your PostgreSQL database
+# Add your Appwrite credentials to .env.local:
+# NEXT_PUBLIC_APPWRITE_ENDPOINT=https://fra.cloud.appwrite.io/v1
+# NEXT_PUBLIC_APPWRITE_PROJECT=your-project-id
+# APPWRITE_API_KEY=your-server-api-key
 
 # Start development server
 npm run dev
 ```
+
+## 🔧 Appwrite Setup
+
+### Step 1: Create Appwrite Project
+
+1. Go to [Appwrite Cloud](https://cloud.appwrite.io/) or your self-hosted instance
+2. Create a new project
+3. Copy your **Project ID** and **Endpoint URL**
+
+### Step 2: Configure Environment Variables
+
+Create `.env.local` in the project root:
+
+```env
+# Appwrite Configuration
+NEXT_PUBLIC_APPWRITE_ENDPOINT=https://fra.cloud.appwrite.io/v1
+NEXT_PUBLIC_APPWRITE_PROJECT=694164500028df77ada9
+APPWRITE_API_KEY=your-server-api-key-here
+
+# Auth Toggle
+# When true, the app uses Appwrite-based auth (Account SDK)
+# When false (default previously), it uses mock auth in isolation mode
+NEXT_PUBLIC_USE_APPWRITE=true
+```
+
+**Important:**
+- `NEXT_PUBLIC_*` variables are exposed to the browser (safe for endpoint/project ID)
+- `APPWRITE_API_KEY` is **server-only** and must never be exposed to the client
+
+### Step 3: Set Up Database Collections
+
+Create the following collections in your Appwrite project:
+
+**Database ID:** `main`
+
+**Collections:**
+
+1. **users** - User profiles
+   - Attributes: `name` (string), `email` (string), `role` (string)
+   - Indexes: `email` (unique)
+
+2. **events** - Scoring events
+   - Attributes: `user_id`, `event_name`, `theme_color`, `logo_url`, `allow_negative`, `display_mode`, `num_teams`, `status`
+   - Indexes: `user_id`, `status`
+
+3. **teams** - Event teams
+   - Attributes: `event_id`, `team_name`, `avatar_url`, `total_points`
+   - Indexes: `event_id`
+
+4. **scores** - Game scores
+   - Attributes: `event_id`, `team_id`, `game_number`, `points`
+   - Indexes: `event_id`, `team_id`
+
+5. **share_links** - Public scoreboard tokens
+   - Attributes: `event_id`, `token`, `is_active`
+   - Indexes: `token` (unique), `event_id`
+
+6. **event_admins** - Multi-user event permissions
+   - Attributes: `event_id`, `user_id`, `role`
+   - Indexes: `event_id`, `user_id`
+
+### Step 4: Set Up Storage Buckets
+
+Create the following storage buckets:
+
+1. **avatars** - Team avatar images
+   - Max file size: 2MB
+   - Allowed extensions: jpg, png, gif, webp
+
+2. **logos** - Event logo images
+   - Max file size: 5MB
+   - Allowed extensions: jpg, png, svg, webp
+
+### Step 5: Configure Permissions
+
+Set appropriate permissions for each collection and bucket based on your security requirements. See `APPWRITE_CONTRACT.md` for detailed permission schemas.
+
+## 🏗️ SDK Wrapper
+
+The Appwrite SDK is configured in `lib/appwrite.ts`:
+
+```typescript
+import { client, account, databases, storage, functions } from '@/lib/appwrite';
+
+// Client-side usage
+const user = await account.get();
+
+// Server-side usage (API routes only)
+import { getServerClient } from '@/lib/appwrite';
+const { databases } = getServerClient();
+```
+
+## 🔐 Auth Toggle (Phase B)
+
+- The app can switch between mock auth and Appwrite auth via `NEXT_PUBLIC_USE_APPWRITE`.
+- When `true`, the following are used:
+  - `lib/appwriteAuth.ts` for `login`, `register`, `logout`, `getCurrentUser`
+  - `lib/auth-context.tsx` switches to session-based auth (no localStorage token)
+- When `false`, the mock isolation auth remains active for offline development.
+
+Existing UI and components do not change — the `AuthContext` API stays the same.
 
 ## 📚 API Documentation
 

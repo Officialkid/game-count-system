@@ -10,7 +10,8 @@ import { getPaletteById } from '@/lib/color-palettes';
 interface Team {
   id: string;
   team_name: string;
-  avatar_url: string | null;
+  // avatar removed for MVP
+  // avatar_url: string | null;
   total_points: number;
 }
 
@@ -28,7 +29,8 @@ interface Event {
   event_name: string;
   created_at: string;
   theme_color?: string | null;
-  logo_url?: string | null;
+  // logo removed for MVP
+  // logo_url?: string | null;
 }
 
 interface PublicScoreboardProps {
@@ -118,7 +120,7 @@ export function PublicScoreboard({
 
   const latestScores = getLatestScores();
 
-  // FIXED: Theme rendering with theme_color palette and logo_url
+  // Theme rendering with theme_color palette (logo removed)
   const palette = getPaletteById(event.theme_color || 'purple') || getPaletteById('purple')!;
 
   return (
@@ -131,18 +133,10 @@ export function PublicScoreboard({
       <div className="max-w-7xl mx-auto px-4 py-6 sm:py-8">
         {/* Header */}
         <div className="text-center mb-6 sm:mb-8">
-          {/* Logo */}
-          {event.logo_url && (
-            <img
-              src={event.logo_url}
-              alt={`${event.event_name} logo`}
-              className="w-24 h-24 sm:w-32 sm:h-32 object-contain mx-auto mb-4 rounded-lg"
-              loading="lazy"
-            />
-          )}
+          {/* Logo removed for MVP */}
           
-          <div className="inline-flex items-center gap-2 px-4 py-2 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 rounded-full text-sm font-semibold mb-4 animate-pulse">
-            <span className="w-2 h-2 bg-red-600 dark:bg-red-500 rounded-full"></span>
+          <div className="inline-flex items-center gap-2 px-4 py-2 bg-red-100 text-red-700 rounded-full text-sm font-semibold mb-4 animate-pulse">
+            <span className="w-2 h-2 bg-red-600 rounded-full"></span>
             LIVE SCOREBOARD
           </div>
           
@@ -153,10 +147,10 @@ export function PublicScoreboard({
             {event.event_name}
           </h1>
           
-          <div className="flex items-center justify-center gap-3 text-sm sm:text-base text-gray-500 dark:text-gray-400">
+          <div className="flex items-center justify-center gap-3 text-sm sm:text-base text-gray-500">
             <p>Last updated: {lastUpdate.toLocaleTimeString()}</p>
             {refreshing && (
-              <span className="inline-flex items-center gap-1 text-primary-600 dark:text-primary-400">
+              <span className="inline-flex items-center gap-1 text-primary-600">
                 <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
@@ -177,11 +171,11 @@ export function PublicScoreboard({
                   accentColor: palette.primary
                 }}
               />
-              <span className="text-gray-700 dark:text-gray-300">Auto-refresh</span>
+              <span className="text-gray-700">Auto-refresh</span>
             </label>
             
             {autoRefresh && (
-              <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+              <div className="flex items-center gap-2 text-sm text-gray-600">
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
@@ -196,8 +190,8 @@ export function PublicScoreboard({
           <Card>
             <div className="text-center py-12">
               <div className="text-4xl mb-2">⏳</div>
-              <h3 className="text-xl font-semibold mb-2 dark:text-gray-100">No teams yet</h3>
-              <p className="text-gray-600 dark:text-gray-400">
+              <h3 className="text-xl font-semibold mb-2">No teams yet</h3>
+              <p className="text-gray-600">
                 The event organizer hasn't added teams yet. Check back soon!
               </p>
             </div>
@@ -218,7 +212,8 @@ export function PublicScoreboard({
                     key={team.id}
                     rank={index + 1}
                     teamName={team.team_name}
-                    avatarUrl={team.avatar_url}
+                    // avatar removed for MVP
+                    avatarUrl={undefined}
                     totalPoints={team.total_points}
                     isPublic
                   />
@@ -228,26 +223,26 @@ export function PublicScoreboard({
 
             {/* Latest Game */}
             {latestScores.length > 0 && (
-              <Card className="bg-blue-50 dark:bg-blue-900/20 dark:border-blue-800">
-                <h3 className="text-lg sm:text-xl font-bold mb-4 dark:text-gray-100">
+              <Card className="bg-blue-50">
+                <h3 className="text-lg sm:text-xl font-bold mb-4">
                   📊 Latest Game (Game {getLatestGameNumber()})
                 </h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                   {latestScores.map((score) => (
                     <div
                       key={score.id}
-                      className="bg-white dark:bg-gray-800 p-3 sm:p-4 rounded-lg flex justify-between items-center border dark:border-gray-700"
+                      className="bg-white p-3 sm:p-4 rounded-lg flex justify-between items-center border"
                     >
-                      <span className="font-semibold text-sm sm:text-base truncate mr-2 dark:text-gray-200">
+                      <span className="font-semibold text-sm sm:text-base truncate mr-2">
                         {score.team_name}
                       </span>
                       <span
                         className={`text-xl sm:text-2xl font-bold flex-shrink-0 ${
                           score.points > 0
-                            ? 'text-green-600 dark:text-green-400'
+                            ? 'text-green-600'
                             : score.points < 0
-                            ? 'text-red-600 dark:text-red-400'
-                            : 'text-gray-600 dark:text-gray-400'
+                            ? 'text-red-600'
+                            : 'text-gray-600'
                         }`}
                       >
                         {score.points > 0 ? '+' : ''}
@@ -262,7 +257,7 @@ export function PublicScoreboard({
         )}
 
         {/* Footer */}
-        <div className="text-center mt-8 sm:mt-12 text-gray-500 dark:text-gray-400 text-xs sm:text-sm">
+        <div className="text-center mt-8 sm:mt-12 text-gray-500 text-xs sm:text-sm">
           <p>Powered by Game Count System</p>
           <p className="mt-2">
             Total Games Played: {getLatestGameNumber()}
@@ -277,8 +272,8 @@ export function LoadingScoreboard() {
   return (
     <div className="max-w-7xl mx-auto px-4 py-16" role="status" aria-live="polite">
       <div className="text-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 dark:border-primary-400 mx-auto mb-4" aria-hidden="true"></div>
-        <p className="text-xl text-gray-600 dark:text-gray-400">Loading scoreboard...</p>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto mb-4" aria-hidden="true"></div>
+        <p className="text-xl text-gray-600">Loading scoreboard...</p>
         <span className="sr-only">Loading scoreboard data</span>
       </div>
     </div>
@@ -291,8 +286,8 @@ export function ErrorScoreboard({ error }: { error: string }) {
       <Card>
         <div className="text-center py-12" role="alert" aria-live="assertive">
           <div className="text-4xl mb-4" aria-hidden="true">❌</div>
-          <h2 className="text-2xl font-bold mb-2 dark:text-gray-100">Error</h2>
-          <p className="text-gray-600 dark:text-gray-400">{error}</p>
+          <h2 className="text-2xl font-bold mb-2">Error</h2>
+          <p className="text-gray-600">{error}</p>
         </div>
       </Card>
     </div>

@@ -1,12 +1,14 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Button } from '../ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card';
 import { useToast } from '../ui/Toast';
 import { LoadingSkeleton } from '../ui/LoadingSkeleton';
+import { useSubmissionLock } from '@/lib/hooks/useSubmissionLock';
 import { auth } from '@/lib/api-client';
 import { getPaletteById } from '@/lib/color-palettes';
+import { nanoid } from 'nanoid';
 
 interface Team {
   id: number;
@@ -26,6 +28,18 @@ interface ScoreEntry {
   points: string;
 }
 
+type SubmissionStatus = 'success' | 'duplicate' | 'error';
+
+interface SubmissionLogEntry {
+  id: string;
+  team: string;
+  gameNumber: number;
+  points: number;
+  status: SubmissionStatus;
+  message?: string;
+  timestamp: number;
+}
+
 interface ScoringTabProps {
   eventId: string;
   event: Event;
@@ -36,6 +50,8 @@ export function ScoringTab({ eventId, event }: ScoringTabProps) {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const { showToast } = useToast();
+  const { lock: lockSingleScore, unlock: unlockSingleScore, isSubmitting: isSingleScoreSubmitting } = useSubmissionLock();
+  const { lock: lockBatchScore, unlock: unlockBatchScore, isSubmitting: isBatchScoreSubmitting } = useSubmissionLock();
   const palette = getPaletteById(event.theme_color || 'purple') || getPaletteById('purple')!;
 
   // Form state - Single Score Entry
@@ -54,6 +70,18 @@ export function ScoringTab({ eventId, event }: ScoringTabProps) {
   
   // Success notification state
   const [lastSuccess, setLastSuccess] = useState<{ gameNum: string; gameName: string } | null>(null);
+  const [submissionLog, setSubmissionLog] = useState<SubmissionLogEntry[]>([]);
+
+  const makeClientScoreId = useCallback(() => {
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+      return crypto.randomUUID();
+    }
+    return nanoid();
+  }, []);
+
+  const appendSubmissionLog = useCallback((entry: SubmissionLogEntry) => {
+    setSubmissionLog((prev) => [entry, ...prev].slice(0, 10));
+  }, []);
 
   useEffect(() => {
     loadTeams();
@@ -89,23 +117,29 @@ export function ScoringTab({ eventId, event }: ScoringTabProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!lockSingleScore()) return; // Prevent duplicate submissions
     setFormError('');
 
     if (!selectedTeamId || !gameNumber || !points) {
       setFormError('Please fill in all required fields');
+      unlockSingleScore();
       return;
     }
 
     const pointsValue = parseInt(points);
     if (isNaN(pointsValue)) {
       setFormError('Points must be a valid number');
+      unlockSingleScore();
       return;
     }
 
     if (!event.allow_negative && pointsValue < 0) {
       setFormError('Negative points are not allowed for this event');
+      unlockSingleScore();
       return;
     }
+
+    const clientScoreId = makeClientScoreId();
 
     try {
       setSubmitting(true);
@@ -121,12 +155,25 @@ export function ScoringTab({ eventId, event }: ScoringTabProps) {
           game_number: parseInt(gameNumber),
           points: pointsValue,
           game_name: gameName || null,
+          submission_id: clientScoreId,
         }),
       });
 
       const result = await response.json();
+      const duplicate = response.status === 409 || result?.error?.code === 'CONFLICT';
       if (!response.ok || !result.success) {
-        setFormError(result.error || 'Failed to add score');
+        const message = result.error || 'Failed to add score';
+        setFormError(message);
+        appendSubmissionLog({
+          id: clientScoreId,
+          team: selectedTeamId,
+          gameNumber: parseInt(gameNumber),
+          points: pointsValue,
+          status: duplicate ? 'duplicate' : 'error',
+          message: typeof message === 'string' ? message : message?.message,
+          timestamp: Date.now(),
+        });
+        unlockSingleScore();
         return;
       }
 
@@ -143,6 +190,16 @@ export function ScoringTab({ eventId, event }: ScoringTabProps) {
       setLastSuccess({ gameNum: gameNumber, gameName: displayGameName });
       setTimeout(() => setLastSuccess(null), 5000); // Clear after 5 seconds
 
+      appendSubmissionLog({
+        id: clientScoreId,
+        team: selectedTeam?.team_name || selectedTeamId,
+        gameNumber: parseInt(gameNumber),
+        points: pointsValue,
+        status: 'success',
+        message: result?.data?.action,
+        timestamp: Date.now(),
+      });
+
       // Reset form
       setGameNumber('');
       setGameName('');
@@ -154,17 +211,30 @@ export function ScoringTab({ eventId, event }: ScoringTabProps) {
     } catch (error) {
       console.error('Error adding score:', error);
       setFormError('Failed to add score');
+      appendSubmissionLog({
+        id: clientScoreId,
+        team: selectedTeamId,
+        gameNumber: parseInt(gameNumber),
+        points: pointsValue,
+        status: 'error',
+        message: 'Network or server error',
+        timestamp: Date.now(),
+      });
+      unlockSingleScore();
     } finally {
       setSubmitting(false);
+      unlockSingleScore();
     }
   };
 
   const handleBatchSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!lockBatchScore()) return; // Prevent duplicate submissions
     setBatchError('');
 
     if (!batchGameNumber) {
       setBatchError('Please enter a game number');
+      unlockBatchScore();
       return;
     }
 
@@ -174,6 +244,7 @@ export function ScoringTab({ eventId, event }: ScoringTabProps) {
 
     if (validScores.length === 0) {
       setBatchError('Please enter at least one score');
+      unlockBatchScore();
       return;
     }
 
@@ -182,6 +253,7 @@ export function ScoringTab({ eventId, event }: ScoringTabProps) {
       const pointsValue = parseInt(score.points);
       if (!event.allow_negative && pointsValue < 0) {
         setBatchError(`Negative points not allowed: ${pointsValue}`);
+        unlockBatchScore();
         return;
       }
     }
@@ -190,9 +262,14 @@ export function ScoringTab({ eventId, event }: ScoringTabProps) {
       setSubmitting(true);
       const token = auth.getToken();
 
+      const scoresWithIds = validScores.map(score => ({
+        ...score,
+        submission_id: makeClientScoreId(),
+      }));
+
       // Submit all scores in parallel
       const responses = await Promise.all(
-        validScores.map(score =>
+        scoresWithIds.map(score =>
           fetch(`/api/events/${eventId}/scores`, {
             method: 'POST',
             headers: {
@@ -204,6 +281,7 @@ export function ScoringTab({ eventId, event }: ScoringTabProps) {
               game_number: parseInt(batchGameNumber),
               points: parseInt(score.points),
               game_name: batchGameName || null,
+              submission_id: score.submission_id,
             }),
           })
         )
@@ -214,6 +292,23 @@ export function ScoringTab({ eventId, event }: ScoringTabProps) {
 
       if (failures.length > 0) {
         setBatchError(`${failures.length} score(s) failed to save`);
+        scoresWithIds.forEach((score, idx) => {
+          const result = results[idx];
+          const duplicate = responses[idx].status === 409 || result?.error?.code === 'CONFLICT';
+          if (!result?.success) {
+            const teamName = teams.find(t => t.id === parseInt(score.team_id))?.team_name || score.team_id;
+            appendSubmissionLog({
+              id: score.submission_id,
+              team: teamName,
+              gameNumber: parseInt(batchGameNumber),
+              points: parseInt(score.points),
+              status: duplicate ? 'duplicate' : 'error',
+              message: result?.error || 'Failed to add score',
+              timestamp: Date.now(),
+            });
+          }
+        });
+        unlockBatchScore();
         return;
       }
 
@@ -231,13 +326,40 @@ export function ScoringTab({ eventId, event }: ScoringTabProps) {
       setBatchGameName('');
       setBatchScores([]);
       
+      scoresWithIds.forEach((score, idx) => {
+        const teamName = teams.find(t => t.id === parseInt(score.team_id))?.team_name || score.team_id;
+        appendSubmissionLog({
+          id: score.submission_id,
+          team: teamName,
+          gameNumber: parseInt(batchGameNumber),
+          points: parseInt(score.points),
+          status: 'success',
+          message: results[idx]?.data?.action,
+          timestamp: Date.now(),
+        });
+      });
+
       // Reload teams
       await loadTeams();
     } catch (error) {
       console.error('Error adding batch scores:', error);
       setBatchError('Failed to add scores');
+      validScores.forEach((score) => {
+        const teamName = teams.find(t => t.id === parseInt(score.team_id))?.team_name || score.team_id;
+        appendSubmissionLog({
+          id: makeClientScoreId(),
+          team: teamName,
+          gameNumber: parseInt(batchGameNumber),
+          points: parseInt(score.points),
+          status: 'error',
+          message: 'Network or server error',
+          timestamp: Date.now(),
+        });
+      });
+      unlockBatchScore();
     } finally {
       setSubmitting(false);
+      unlockBatchScore();
     }
   };
 
@@ -476,10 +598,10 @@ export function ScoringTab({ eventId, event }: ScoringTabProps) {
                   type="submit"
                   variant="primary"
                   data-tour="add-score-button"
-                  loading={submitting}
-                  disabled={submitting}
+                  loading={submitting || isSingleScoreSubmitting}
+                  disabled={submitting || isSingleScoreSubmitting}
                 >
-                  Add Score
+                  {submitting || isSingleScoreSubmitting ? 'Adding score...' : 'Add Score'}
                 </Button>
               </div>
             </form>
@@ -594,16 +716,68 @@ export function ScoringTab({ eventId, event }: ScoringTabProps) {
                 <Button
                   type="submit"
                   variant="primary"
-                  loading={submitting}
-                  disabled={submitting}
+                  loading={submitting || isBatchScoreSubmitting}
+                  disabled={submitting || isBatchScoreSubmitting}
                 >
-                  Add All Scores
+                  {submitting || isBatchScoreSubmitting ? 'Creating scores...' : 'Add All Scores'}
                 </Button>
               </div>
             </form>
           </CardContent>
         </Card>
       )}
+
+      {/* Debug: Last 10 submissions */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Debug: Last 10 score submissions</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {submissionLog.length === 0 ? (
+            <p className="text-sm text-gray-600">No submissions yet. New writes will show here with their clientScoreId.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-200">
+                    <th className="text-left py-2 px-2 font-semibold text-gray-700">Time</th>
+                    <th className="text-left py-2 px-2 font-semibold text-gray-700">clientScoreId</th>
+                    <th className="text-left py-2 px-2 font-semibold text-gray-700">Team</th>
+                    <th className="text-right py-2 px-2 font-semibold text-gray-700">Game #</th>
+                    <th className="text-right py-2 px-2 font-semibold text-gray-700">Points</th>
+                    <th className="text-left py-2 px-2 font-semibold text-gray-700">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {submissionLog.map((entry) => (
+                    <tr key={entry.id} className="border-b border-gray-100">
+                      <td className="py-2 px-2 text-gray-600 whitespace-nowrap">{new Date(entry.timestamp).toLocaleTimeString()}</td>
+                      <td className="py-2 px-2 font-mono text-xs text-gray-800 break-all">{entry.id}</td>
+                      <td className="py-2 px-2 text-gray-800">{entry.team}</td>
+                      <td className="py-2 px-2 text-right text-gray-800">{entry.gameNumber}</td>
+                      <td className="py-2 px-2 text-right text-gray-800">{entry.points}</td>
+                      <td className="py-2 px-2">
+                        <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                          entry.status === 'success'
+                            ? 'bg-green-50 text-green-700 border border-green-200'
+                            : entry.status === 'duplicate'
+                              ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                              : 'bg-red-50 text-red-700 border border-red-200'
+                        }`}>
+                          {entry.status}
+                        </span>
+                        {entry.message ? (
+                          <div className="text-xs text-gray-500 mt-1">{String(entry.message)}</div>
+                        ) : null}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Current Team Standings */}
       <Card>

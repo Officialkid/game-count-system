@@ -98,11 +98,11 @@ export function validatePassword(password: string): PasswordValidationResult {
 export function getPasswordStrengthColor(strength: 'weak' | 'medium' | 'strong'): string {
   switch (strength) {
     case 'weak':
-      return 'text-red-600 dark:text-red-400';
+      return 'text-red-600';
     case 'medium':
-      return 'text-yellow-600 dark:text-yellow-400';
+      return 'text-yellow-600';
     case 'strong':
-      return 'text-green-600 dark:text-green-400';
+      return 'text-green-600';
   }
 }
 

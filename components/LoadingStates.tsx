@@ -14,7 +14,7 @@ export function LoadingSpinner({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' }) {
   return (
     <div className="flex justify-center items-center" role="status" aria-live="polite" aria-label="Loading content">
       <svg
-        className={`${sizeClasses[size]} animate-spin text-primary-600 dark:text-primary-400`}
+        className={`${sizeClasses[size]} animate-spin text-primary-600`}
         xmlns="http://www.w3.org/2000/svg"
         fill="none"
         viewBox="0 0 24 24"
@@ -41,11 +41,11 @@ export function LoadingSpinner({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' }) {
 
 export function LoadingCard() {
   return (
-    <Card className="animate-pulse dark:bg-gray-800 dark:border-gray-700" role="status" aria-live="polite" aria-label="Loading card">
+    <Card className="animate-pulse" role="status" aria-live="polite" aria-label="Loading card">
       <div className="space-y-3">
-        <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4"></div>
-        <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/2"></div>
-        <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded w-full"></div>
+        <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+        <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+        <div className="h-8 bg-gray-200 rounded w-full"></div>
       </div>
       <span className="sr-only">Loading content...</span>
     </Card>
@@ -54,14 +54,14 @@ export function LoadingCard() {
 
 export function LoadingTeamCard() {
   return (
-    <Card className="animate-pulse dark:bg-gray-800 dark:border-gray-700" role="status" aria-live="polite" aria-label="Loading team card">
+    <Card className="animate-pulse" role="status" aria-live="polite" aria-label="Loading team card">
       <div className="flex items-center gap-4">
-        <div className="w-16 h-16 bg-gray-200 dark:bg-gray-700 rounded-full"></div>
+        <div className="w-16 h-16 bg-gray-200 rounded-full"></div>
         <div className="flex-1 space-y-2">
-          <div className="h-5 bg-gray-200 dark:bg-gray-700 rounded w-2/3"></div>
-          <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/3"></div>
+          <div className="h-5 bg-gray-200 rounded w-2/3"></div>
+          <div className="h-4 bg-gray-200 rounded w-1/3"></div>
         </div>
-        <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded w-16"></div>
+        <div className="h-8 bg-gray-200 rounded w-16"></div>
       </div>
       <span className="sr-only">Loading team information...</span>
     </Card>
@@ -72,7 +72,7 @@ export function LoadingScoreboard() {
   return (
     <div className="space-y-4" role="status" aria-live="polite" aria-label="Loading scoreboard">
       <div className="animate-pulse">
-        <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded w-1/3 mb-4"></div>
+        <div className="h-8 bg-gray-200 rounded w-1/3 mb-4"></div>
         <div className="space-y-3">
           {[1, 2, 3].map((i) => (
             <LoadingTeamCard key={i} />
@@ -90,14 +90,14 @@ export function LoadingTable({ rows = 5, cols = 4 }: { rows?: number; cols?: num
       <div className="animate-pulse">
         <div className="grid gap-4 mb-4" style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}>
           {Array.from({ length: cols }).map((_, i) => (
-            <div key={i} className="h-4 bg-gray-300 dark:bg-gray-600 rounded"></div>
+            <div key={i} className="h-4 bg-gray-300 rounded"></div>
           ))}
         </div>
         <div className="space-y-3">
           {Array.from({ length: rows }).map((_, rowIndex) => (
             <div key={rowIndex} className="grid gap-4" style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}>
               {Array.from({ length: cols }).map((_, colIndex) => (
-                <div key={colIndex} className="h-4 bg-gray-200 dark:bg-gray-700 rounded"></div>
+                <div key={colIndex} className="h-4 bg-gray-200 rounded"></div>
               ))}
             </div>
           ))}
@@ -112,7 +112,7 @@ export function LoadingDashboard() {
   return (
     <div className="space-y-6" role="status" aria-live="polite" aria-label="Loading dashboard">
       <div className="animate-pulse">
-        <div className="h-10 bg-gray-200 dark:bg-gray-700 rounded w-1/4 mb-6"></div>
+        <div className="h-10 bg-gray-200 rounded w-1/4 mb-6"></div>
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {[1, 2, 3].map((i) => (
             <LoadingCard key={i} />
@@ -129,14 +129,14 @@ interface SkeletonProps {
 }
 
 export function Skeleton({ className = '' }: SkeletonProps) {
-  return <div className={`animate-pulse bg-gray-200 dark:bg-gray-700 rounded ${className}`} aria-hidden="true"></div>;
+  return <div className={`animate-pulse bg-gray-200 rounded ${className}`} aria-hidden="true"></div>;
 }
 
 export function LoadingButton() {
   return (
     <button
       disabled
-      className="inline-flex items-center px-4 py-2 bg-primary-600 dark:bg-primary-500 text-white rounded-md opacity-50 cursor-not-allowed"
+      className="inline-flex items-center px-4 py-2 bg-primary-600 text-white rounded-md opacity-50 cursor-not-allowed"
       role="status"
       aria-live="polite"
       aria-label="Loading button"
@@ -150,7 +150,7 @@ export function LoadingButton() {
 export function LoadingOverlay({ message = 'Loading...' }: { message?: string }) {
   return (
     <div
-      className="fixed inset-0 bg-black bg-opacity-50 dark:bg-opacity-70 flex items-center justify-center z-50"
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
       role="dialog"
       aria-modal="true"
       aria-label={message}
@@ -158,7 +158,7 @@ export function LoadingOverlay({ message = 'Loading...' }: { message?: string })
       <Card className="max-w-sm">
         <div className="flex flex-col items-center gap-4 p-6">
           <LoadingSpinner size="lg" />
-          <p className="text-gray-700 dark:text-gray-300 font-medium">{message}</p>
+          <p className="text-gray-700 font-medium">{message}</p>
         </div>
       </Card>
     </div>
@@ -168,14 +168,14 @@ export function LoadingOverlay({ message = 'Loading...' }: { message?: string })
 export function LoadingPage({ message = 'Loading page...' }: { message?: string }) {
   return (
     <div 
-      className="min-h-screen bg-gradient-to-br from-primary-50 to-accent-50 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center p-4"
+      className="min-h-screen bg-gradient-to-br from-primary-50 to-accent-50 flex items-center justify-center p-4"
       role="status"
       aria-live="polite"
       aria-label={message}
     >
       <div className="text-center">
         <LoadingSpinner size="lg" />
-        <p className="mt-4 text-gray-700 dark:text-gray-300 font-medium">{message}</p>
+        <p className="mt-4 text-gray-700 font-medium">{message}</p>
         <span className="sr-only">{message}</span>
       </div>
     </div>

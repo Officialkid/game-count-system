@@ -34,7 +34,7 @@ export function ErrorMessage({ title = 'Error', message, onRetry, className = ''
           <p className="text-red-700 text-sm">{message}</p>
           {onRetry && (
             <Button
-              variant="outline"
+              variant="secondary"
               size="sm"
               onClick={onRetry}
               className="mt-3 border-red-300 text-red-700 hover:bg-red-100"
@@ -86,7 +86,7 @@ export function ErrorPage({
             </Button>
           )}
           {onGoHome && (
-            <Button variant="outline" onClick={onGoHome} aria-label="Go to homepage">
+            <Button variant="secondary" onClick={onGoHome} aria-label="Go to homepage">
               Go Home
             </Button>
           )}

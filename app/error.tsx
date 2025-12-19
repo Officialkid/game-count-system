@@ -17,12 +17,12 @@ export default function Error({
   }, [error]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-red-50 via-orange-50 to-yellow-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 flex items-center justify-center p-4">
-      <div className="max-w-md w-full bg-white dark:bg-gray-800 rounded-xl shadow-2xl p-8 text-center">
+    <div className="min-h-screen bg-gradient-to-br from-red-50 via-orange-50 to-yellow-50 flex items-center justify-center p-4">
+      <div className="max-w-md w-full bg-white rounded-xl shadow-2xl p-8 text-center">
         <div className="mb-6">
-          <div className="w-20 h-20 bg-red-100 dark:bg-red-900/20 rounded-full flex items-center justify-center mx-auto mb-4">
+          <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <svg
-              className="w-10 h-10 text-red-600 dark:text-red-400"
+              className="w-10 h-10 text-red-600"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -35,15 +35,15 @@ export default function Error({
               />
             </svg>
           </div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">
             Something went wrong!
           </h1>
-          <p className="text-gray-600 dark:text-gray-400 mb-6">
+          <p className="text-gray-600 mb-6">
             We encountered an unexpected error. Don't worry, your data is safe.
           </p>
           {process.env.NODE_ENV === 'development' && (
-            <div className="mt-4 p-4 bg-gray-100 dark:bg-gray-900 rounded-lg text-left">
-              <p className="text-xs font-mono text-red-600 dark:text-red-400 break-all">
+            <div className="mt-4 p-4 bg-gray-100 rounded-lg text-left">
+              <p className="text-xs font-mono text-red-600 break-all">
                 {error.message}
               </p>
             </div>

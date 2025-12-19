@@ -3,12 +3,16 @@
 
 import { useState, useRef } from 'react';
 import Image from 'next/image';
+import { storageService } from '@/lib/services';
+import { useAuth } from '@/lib/auth-context';
 
 interface LogoUploadProps {
   currentLogoUrl?: string;
-  onLogoChange: (file: File | null, previewUrl: string | null) => void;
+  onLogoChange: (file: File | null, previewUrl: string | null, fileId?: string) => void;
   label?: string;
   maxSizeMB?: number;
+  type?: 'logo' | 'avatar';
+  entityId?: string; // event ID or team ID
 }
 
 export function LogoUpload({
@@ -16,38 +20,75 @@ export function LogoUpload({
   onLogoChange,
   label = 'Event Logo',
   maxSizeMB = 10,
+  type = 'logo',
+  entityId,
 }: LogoUploadProps) {
+  const { user } = useAuth();
   const [preview, setPreview] = useState<string | null>(currentLogoUrl || null);
   const [error, setError] = useState<string>('');
   const [isDragging, setIsDragging] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const validateAndProcessFile = (file: File) => {
+  const validateAndProcessFile = async (file: File) => {
     setError('');
+    setUploading(true);
 
-    // Check file type
-    if (!file.type.match(/^image\/(png|jpeg|jpg)$/)) {
-      setError('Only PNG and JPG images are allowed');
+    try {
+      // Check file type
+      if (!file.type.match(/^image\/(png|jpeg|jpg)$/)) {
+        setError('Only PNG and JPG images are allowed');
+        return false;
+      }
+
+      // Check file size
+      const sizeMB = file.size / (1024 * 1024);
+      if (sizeMB > maxSizeMB) {
+        setError(`File size must be less than ${maxSizeMB}MB (current: ${sizeMB.toFixed(2)}MB)`);
+        return false;
+      }
+
+      // Upload to Appwrite Storage (if enabled)
+      const useAppwrite = process.env.NEXT_PUBLIC_USE_APPWRITE_SERVICES === 'true';
+      
+      if (useAppwrite) {
+        if (!user) {
+          setError('You must be logged in to upload files');
+          return false;
+        }
+
+        const uploadFn = type === 'avatar' 
+          ? storageService.uploadTeamAvatar 
+          : storageService.uploadEventLogo;
+
+        const result = await uploadFn(file, user.id, entityId);
+
+        if (!result.success || !result.data) {
+          setError(result.error || 'Upload failed');
+          return false;
+        }
+
+        // Use Appwrite file URL
+        setPreview(result.data.fileUrl);
+        onLogoChange(file, result.data.fileUrl, result.data.fileId);
+      } else {
+        // Create local preview for mock mode
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const previewUrl = e.target?.result as string;
+          setPreview(previewUrl);
+          onLogoChange(file, previewUrl);
+        };
+        reader.readAsDataURL(file);
+      }
+
+      return true;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Upload failed');
       return false;
+    } finally {
+      setUploading(false);
     }
-
-    // Check file size
-    const sizeMB = file.size / (1024 * 1024);
-    if (sizeMB > maxSizeMB) {
-      setError(`File size must be less than ${maxSizeMB}MB (current: ${sizeMB.toFixed(2)}MB)`);
-      return false;
-    }
-
-    // Create preview
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const previewUrl = e.target?.result as string;
-      setPreview(previewUrl);
-      onLogoChange(file, previewUrl);
-    };
-    reader.readAsDataURL(file);
-
-    return true;
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -88,7 +129,7 @@ export function LogoUpload({
 
   return (
     <div className="space-y-2">
-      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+      <label className="block text-sm font-medium text-gray-700">
         {label}
       </label>
 
@@ -99,14 +140,14 @@ export function LogoUpload({
         onDrop={handleDrop}
         className={`relative border-2 border-dashed rounded-lg transition-all ${
           isDragging
-            ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20'
-            : 'border-gray-300 dark:border-gray-600 hover:border-primary-400 dark:hover:border-primary-500'
-        } ${error ? 'border-red-500 dark:border-red-400' : ''}`}
+            ? 'border-primary-500 bg-primary-50'
+            : 'border-gray-300 hover:border-primary-400'
+        } ${error ? 'border-red-500' : ''}`}
       >
         {preview ? (
           /* Preview Display */
           <div className="p-4">
-            <div className="relative w-full max-w-xs mx-auto aspect-video bg-gray-100 dark:bg-gray-800 rounded-lg overflow-hidden">
+            <div className="relative w-full max-w-xs mx-auto aspect-video bg-gray-100 rounded-lg overflow-hidden">
               <Image
                 src={preview}
                 alt="Logo preview"
@@ -120,13 +161,15 @@ export function LogoUpload({
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
                 className="btn-secondary text-sm px-3 py-1.5"
+                disabled={uploading}
               >
-                Change Logo
+                {uploading ? 'Uploading...' : 'Change Logo'}
               </button>
               <button
                 type="button"
                 onClick={handleRemove}
-                className="btn-secondary text-sm px-3 py-1.5 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
+                className="btn-secondary text-sm px-3 py-1.5 text-red-600 hover:bg-red-50"
+                disabled={uploading}
               >
                 Remove
               </button>
@@ -135,7 +178,7 @@ export function LogoUpload({
         ) : (
           /* Upload Prompt */
           <div className="p-8 text-center">
-            <div className="mx-auto w-16 h-16 mb-4 text-gray-400 dark:text-gray-500">
+            <div className="mx-auto w-16 h-16 mb-4 text-gray-400">
               <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
                   strokeLinecap="round"
@@ -149,13 +192,14 @@ export function LogoUpload({
               type="button"
               onClick={() => fileInputRef.current?.click()}
               className="btn-primary text-sm px-4 py-2 mb-2"
+              disabled={uploading}
             >
-              Choose File
+              {uploading ? '⏳ Uploading...' : 'Choose File'}
             </button>
-            <p className="text-sm text-gray-600 dark:text-gray-400">
+            <p className="text-sm text-gray-600">
               or drag and drop your logo here
             </p>
-            <p className="text-xs text-gray-500 dark:text-gray-500 mt-2">
+            <p className="text-xs text-gray-500 mt-2">
               PNG or JPG • Max {maxSizeMB}MB
             </p>
           </div>
@@ -173,7 +217,7 @@ export function LogoUpload({
 
       {/* Error Message */}
       {error && (
-        <p className="text-sm text-red-600 dark:text-red-400 flex items-center gap-1">
+        <p className="text-sm text-red-600 flex items-center gap-1">
           <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
             <path
               fillRule="evenodd"
@@ -187,7 +231,7 @@ export function LogoUpload({
 
       {/* Helper Text */}
       {!error && (
-        <p className="text-xs text-gray-500 dark:text-gray-400">
+        <p className="text-xs text-gray-500">
           Recommended: Square or wide logo with transparent background
         </p>
       )}

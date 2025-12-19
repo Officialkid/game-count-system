@@ -105,10 +105,10 @@ export function AnalyticsTab({ eventId }: AnalyticsTabProps) {
       <Card>
         <CardContent className="text-center py-16">
           <div className="text-6xl mb-4">📊</div>
-          <h3 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">
+          <h3 className="text-2xl font-bold text-gray-900 mb-2">
             No Data Yet
           </h3>
-          <p className="text-gray-600 dark:text-gray-400">
+          <p className="text-gray-600">
             Analytics will appear once games have been played
           </p>
         </CardContent>
@@ -134,7 +134,7 @@ export function AnalyticsTab({ eventId }: AnalyticsTabProps) {
               {insights.map((insight, index) => (
                 <div
                   key={index}
-                  className="p-3 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg text-sm"
+                  className="p-3 bg-purple-50 border border-purple-200 rounded-lg text-sm"
                 >
                   {insight}
                 </div>
@@ -152,50 +152,50 @@ export function AnalyticsTab({ eventId }: AnalyticsTabProps) {
         <CardContent>
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-gray-50 dark:bg-gray-800">
+              <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                     Team
                   </th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">
                     Total
                   </th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">
                     Games
                   </th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">
                     Avg
                   </th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">
                     High
                   </th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">
                     Low
                   </th>
-                  <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                  <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">
                     Trend
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+              <tbody className="divide-y divide-gray-200">
                 {performances.map((perf, index) => (
                   <tr key={index}>
-                    <td className="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">
+                    <td className="px-4 py-3 font-medium text-gray-900">
                       {perf.teamName}
                     </td>
-                    <td className="px-4 py-3 text-right text-gray-900 dark:text-gray-100">
+                    <td className="px-4 py-3 text-right text-gray-900">
                       {perf.totalPoints}
                     </td>
-                    <td className="px-4 py-3 text-right text-gray-600 dark:text-gray-400">
+                    <td className="px-4 py-3 text-right text-gray-600">
                       {perf.gamesPlayed}
                     </td>
-                    <td className="px-4 py-3 text-right text-gray-600 dark:text-gray-400">
+                    <td className="px-4 py-3 text-right text-gray-600">
                       {perf.averageScore.toFixed(1)}
                     </td>
-                    <td className="px-4 py-3 text-right text-gray-600 dark:text-gray-400">
+                    <td className="px-4 py-3 text-right text-gray-600">
                       {perf.highestScore}
                     </td>
-                    <td className="px-4 py-3 text-right text-gray-600 dark:text-gray-400">
+                    <td className="px-4 py-3 text-right text-gray-600">
                       {perf.lowestScore}
                     </td>
                     <td className="px-4 py-3 text-center">

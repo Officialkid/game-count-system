@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'next/navigation';
-import { apiClient } from '@/lib/api-client';
+import { shareLinksService, eventsService, teamsService, scoresService } from '@/lib/services';
 import { PublicScoreboard } from '@/components/PublicScoreboard';
 
 interface Team {
@@ -68,17 +68,62 @@ export default function PublicScoreboardPage() {
     if (!silent) setLoading(true);
 
     try {
-      const response = await apiClient.getPublicScoreboard(token);
-      // Check if request was aborted
+      // Resolve share token to get event ID
+      const tokenResult = await shareLinksService.resolveShareToken(token);
       if (abortControllerRef.current?.signal.aborted) return;
       
-      if (response.success) {
-        setEvent(response.data?.event);
-        setTeams(response.data?.teams || []);
-        setScores(response.data?.scores || []);
+      if (!tokenResult.success || !tokenResult.data?.eventId) {
+        setError(tokenResult.error || 'Failed to load scoreboard');
+        setLoading(false);
+        return;
+      }
+
+      const eventId = tokenResult.data.eventId;
+
+      // Fetch event, teams, and scores in parallel
+      const [eventResult, teamsResult, scoresResult] = await Promise.all([
+        eventsService.getEvent(eventId),
+        teamsService.getTeams(eventId),
+        scoresService.getScores(eventId),
+      ]);
+
+      if (abortControllerRef.current?.signal.aborted) return;
+      
+      if (eventResult.success && teamsResult.success && scoresResult.success) {
+        const e: any = eventResult.data?.event;
+        if (e) {
+          setEvent({
+            id: e.$id,
+            event_name: e.event_name,
+            created_at: e.created_at,
+            theme_color: e.theme_color || null,
+            logo_url: e.logo_path || null,
+          });
+        }
+
+        const teamsRaw: any[] = teamsResult.data?.teams || [];
+        const mappedTeams = teamsRaw.map((t) => ({
+          id: t.$id,
+          team_name: t.team_name,
+          avatar_url: t.avatar_path || null,
+          total_points: t.total_points || 0,
+        }));
+        setTeams(mappedTeams);
+
+        const teamMap = new Map(mappedTeams.map((t) => [t.id, t]));
+        const scoresRaw: any[] = scoresResult.data?.scores || [];
+        const mappedScores = scoresRaw.map((s) => ({
+          id: s.$id,
+          team_id: s.team_id,
+          team_name: teamMap.get(s.team_id)?.team_name || 'Unknown Team',
+          game_number: s.game_number,
+          points: s.points,
+          created_at: s.created_at,
+        }));
+        setScores(mappedScores);
         setError('');
       } else {
-        setError(response.error || 'Failed to load scoreboard');
+        setError('Failed to load scoreboard');
       }
     } catch (err: any) {
       if (err.name === 'AbortError') return; // Ignore abort errors

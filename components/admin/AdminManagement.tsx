@@ -2,8 +2,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { useToast } from '../ui/Toast';
 import { EventAdmin, AdminInvitation, AdminActivityLog, AdminRole } from '@/lib/types';
+import { adminsService, auditService } from '@/lib/services';
+import { useAuth } from '@/lib/auth-context';
 
 interface AdminManagementProps {
   eventId: string;
@@ -11,6 +14,8 @@ interface AdminManagementProps {
 }
 
 export default function AdminManagement({ eventId, eventName }: AdminManagementProps) {
+  const router = useRouter();
+  const { user } = useAuth();
   const [admins, setAdmins] = useState<EventAdmin[]>([]);
   const [invitations, setInvitations] = useState<AdminInvitation[]>([]);
   const [activityLog, setActivityLog] = useState<AdminActivityLog[]>([]);
@@ -38,17 +43,25 @@ export default function AdminManagement({ eventId, eventName }: AdminManagementP
   const loadAdmins = async () => {
     setLoading(true);
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`/api/events/${eventId}/admins`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      const data = await response.json();
-      if (data.success) {
-        setAdmins(data.data.admins);
-        setInvitations(data.data.invitations);
+      const res = await adminsService.getAdmins(eventId);
+      if (res.success && res.data) {
+        const admins = (res.data.admins as any[]).map(a => ({
+          id: a.$id,
+          event_id: a.event_id,
+          user_id: a.user_id,
+          role: a.role,
+          invited_by: null,
+          invited_at: new Date().toISOString(),
+          accepted_at: null,
+          created_at: a.created_at || new Date().toISOString(),
+          updated_at: a.created_at || new Date().toISOString(),
+          user_name: a.user_name,
+          user_email: a.user_email,
+        })) as EventAdmin[];
+        setAdmins(admins);
+        setInvitations([]);
       } else {
-        showToast(data.error || 'Failed to load administrators', 'error');
+        showToast(res.error || 'Failed to load administrators', 'error');
       }
     } catch (error) {
       showToast('Network error loading administrators', 'error');
@@ -59,16 +72,24 @@ export default function AdminManagement({ eventId, eventName }: AdminManagementP
 
   const loadActivityLog = async (page: number) => {
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(
-        `/api/events/${eventId}/admins/activity?page=${page}&limit=20`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-
-      const data = await response.json();
-      if (data.success) {
-        setActivityLog(data.data.logs);
-        setActivityTotal(data.data.pagination.total);
+      const logs = await auditService.getRecordAuditLogs('events', eventId);
+      if (logs.success && logs.data) {
+        const mapped = (logs.data.logs as any[]).map((l) => ({
+          id: l.$id,
+          event_id: eventId,
+          admin_id: l.user_id,
+          admin_role: 'admin' as AdminRole,
+          action: l.action,
+          target_type: l.entity,
+          target_id: l.record_id,
+          details: l.details || null,
+          ip_address: l.ip_address || null,
+          user_agent: l.user_agent || null,
+          created_at: l.timestamp,
+          admin_name: undefined,
+        })) as AdminActivityLog[];
+        setActivityLog(mapped);
+        setActivityTotal(mapped.length);
       }
     } catch (error) {
       showToast('Failed to load activity log', 'error');
@@ -80,26 +101,11 @@ export default function AdminManagement({ eventId, eventName }: AdminManagementP
     setSubmitting(true);
 
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`/api/events/${eventId}/admins/invite`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ email: inviteEmail, role: inviteRole }),
-      });
-
-      const data = await response.json();
-      if (data.success) {
-        showToast('Invitation sent successfully!', 'success');
-        setInviteEmail('');
-        setInviteRole('admin');
-        setShowInviteForm(false);
-        loadAdmins();
-      } else {
-        showToast(data.error || 'Failed to send invitation', 'error');
-      }
+      // Invitations require server-side email/user lookup; surface guidance
+      showToast('Invitations require a server function. Configure Appwrite Function to send invites.', 'warning');
+      setInviteEmail('');
+      setInviteRole('admin');
+      setShowInviteForm(false);
     } catch (error) {
       showToast('Network error sending invitation', 'error');
     } finally {
@@ -111,23 +117,14 @@ export default function AdminManagement({ eventId, eventName }: AdminManagementP
     if (!removeTarget) return;
 
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(
-        `/api/events/${eventId}/admins?userId=${removeTarget.user_id}`,
-        {
-          method: 'DELETE',
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-
-      const data = await response.json();
-      if (data.success) {
-        showToast('Administrator removed successfully', 'success');
-        setRemoveTarget(null);
-        loadAdmins();
-      } else {
-        showToast(data.error || 'Failed to remove administrator', 'error');
+      const resp = await adminsService.removeAdmin(eventId, removeTarget.user_id);
+      if (!resp.success) {
+        showToast(resp.error || 'Failed to remove administrator', 'error');
+        return;
       }
+      showToast('Administrator removed successfully', 'success');
+      setRemoveTarget(null);
+      loadAdmins();
     } catch (error) {
       showToast('Network error removing administrator', 'error');
     }

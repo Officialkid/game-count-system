@@ -1,0 +1,170 @@
+/* Mobile & Touch Optimization Styles */
+
+/* Ensure touch devices get native-feeling feedback */
+@supports (touch-action: manipulation) {
+  button,
+  a,
+  input,
+  select,
+  textarea,
+  [role='button'],
+  [role='tab'],
+  [role='menuitem'],
+  [role='link'] {
+    /* Disable default 300ms delay on touch devices */
+    touch-action: manipulation;
+  }
+}
+
+/* Remove default tap highlight on mobile */
+button,
+a,
+input,
+select,
+textarea,
+[role='button'] {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Smooth tap feedback for buttons */
+button,
+[role='button'] {
+  transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+button:active,
+[role='button'][aria-pressed='true'] {
+  transform: scale(0.98);
+}
+
+/* Swipe animation for swipeable list items */
+@keyframes swipeSlide {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-80px);
+  }
+}
+
+/* Large touch targets for mobile accessibility */
+/* Ensure minimum 44px height/width for interactive elements */
+button,
+a,
+input[type='button'],
+input[type='submit'],
+input[type='reset'],
+[role='button'],
+[role='tab'],
+[role='menuitem'] {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+/* Add extra padding on mobile for larger touch targets */
+@media (max-width: 640px) {
+  button,
+  input[type='text'],
+  input[type='email'],
+  input[type='password'],
+  input[type='number'],
+  textarea,
+  select,
+  [role='button'] {
+    padding-top: 0.75rem;
+    padding-bottom: 0.75rem;
+    padding-left: 1rem;
+    padding-right: 1rem;
+    font-size: 16px; /* Prevents zoom on iOS when input is focused */
+    line-height: 1.5;
+  }
+}
+
+/* Prevent horizontal scroll on mobile */
+body {
+  overflow-x: hidden;
+}
+
+/* Improve scrolling performance */
+.overflow-y-auto,
+.overflow-scroll {
+  -webkit-overflow-scrolling: touch; /* Smooth momentum scrolling on iOS */
+}
+
+/* Focus states for keyboard navigation */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+[role='button']:focus-visible {
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 2px white, 0 0 0 4px #9333ea; /* Purple focus ring */
+}
+
+/* Ensure input labels are large enough to tap */
+label {
+  display: block;
+  font-size: clamp(0.875rem, 1vw, 1rem);
+  padding: 0.5rem 0;
+}
+
+/* Reduce motion for users who prefer it */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Prevent zoom on double-tap for elements with touch handlers */
+[data-swipeable] {
+  touch-action: pan-y;
+  user-select: none;
+}
+
+/* Improve contrast on focus for accessibility */
+input:focus,
+textarea:focus,
+select:focus {
+  background-color: #f9fafb;
+}
+
+/* Ensure form inputs don't zoom on iOS */
+input,
+textarea,
+select {
+  font-size: 16px;
+}
+
+/* Optimize for landscape mode on mobile */
+@media (max-height: 600px) and (orientation: landscape) {
+  button,
+  input,
+  select,
+  textarea {
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-size: clamp(1.125rem, 3vw, 1.875rem);
+    margin-bottom: 0.5rem;
+  }
+}
+
+/* Safe area insets for notched devices */
+@supports (padding: max(0px)) {
+  body {
+    padding-left: max(0px, env(safe-area-inset-left));
+    padding-right: max(0px, env(safe-area-inset-right));
+  }
+
+  .pb-20 {
+    padding-bottom: max(5rem, env(safe-area-inset-bottom) + 5rem);
+  }
+}

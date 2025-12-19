@@ -54,11 +54,11 @@ export class ErrorBoundary extends Component<Props, State> {
 
       return (
         <div className="min-h-[400px] flex items-center justify-center p-8">
-          <div className="max-w-md w-full bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 text-center border border-red-200 dark:border-red-800">
+          <div className="max-w-md w-full bg-white rounded-xl shadow-lg p-6 text-center border border-red-200">
             <div className="mb-4">
-              <div className="w-16 h-16 bg-red-100 dark:bg-red-900/20 rounded-full flex items-center justify-center mx-auto mb-3">
+              <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-3">
                 <svg
-                  className="w-8 h-8 text-red-600 dark:text-red-400"
+                  className="w-8 h-8 text-red-600"
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
@@ -71,15 +71,15 @@ export class ErrorBoundary extends Component<Props, State> {
                   />
                 </svg>
               </div>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">
                 Component Error
               </h3>
-              <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+              <p className="text-sm text-gray-600 mb-4">
                 This component encountered an error and couldn't render properly.
               </p>
               {process.env.NODE_ENV === 'development' && this.state.error && (
-                <div className="mt-3 p-3 bg-gray-100 dark:bg-gray-900 rounded text-left">
-                  <p className="text-xs font-mono text-red-600 dark:text-red-400 break-all">
+                <div className="mt-3 p-3 bg-gray-100 rounded text-left">
+                  <p className="text-xs font-mono text-red-600 break-all">
                     {this.state.error.message}
                   </p>
                 </div>

@@ -1,0 +1,9 @@
+{
+  "name": "submit-score-handler",
+  "version": "1.0.0",
+  "main": "index.js",
+  "type": "commonjs",
+  "dependencies": {
+    "node-appwrite": "^13.0.0"
+  }
+}

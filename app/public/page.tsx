@@ -4,6 +4,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardHeader, CardTitle, CardContent, Badge, LoadingCardSkeleton } from '@/components/ui';
+import { shareLinksService, eventsService, teamsService } from '@/lib/services';
 import { getPaletteById } from '@/lib/color-palettes';
 
 interface PublicEvent {
@@ -21,6 +22,7 @@ export default function PublicEventsPage() {
   const [events, setEvents] = useState<PublicEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [retrying, setRetrying] = useState(false);
 
   useEffect(() => {
     loadPublicEvents();
@@ -28,18 +30,38 @@ export default function PublicEventsPage() {
 
   const loadPublicEvents = async () => {
     try {
-      const response = await fetch('/api/public/events');
-      const data = await response.json();
-
-      if (data.success) {
-        setEvents(data.data.events);
-      } else {
-        setError(data.error || 'Failed to load events');
+      setRetrying(true);
+      // List active share links (public)
+      const links = await shareLinksService.getUserShareLinks('public');
+      if (!links.success || !links.data) {
+        setEvents([]);
+        setError('');
+        return;
       }
+      const active = links.data.shareLinks.slice(0, 24);
+      const mapped: PublicEvent[] = [];
+      for (const sl of active as any[]) {
+        const ev = await eventsService.getEvent(sl.event_id);
+        if (!ev.success || !ev.data) continue;
+        const e: any = ev.data.event;
+        const teams = await teamsService.getTeams(sl.event_id);
+        mapped.push({
+          id: e.$id,
+          event_name: e.event_name,
+          theme_color: e.theme_color || 'purple',
+          logo_url: e.logo_path || e.logo_url || null,
+          created_at: e.created_at,
+          team_count: teams.success && teams.data ? (teams.data.teams as any[]).length : 0,
+          share_token: sl.token,
+        });
+      }
+      setEvents(mapped);
+      setError('');
     } catch (err) {
       setError('Network error loading events');
     } finally {
       setLoading(false);
+      setRetrying(false);
     }
   };
 
@@ -73,8 +95,9 @@ export default function PublicEventsPage() {
             <button
               onClick={loadPublicEvents}
               className="btn-primary"
+              disabled={retrying}
             >
-              Try Again
+              {retrying ? 'Retrying...' : 'Try Again'}
             </button>
           </div>
         </div>

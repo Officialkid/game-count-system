@@ -3,7 +3,6 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Navbar } from '@/components/Navbar';
 
 export default function HomePage() {
   const [isScrolled, setIsScrolled] = useState(false);
@@ -80,9 +79,6 @@ export default function HomePage() {
         <div className="absolute top-1/3 right-1/4 w-96 h-96 bg-amber-300 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob animation-delay-2000"></div>
         <div className="absolute bottom-1/4 left-1/3 w-96 h-96 bg-pink-300 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob animation-delay-4000"></div>
       </div>
-
-      {/* Navigation Bar */}
-      <Navbar />
 
       {/* Hero Section */}
       <section className="relative pt-32 pb-20 px-4 sm:px-6 lg:px-8">
@@ -244,12 +240,14 @@ export default function HomePage() {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
             {/* Brand */}
             <div className="col-span-1 md:col-span-2">
-              <div className="flex items-center space-x-2 mb-4">
-                <span className="text-3xl">🎮</span>
-                <span className="text-2xl font-bold bg-gradient-to-r from-purple-400 to-amber-400 bg-clip-text text-transparent">
+              <Link href="/dashboard" className="flex items-center space-x-2 mb-4 group w-fit">
+                <div className="w-10 h-10 rounded-lg bg-gradient-to-r from-purple-600 to-amber-500 flex items-center justify-center">
+                  <img src="/logo.png" alt="GameScore" className="w-7 h-7" />
+                </div>
+                <span className="text-2xl font-bold bg-gradient-to-r from-purple-400 to-amber-400 bg-clip-text text-transparent group-hover:from-purple-300 group-hover:to-amber-300 transition-all">
                   GameScore
                 </span>
-              </div>
+              </Link>
               <p className="text-gray-400 mb-4">
                 The ultimate scoring platform for competitions, tournaments, and events.
               </p>

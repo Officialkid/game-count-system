@@ -43,27 +43,39 @@ export default function PublicScoreboardPage({ params }: { params: { token: stri
   const [teams, setTeams] = useState<Team[]>([]);
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string>('');
   const [live, setLive] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [invalid, setInvalid] = useState<string | null>(null);
   const [rankChanges, setRankChanges] = useState<RankChange[]>([]);
   const prevTeamsRef = useRef<Map<number, number>>(new Map());
   const [lastUpdate, setLastUpdate] = useState<number>(Date.now());
+  const [reloadCounter, setReloadCounter] = useState(0);
 
   // Auto-refresh every 5-8 seconds
   useEffect(() => {
     let mounted = true;
     const load = async () => {
       try {
+        setError('');
         // Quick token verify
         const v = await fetch(`/api/public/verify/${token}`);
         if (v.status === 404) {
           if (mounted) { setInvalid('Invalid or expired link'); setLoading(false); }
           return;
         }
+        if (!v.ok && v.status >= 500) {
+          if (mounted) { setError('Server error verifying link. Please try again later.'); setLoading(false); }
+          return;
+        }
         // Fetch unified public data
         const res = await fetch(`/api/public/scoreboard/${token}`);
-        if (!res.ok) throw new Error('Failed to load');
+        if (!res.ok) {
+          if (res.status >= 500) {
+            throw new Error('Server error');
+          }
+          throw new Error('Failed to load');
+        }
         const payload = await res.json();
         const data = payload?.data ?? payload;
         if (!mounted) return;
@@ -97,8 +109,12 @@ export default function PublicScoreboardPage({ params }: { params: { token: stri
         setHistory(scores);
         setInvalid(null);
         setLastUpdate(Date.now());
-      } catch (e) {
+      } catch (e: any) {
         console.error(e);
+        if (mounted) {
+          const msg = e?.message === 'Server error' ? 'Server error. Please try again later.' : 'Network error. Please check your connection and retry.';
+          setError(msg);
+        }
       } finally {
         if (mounted) setLoading(false);
       }
@@ -106,10 +122,25 @@ export default function PublicScoreboardPage({ params }: { params: { token: stri
     load();
     const id = setInterval(load, 6000); // 6 second refresh
     return () => { mounted = false; clearInterval(id); };
-  }, [token]);
+  }, [token, reloadCounter]);
 
   // Live updates via SSE when we know the eventId (from public API)
   const eventStream = useEventStream(event?.id ? String(event.id) : '', !!event?.id);
+  const connectionStatus = eventStream?.status ?? 'idle';
+  const statusBadge = useMemo(() => {
+    switch (connectionStatus) {
+      case 'connected':
+        return { label: 'Live', variant: 'success', dot: 'bg-green-600' } as const;
+      case 'connecting':
+        return { label: 'Connecting', variant: 'info', dot: 'bg-blue-600' } as const;
+      case 'error':
+        return { label: 'Reconnecting...', variant: 'warning', dot: 'bg-yellow-500' } as const;
+      case 'disconnected':
+        return { label: 'Disconnected', variant: 'default', dot: 'bg-gray-400' } as const;
+      default:
+        return { label: 'Standby', variant: 'default', dot: 'bg-gray-400' } as const;
+    }
+  }, [connectionStatus]);
   
   useEffect(() => {
     if (!eventStream) return;
@@ -204,6 +235,20 @@ export default function PublicScoreboardPage({ params }: { params: { token: stri
     );
   }
 
+  if (error) {
+    return (
+      <div className="max-w-6xl mx-auto px-4 py-16 text-center">
+        <p className="text-gray-700 font-semibold mb-3">{error}</p>
+        <button
+          onClick={() => setReloadCounter((c) => c + 1)}
+          className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
+
   if (invalid) {
     return (
       <div className="max-w-6xl mx-auto px-4 py-16 text-center">
@@ -279,17 +324,17 @@ export default function PublicScoreboardPage({ params }: { params: { token: stri
                   <Badge variant="primary" className="gap-1">
                     <span className="text-xs">🌐</span> Public Scoreboard
                   </Badge>
-                  {live ? (
-                    <span className="text-sm text-green-600 flex items-center gap-1.5 font-medium">
-                      <span className="inline-block w-2.5 h-2.5 bg-green-600 rounded-full animate-pulse"></span>
-                      Live Updates
-                    </span>
-                  ) : (
-                    <span className="text-sm text-gray-500 flex items-center gap-1.5">
-                      <span className="inline-block w-2.5 h-2.5 bg-gray-400 rounded-full"></span>
-                      Updates every 6s
-                    </span>
-                  )}
+                  <Badge variant={statusBadge.variant} className="gap-2">
+                    <span
+                      className={`inline-block w-2.5 h-2.5 rounded-full ${statusBadge.dot} ${
+                        connectionStatus === 'connected' ? 'animate-pulse' : ''
+                      }`}
+                    ></span>
+                    {statusBadge.label}
+                  </Badge>
+                  <span className="text-sm text-gray-600 flex items-center gap-1.5">
+                    {live ? 'Live events enabled' : 'Fallback: refresh every 6s'}
+                  </span>
                 </div>
               </div>
             </div>

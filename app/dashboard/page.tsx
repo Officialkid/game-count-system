@@ -1,23 +1,22 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { apiClient } from '@/lib/api-client';
 import { useAuth } from '@/lib/auth-context';
-import { Navbar } from '@/components/Navbar';
+import { eventsService, recapsService, scoresService } from '@/lib/services';
+import type { Event as AppwriteEvent } from '@/lib/services/appwriteEvents';
+import { ProtectedPage } from '@/components/AuthGuard';
+import { Home, Trophy, Settings as SettingsIcon, Plus, Sparkles, Users } from 'lucide-react';
 import { EventSetupWizard } from '@/components/EventSetupWizard';
 import { EventCard } from '@/components/EventCard';
 import { DeleteConfirmationModal } from '@/components/DeleteConfirmationModal';
+import { Button } from '@/components/Button';
+import { EmptyState } from '@/components/EmptyState';
+import React from 'react';
+import { SearchFilterToolbar } from '@/components/SearchFilterToolbar';
 
-interface Event {
-  id: string;
-  event_name: string;
-  status?: string;
-  team_count?: number;
-  start_date?: string | null;
-  end_date?: string | null;
-  is_active?: boolean;
-}
+// Type alias for Appwrite Event, with id as alias for $id
+type Event = AppwriteEvent & { id?: string };
 
 interface User {
   name: string;
@@ -25,16 +24,27 @@ interface User {
   avatar_url?: string;
 }
 
-export default function DashboardPage() {
+// Helper to convert Appwrite event to EventCard format
+const convertEventForCard = (event: AppwriteEvent) => ({
+  id: event.$id,
+  event_name: event.event_name,
+  status: event.status,
+  team_count: 0, // Will need to fetch separately if needed
+  updated_at: event.updated_at,
+});
+
+// Inner component - no auth checks needed, wrapped by AuthGuard
+function DashboardContent() {
   const router = useRouter();
-  const { isAuthenticated, isLoading: authLoading, user: authUser } = useAuth();
-  const [mounted, setMounted] = useState(false);
+  const { user: authUser } = useAuth();
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<User | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'inactive'>('all');
+  const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'inactive' | 'archived'>('all');
+  const [sortOrder, setSortOrder] = useState<'newest' | 'oldest' | 'alphabetical'>('newest');
   const [showCreateWizard, setShowCreateWizard] = useState(false);
+  const [editEventId, setEditEventId] = useState<string | null>(null);
   const [deleteModal, setDeleteModal] = useState<{ isOpen: boolean; eventId: string; eventName: string }>({
     isOpen: false,
     eventId: '',
@@ -42,42 +52,17 @@ export default function DashboardPage() {
   });
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // Redirect to login if not authenticated
+  // Load dashboard data (auth is already verified by AuthGuard)
   useEffect(() => {
-    if (!authLoading && !isAuthenticated) {
-      router.push('/login?returnUrl=/dashboard');
-    }
-  }, [authLoading, isAuthenticated, router]);
-
-  // Mark as mounted to enable rendering
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  useEffect(() => {
-    if (!mounted || authLoading) return;
-    
-    // Only load data if authenticated
-    if (!isAuthenticated) {
-      setLoading(false);
-      return;
-    }
-
-    const loadData = async () => {
+    const loadCritical = async () => {
       try {
-        const [eventsRes, userRes] = await Promise.all([
-          apiClient.get('/api/events/list'),
-          apiClient.get('/api/auth/me'),
-        ]);
+        setLoading(true);
+        if (!authUser?.id) return;
+        
+        const eventsRes = await eventsService.getEvents(authUser.id);
 
-        const eventsData = await eventsRes.json();
-        const userData = await userRes.json();
-
-        if (eventsData.success && eventsData.data?.events) {
-          setEvents(eventsData.data.events);
-        }
-        if (userData.success && userData.data?.user) {
-          setUser(userData.data.user);
+        if (eventsRes.success && eventsRes.data?.events) {
+          setEvents(eventsRes.data.events);
         }
       } catch (error) {
         console.error('Dashboard load error:', error);
@@ -86,104 +71,216 @@ export default function DashboardPage() {
       }
     };
 
-    loadData();
-  }, [mounted, authLoading, isAuthenticated]);
+    loadCritical();
+    // Defer non-critical fetches until idle
+    const idle = (window as any).requestIdleCallback || ((cb: Function) => setTimeout(() => cb({ timeRemaining: () => 0 }), 200));
+    idle(async () => {
+      try {
+        if (authUser?.id) {
+          const r = await recapsService.getSummary(authUser.id);
+          if (r.success && r.data) {
+            setRecap({ mvpTeam: r.data.mvpTeam, totalGames: r.data.totalGames, topTeam: r.data.topTeam });
+          }
+        }
+      } catch {}
+    });
+  }, []);
 
-  const filteredEvents = events.filter((event) => {
-    const matchesSearch = event.event_name.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesFilter = filterStatus === 'all' || event.status === filterStatus;
-    return matchesSearch && matchesFilter;
-  });
+  const filteredEvents = useMemo(() => {
+    const term = (searchQuery || '').toLowerCase();
+
+    const withStatus = events.filter((event) => {
+      const name = (event.event_name || '').toLowerCase();
+      const matchesSearch = name.includes(term);
+      const normalizedStatus = event.status || 'active';
+      const isActive = normalizedStatus === 'active';
+      const isArchived = normalizedStatus === 'archived';
+
+      const matchesFilter =
+        filterStatus === 'all'
+          ? true
+          : filterStatus === 'active'
+            ? isActive
+            : filterStatus === 'archived'
+              ? isArchived
+              : !isActive && !isArchived;
+
+      return matchesSearch && matchesFilter;
+    });
+
+    const sorted = [...withStatus].sort((a, b) => {
+      if (sortOrder === 'alphabetical') {
+        return (a.event_name || '').localeCompare(b.event_name || '');
+      }
+      const aDate = new Date(a.updated_at || a.created_at || 0).getTime();
+      const bDate = new Date(b.updated_at || b.created_at || 0).getTime();
+      return sortOrder === 'newest' ? bDate - aDate : aDate - bDate;
+    });
+
+    return sorted;
+  }, [events, searchQuery, filterStatus, sortOrder]);
+
+  // Quick Stats
+  const totalEvents = events.length;
+  const activeEvents = events.filter((e) => e.status === 'active').length;
+  const totalTeams = 0; // Will fetch dynamically
+  const [scoresLast7Days, setScoresLast7Days] = useState<number>(0);
+  const [recap, setRecap] = useState<{ mvpTeam?: string; totalGames?: number; topTeam?: string } | null>(null);
+  const [checklistOpen, setChecklistOpen] = useState(true);
+  const liveRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        if (authUser?.id) {
+          const res = await scoresService.getScoresCountLastDays(authUser.id, 7);
+          if (res.success && res.data) {
+            setScoresLast7Days(res.data.count || 0);
+          }
+        }
+      } catch {}
+      try {
+        if (authUser?.id) {
+          const r = await recapsService.getSummary(authUser.id);
+          if (r.success && r.data) {
+            setRecap({ mvpTeam: r.data.mvpTeam, totalGames: r.data.totalGames, topTeam: r.data.topTeam });
+          }
+        }
+      } catch {}
+    })();
+  }, []);
+
+  const StatCard = ({ label, value }: { label: string; value: number }) => {
+    const [display, setDisplay] = useState(0);
+    useEffect(() => {
+      let start: number | null = null;
+      const duration = 600;
+      const step = (ts: number) => {
+        if (start === null) start = ts;
+        const p = Math.min(1, (ts - start) / duration);
+        const eased = 1 - Math.pow(1 - p, 3);
+        setDisplay(Math.round(eased * value));
+        if (p < 1) requestAnimationFrame(step);
+      };
+      requestAnimationFrame(step);
+    }, [value]);
+    return (
+      <div className="min-w-[180px] rounded-lg border border-neutral-200 bg-white shadow-sm px-4 py-3">
+        <p className="text-xs text-neutral-500">{label}</p>
+        <p className="mt-1 text-2xl font-semibold text-neutral-900">{display}</p>
+      </div>
+    );
+  };
 
   const handleWizardComplete = (eventId: string) => {
     setShowCreateWizard(false);
+    setEditEventId(null);
+    
+    // Reload events to get the latest data
+      if (authUser?.id) {
+        eventsService.getEvents(authUser.id).then((res) => {
+      if (res.success && res.data?.events) {
+        setEvents(res.data.events);
+      }
+        });
+      }
+    
+    // Navigate to the event detail page
     router.push(`/event/${eventId}`);
   };
-
-  const handleLogout = () => {
-    // Logout is now handled through the Navbar and auth context
-    router.push('/login');
+  
+  const handleWizardCancel = () => {
+    setShowCreateWizard(false);
+    setEditEventId(null);
   };
 
-  const handleViewEvent = (eventId: string) => {
+  const handleViewEvent = useCallback((eventId: string) => {
     router.push(`/event/${eventId}`);
-  };
+  }, [router]);
 
-  const handleEditEvent = (eventId: string) => {
-    // TODO: Implement edit event functionality
-    router.push(`/event/${eventId}/edit`);
-  };
+  const handleEditEvent = useCallback((eventId: string) => {
+    setEditEventId(eventId);
+    setShowCreateWizard(true);
+  }, []);
 
-  const handleDeleteClick = (eventId: string, eventName: string) => {
+  const handleDeleteClick = useCallback((eventId: string, eventName: string) => {
     setDeleteModal({ isOpen: true, eventId, eventName });
-  };
+  }, []);
 
   const handleConfirmDelete = async () => {
     setIsDeleting(true);
     try {
-      const response = await apiClient.delete(`/api/events/${deleteModal.eventId}`);
-      if (response.ok) {
-        setEvents(events.filter((e) => e.id !== deleteModal.eventId));
+        const response = await eventsService.deleteEvent(deleteModal.eventId);
+        if (response.success) {
+            setEvents(events.filter((e) => e.$id !== deleteModal.eventId));
         setDeleteModal({ isOpen: false, eventId: '', eventName: '' });
+        liveRef.current?.appendChild(document.createTextNode(`Deleted event ${deleteModal.eventName}.`));
       } else {
         console.error('Failed to delete event');
+        liveRef.current?.appendChild(document.createTextNode('Failed to delete event.'));
       }
     } catch (error) {
       console.error('Delete event error:', error);
+      liveRef.current?.appendChild(document.createTextNode('Delete error.'));
     } finally {
       setIsDeleting(false);
     }
   };
 
-  const handleDuplicateEvent = async (eventId: string) => {
+  const handleDuplicateEvent = useCallback(async (eventId: string) => {
     try {
-      const response = await fetch(`/api/events/${eventId}/duplicate`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
-      });
-      if (response.ok) {
-        const newEvent = await response.json();
-        setEvents([newEvent.data, ...events]);
+        const result = await eventsService.duplicateEvent(eventId, authUser!.id);
+        if (result.success && result.data) {
+          // Add the duplicated event to the beginning of the list
+          setEvents(prevEvents => [result.data.event, ...prevEvents]);
+          liveRef.current?.appendChild(document.createTextNode(`Event duplicated: ${result.data.event.event_name}`));
       } else {
         console.error('Failed to duplicate event');
+        liveRef.current?.appendChild(document.createTextNode('Failed to duplicate event.'));
       }
     } catch (error) {
       console.error('Duplicate event error:', error);
+      liveRef.current?.appendChild(document.createTextNode('Duplicate error.'));
     }
-  };
+  }, []);
 
-  // Show create wizard modal
+  // Show create/edit wizard modal
   if (showCreateWizard) {
+    const editEvent = editEventId ? events.find(e => e.$id === editEventId) : null;
+    
     return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-amber-50 to-pink-50">
-        <Navbar />
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 mt-20">
-          <button
-            onClick={() => setShowCreateWizard(false)}
-            className="mb-4 px-4 py-2 bg-gray-200 text-gray-800 rounded-lg font-medium hover:bg-gray-300 transition-all"
+      <div className="min-h-screen bg-gradient-to-br from-neutral-50 to-neutral-100">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <Button
+            variant="secondary"
+            onClick={handleWizardCancel}
+            className="mb-6"
           >
             ← Back to Dashboard
-          </button>
-          <EventSetupWizard onComplete={handleWizardComplete} />
+          </Button>
+          <EventSetupWizard 
+            onComplete={handleWizardComplete}
+            onCancel={handleWizardCancel}
+            editEventId={editEventId || undefined}
+            initialData={editEvent as any}
+          />
         </div>
       </div>
     );
   }
 
-  if (!mounted || loading) {
+  // Show loading during data fetch
+  if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-amber-50 to-pink-50">
-        <Navbar />
-        <div className="container-safe py-8 mt-20">
-          <div className="mb-8 flex justify-between items-center">
-            <div className="space-y-2">
-              <div className="h-10 w-48 bg-gray-200 rounded animate-pulse" />
-              <div className="h-4 w-64 bg-gray-200 rounded animate-pulse" />
-            </div>
+      <div className="min-h-screen bg-gradient-to-br from-neutral-50 to-neutral-100">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="mb-8 space-y-4">
+            <div className="h-10 w-48 bg-neutral-200 rounded-lg animate-pulse" />
+            <div className="h-4 w-96 bg-neutral-200 rounded animate-pulse" />
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {[1, 2, 3, 4, 5, 6].map((i) => (
-              <div key={i} className="h-64 bg-white/40 rounded-2xl animate-pulse" />
+              <div key={i} className="h-64 bg-white rounded-xl shadow-sm animate-pulse" />
             ))}
           </div>
         </div>
@@ -192,117 +289,232 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-amber-50 to-pink-50">
-      <Navbar />
-      <div className="container-safe py-8 mt-20">
-        {/* Header Section with User Profile - Premium Glass Design */}
-        <div className="mb-8">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-8 bg-white/40 backdrop-blur-xl rounded-3xl p-8 border border-white/20 shadow-xl hover:shadow-2xl transition-all">
-            <div className="flex items-center gap-6">
-              <div className="w-16 h-16 rounded-full bg-gradient-to-r from-purple-600 to-amber-500 flex items-center justify-center text-white text-2xl font-bold shadow-lg">
-                {user?.name?.charAt(0).toUpperCase() || 'U'}
+    <>
+      {/* Global live region for feedback */}
+      <div ref={liveRef} aria-live="polite" aria-atomic="true" className="sr-only"></div>
+      <div className="min-h-screen bg-gradient-to-br from-neutral-50 to-neutral-100 pb-20 md:pb-8">
+        <div className="w-full max-w-7xl mx-auto px-3 sm:px-4 lg:px-8 py-4 sm:py-8">
+          {/* Keyboard shortcuts: '/' focuses search, 'n' opens create */}
+          <div className="sr-only" aria-hidden>
+            Keyboard shortcuts: Press '/' to focus search. Press 'n' to create event.
+          </div>
+          <script dangerouslySetInnerHTML={{ __html: `
+            (function(){
+              var searchInput = null;
+              function findSearch(){
+                if (!searchInput) {
+                  searchInput = document.querySelector('[data-search-input]') || document.querySelector('input[type="search"]');
+                }
+                return searchInput;
+              }
+              document.addEventListener('keydown', function(e){
+                if (e.key === '/' && !e.defaultPrevented) {
+                  var el = findSearch();
+                  if (el) { e.preventDefault(); el.focus(); el.select && el.select(); }
+                }
+                if ((e.key === 'n' || e.key === 'N') && !e.defaultPrevented) {
+                  var btn = document.querySelector('[data-create-event]');
+                  if (btn) { e.preventDefault(); btn.click(); }
+                }
+              });
+            })();
+          ` }} />
+          {/* Quick Stats Strip */}
+          <div className="mb-6 sm:mb-8">
+            <div className="flex gap-3 overflow-x-auto pb-2 [-ms-overflow-style:none] [scrollbar-width:none]">
+              <StatCard label="Total Events" value={totalEvents} />
+              <StatCard label="Active Events" value={activeEvents} />
+              <StatCard label="Total Teams" value={totalTeams} />
+              <StatCard label="Scores in Last 7 Days" value={scoresLast7Days} />
+            </div>
+          </div>
+
+          {/* Highlights Module (Recap discovery) */}
+          {recap && (recap.mvpTeam || recap.totalGames || recap.topTeam) ? (
+            <div className="mb-6 sm:mb-8">
+              <div className="rounded-lg border border-neutral-200 bg-white p-4 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-neutral-900">
+                    <Trophy className="w-5 h-5 text-amber-500" />
+                    <h2 className="font-semibold">Highlights</h2>
+                  </div>
+                  <Button variant="secondary" onClick={() => router.push('/recap')}>View Full Recap →</Button>
+                </div>
+                <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm text-neutral-700">
+                  <div className="rounded-md border border-neutral-100 bg-neutral-50 p-3">
+                    <p className="text-xs text-neutral-500">MVP Team</p>
+                    <p className="mt-1 font-medium">{recap.mvpTeam ?? '—'}</p>
+                  </div>
+                  <div className="rounded-md border border-neutral-100 bg-neutral-50 p-3">
+                    <p className="text-xs text-neutral-500">Total Games Played</p>
+                    <p className="mt-1 font-medium">{recap.totalGames ?? 0}</p>
+                  </div>
+                  <div className="rounded-md border border-neutral-100 bg-neutral-50 p-3">
+                    <p className="text-xs text-neutral-500">Top-Ranked Team</p>
+                    <p className="mt-1 font-medium">{recap.topTeam ?? '—'}</p>
+                  </div>
+                </div>
               </div>
+            </div>
+          ) : null}
+          {/* Simplified Header with Mobile CTA */}
+          <div className="mb-6 sm:mb-8">
+            <div className="flex items-start justify-between gap-4">
               <div>
-                <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-amber-500 bg-clip-text text-transparent">
-                  Welcome back, {user?.name || 'User'}
-                </h1>
-                <p className="text-gray-600 text-sm">{user?.email}</p>
+                <h1 className="text-2xl sm:text-3xl font-bold text-neutral-900">Dashboard</h1>
+                <p className="text-neutral-600 text-sm sm:text-base">Manage your events and scores</p>
               </div>
-            </div>
-            <button
-              onClick={handleLogout}
-              className="px-6 py-2 bg-gradient-to-r from-red-500 to-pink-600 text-white rounded-lg font-medium hover:shadow-lg transition-all transform hover:scale-105"
-            >
-              Logout
-            </button>
-          </div>
-
-          {/* Stats Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-            <div className="bg-white/40 backdrop-blur-xl rounded-2xl p-6 border border-white/20 shadow-lg">
-              <p className="text-gray-600 text-sm font-medium mb-2">Total Events</p>
-              <p className="text-4xl font-bold text-purple-600">{events.length}</p>
-            </div>
-            <div className="bg-white/40 backdrop-blur-xl rounded-2xl p-6 border border-white/20 shadow-lg">
-              <p className="text-gray-600 text-sm font-medium mb-2">Active Events</p>
-              <p className="text-4xl font-bold text-amber-500">{events.filter(e => e.status !== 'inactive').length}</p>
-            </div>
-            <div className="bg-white/40 backdrop-blur-xl rounded-2xl p-6 border border-white/20 shadow-lg">
-              <p className="text-gray-600 text-sm font-medium mb-2">Total Teams</p>
-              <p className="text-4xl font-bold text-pink-500">{events.reduce((sum, e) => sum + (e.team_count || 0), 0)}</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Search and Filter Section */}
-        <div className="mb-8 flex flex-col md:flex-row gap-4">
-          <input
-            type="text"
-            placeholder="Search events..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="flex-1 px-4 py-3 bg-white/40 backdrop-blur-xl border border-white/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-600 focus:border-transparent placeholder-gray-500"
-          />
-          <select
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value as any)}
-            className="px-4 py-3 bg-white/40 backdrop-blur-xl border border-white/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-600 focus:border-transparent text-gray-700"
-          >
-            <option value="all">All Events</option>
-            <option value="active">Active</option>
-            <option value="inactive">Inactive</option>
-          </select>
-          <button
-            onClick={() => setShowCreateWizard(true)}
-            data-tour="create-event"
-            className="px-6 py-3 bg-gradient-to-r from-purple-600 to-amber-500 text-white rounded-xl font-medium hover:shadow-lg transition-all transform hover:scale-105 whitespace-nowrap"
-          >
-            + New Event
-          </button>
-        </div>
-
-        {/* Events Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredEvents.length === 0 ? (
-            <div className="col-span-full text-center py-16">
-              <div className="bg-white/40 backdrop-blur-xl rounded-2xl p-12 border border-white/20 shadow-lg">
-                <p className="text-gray-500 text-lg mb-6">
-                  {searchQuery || filterStatus !== 'all'
-                    ? 'No events match your search'
-                    : 'No events yet. Create your first event!'}
-                </p>
-                <button
+              <Button
+                variant="primary"
+                size="md"
+                leftIcon={<Plus className="w-5 h-5" />}
+                onClick={() => setShowCreateWizard(true)}
+                data-tour="create-event"
+                className="flex-shrink-0 sm:hidden"
+              >
+                Create
+              </Button>
+              <div className="hidden sm:block flex-shrink-0">
+                <Button
+                  variant="primary"
+                  size="md"
+                  leftIcon={<Plus className="w-5 h-5" />}
                   onClick={() => setShowCreateWizard(true)}
                   data-tour="create-event"
-                  className="px-8 py-3 bg-gradient-to-r from-purple-600 to-amber-500 text-white rounded-xl font-medium hover:shadow-lg transition-all transform hover:scale-105"
                 >
-                  Create Your First Event
-                </button>
+                  Create Event
+                </Button>
               </div>
             </div>
-          ) : (
-            filteredEvents.map((event) => (
-              <EventCard
-                key={event.id}
-                event={event}
-                onView={handleViewEvent}
-                onEdit={handleEditEvent}
-                onDelete={(id) => handleDeleteClick(id, event.event_name)}
-                onDuplicate={handleDuplicateEvent}
-              />
-            ))
-          )}
-        </div>
+          </div>
 
-        {/* Delete Confirmation Modal */}
-        <DeleteConfirmationModal
-          isOpen={deleteModal.isOpen}
-          eventName={deleteModal.eventName}
-          onConfirm={handleConfirmDelete}
-          onCancel={() => setDeleteModal({ isOpen: false, eventId: '', eventName: '' })}
-          isDeleting={isDeleting}
-        />
+          {/* Unified Search & Filter Toolbar */}
+          <div className="mb-6 sm:mb-8">
+            <SearchFilterToolbar
+              value={searchQuery}
+              onValueChange={setSearchQuery}
+              status={filterStatus}
+              onStatusChange={(s) => setFilterStatus(s)}
+              sort={sortOrder}
+              onSortChange={setSortOrder}
+              helperText="Search by event name. Filter by status. Sort by newest, oldest, or alphabetical."
+            />
+          </div>
+
+          {/* Onboarding Checklist */}
+          <div className="mb-6">
+            <button
+              className="text-sm font-medium text-neutral-700 hover:text-neutral-900"
+              aria-expanded={checklistOpen}
+              onClick={() => setChecklistOpen((v) => !v)}
+            >
+              {checklistOpen ? 'Hide' : 'Show'} Onboarding Checklist
+            </button>
+            {checklistOpen && (
+              <div className="mt-2 rounded-lg border border-neutral-200 bg-white p-3">
+                <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {[
+                    { label: 'Create Event', done: events.length > 0 },
+                    { label: 'Add Teams', done: false }, // TODO: Fetch teams for first event
+                    { label: 'Start Game', done: (events[0]?.status === 'active') },
+                    { label: 'View Recap', done: (events.length > 0) },
+                  ].map((item) => (
+                    <li key={item.label} className="flex items-center gap-2 text-sm">
+                      <span className={`inline-block w-2 h-2 rounded-full ${item.done ? 'bg-green-500' : 'bg-neutral-300'}`} aria-hidden />
+                      <span className={item.done ? 'text-neutral-800' : 'text-neutral-600'}>{item.label}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+
+          {/* Events Grid - Fluid, mobile-first */}
+          {filteredEvents.length === 0 ? (
+            <EmptyState
+              title="No events yet"
+              description="Kick off your first event to start tracking teams, scores, and recaps."
+              actionLabel="Create your first event"
+              onAction={() => setShowCreateWizard(true)}
+              icon={<Sparkles className="w-12 h-12 text-purple-600" aria-hidden />}
+              secondaryActionLabel="Create Demo Event"
+              onSecondaryAction={async () => {
+                try {
+                  if (!authUser?.id) return;
+                  const create = await eventsService.createEvent(authUser.id, {
+                    event_name: 'Demo Event',
+                    theme_color: 'purple',
+                    allow_negative: false,
+                    display_mode: 'cumulative',
+                    num_teams: 3,
+                    status: 'active',
+                  });
+                  if (create.success && create.data) {
+                    localStorage.setItem('demoActive', 'true');
+                    setEvents([create.data.event]);
+                  }
+                } catch {}
+              }}
+              tips={[
+                'Use the Create Event wizard to set teams and rules quickly.',
+                'Swipe cards on mobile to manage events (delete/duplicate).',
+                'Visit Your Recap to see highlights once events are active.',
+              ]}
+            />
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 will-change-transform" style={{ contentVisibility: 'auto' }}>
+              {filteredEvents.map((event) => (
+                <EventCard
+                  key={event.$id}
+                  event={convertEventForCard(event)}
+                  onView={() => handleViewEvent(event.$id)}
+                  onEdit={() => handleEditEvent(event.$id)}
+                  onDelete={() => handleDeleteClick(event.$id, event.event_name)}
+                  onDuplicate={() => handleDuplicateEvent(event.$id)}
+                />
+              ))}
+            </div>
+          )}
+
+          {/* Delete Confirmation Modal */}
+          <DeleteConfirmationModal
+            isOpen={deleteModal.isOpen}
+            title="Delete Event"
+            message={`Are you sure you want to delete "${deleteModal.eventName}"? This action cannot be undone.`}
+            confirmButtonLabel="Yes, Delete"
+            cancelButtonLabel="No, Keep It"
+            onConfirm={handleConfirmDelete}
+            onCancel={() => setDeleteModal({ isOpen: false, eventId: '', eventName: '' })}
+            isDeleting={isDeleting}
+          />
+        </div>
       </div>
-    </div>
+      {/* Demo banner */}
+      {typeof window !== 'undefined' && localStorage.getItem('demoActive') === 'true' ? (
+        <div className="fixed bottom-20 left-0 right-0 mx-auto max-w-7xl px-4">
+          <div className="rounded-lg border border-amber-300 bg-amber-50 text-amber-900 p-3 flex items-center justify-between">
+            <span className="text-sm">Demo data active</span>
+            <button
+              className="text-sm font-medium underline"
+              onClick={() => {
+                localStorage.removeItem('demoActive');
+                // Optionally clear demo events from UI
+              }}
+            >
+              Remove Demo
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </>
+  );
+}
+
+// Export the wrapped component with AuthGuard
+export default function DashboardPage() {
+  return (
+    <ProtectedPage returnUrl="/dashboard">
+      <DashboardContent />
+    </ProtectedPage>
   );
 }

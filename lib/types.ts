@@ -14,7 +14,6 @@ export interface Event {
   created_at: string;
   // Phase 2 enhancements
   brand_color?: string;
-  logo_url?: string | null;
   allow_negative?: boolean;
   display_mode?: 'cumulative' | 'per_day';
   num_teams?: number;
@@ -53,7 +52,6 @@ export interface Team {
   id: string;
   event_id: string;
   team_name: string;
-  avatar_url: string | null;
   total_points: number;
 }
 

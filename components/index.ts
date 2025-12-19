@@ -7,7 +7,6 @@ export { PasswordInput } from './PasswordInput';
 export { Card } from './Card';
 export { Navbar } from './Navbar';
 export { ColorPaletteSelector } from './ColorPaletteSelector';
-export { LogoUpload } from './LogoUpload';
 export { AuthForm } from './AuthForm';
 export type { AuthFormData } from './AuthForm';
 export { DashboardCard, CreateEventForm } from './DashboardCard';

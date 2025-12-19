@@ -26,7 +26,7 @@ export async function middleware(request: NextRequest) {
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: https:",
       "font-src 'self' data:",
-      "connect-src 'self'",
+      "connect-src 'self' https://*.appwrite.io https://*.cloud.appwrite.io",
       "frame-ancestors 'none'",
     ].join('; ')
   );

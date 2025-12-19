@@ -5,6 +5,7 @@ import { useState, FormEvent } from 'react';
 import { Card } from './Card';
 import { Button } from './Button';
 import { Input } from './Input';
+import { useSubmissionLock } from '@/lib/hooks/useSubmissionLock';
 
 interface Team {
   id: string;
@@ -23,9 +24,14 @@ export function ScoreInputRow({ teams, onSubmit, loading = false }: ScoreInputRo
     game_number: 1,
     points: 0,
   });
+  const { lock, unlock, isSubmitting } = useSubmissionLock();
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    
+    // Prevent duplicate submissions
+    if (!lock()) return;
+    
     try {
       await onSubmit(formData.team_id, formData.game_number, formData.points);
       // Auto-increment game number for next score, reset team and points
@@ -37,6 +43,9 @@ export function ScoreInputRow({ teams, onSubmit, loading = false }: ScoreInputRo
     } catch (error) {
       // Keep form data if submission fails
       console.error('Failed to submit score:', error);
+      unlock(); // Release lock on error
+    } finally {
+      unlock(); // Always release the lock
     }
   };
 
@@ -93,8 +102,8 @@ export function ScoreInputRow({ teams, onSubmit, loading = false }: ScoreInputRo
           required
         />
 
-        <Button type="submit" fullWidth disabled={loading}>
-          {loading ? 'Adding Score...' : 'Add Score'}
+        <Button type="submit" fullWidth disabled={loading || isSubmitting}>
+          {isSubmitting ? 'Adding Score...' : loading ? 'Loading...' : 'Add Score'}
         </Button>
       </form>
     </Card>
@@ -110,12 +119,24 @@ interface AddTeamFormProps {
 export function AddTeamForm({ onSubmit, onCancel, loading = false }: AddTeamFormProps) {
   const [teamName, setTeamName] = useState('');
   const [avatarUrl, setAvatarUrl] = useState('');
+  const { lock, unlock, isSubmitting } = useSubmissionLock();
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    await onSubmit(teamName, avatarUrl);
-    setTeamName('');
-    setAvatarUrl('');
+    
+    // Prevent duplicate submissions
+    if (!lock()) return;
+    
+    try {
+      await onSubmit(teamName, avatarUrl);
+      setTeamName('');
+      setAvatarUrl('');
+    } catch (error) {
+      console.error('Failed to add team:', error);
+      unlock(); // Release lock on error
+    } finally {
+      unlock(); // Always release the lock
+    }
   };
 
   return (
@@ -137,10 +158,10 @@ export function AddTeamForm({ onSubmit, onCancel, loading = false }: AddTeamForm
           onChange={(e) => setAvatarUrl(e.target.value)}
         />
         <div className="flex gap-2">
-          <Button type="submit" disabled={loading}>
-            {loading ? 'Adding...' : 'Add Team'}
+          <Button type="submit" disabled={loading || isSubmitting}>
+            {isSubmitting ? 'Adding...' : loading ? 'Loading...' : 'Add Team'}
           </Button>
-          <Button type="button" variant="secondary" onClick={onCancel}>
+          <Button type="button" variant="secondary" onClick={onCancel} disabled={isSubmitting}>
             Cancel
           </Button>
         </div>

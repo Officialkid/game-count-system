@@ -23,7 +23,7 @@ export function ColorPaletteSelector({
 
   return (
     <div className="space-y-2">
-      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+      <label className="block text-sm font-medium text-gray-700">
         {label}
       </label>
 
@@ -31,7 +31,7 @@ export function ColorPaletteSelector({
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center justify-between p-3 border border-gray-300 dark:border-gray-600 rounded-lg hover:border-primary-500 dark:hover:border-primary-400 transition-colors bg-white dark:bg-gray-800"
+        className="w-full flex items-center justify-between p-3 border border-gray-300 rounded-lg hover:border-primary-500 transition-colors bg-white"
       >
         <div className="flex items-center gap-3">
           {/* Color Preview */}
@@ -40,10 +40,10 @@ export function ColorPaletteSelector({
             style={{ background: selectedPaletteObj.preview }}
           />
           <div className="text-left">
-            <div className="font-medium text-gray-900 dark:text-gray-100">
+            <div className="font-medium text-gray-900">
               {selectedPaletteObj.name}
             </div>
-            <div className="text-sm text-gray-500 dark:text-gray-400">
+            <div className="text-sm text-gray-500">
               {selectedPaletteObj.description}
             </div>
           </div>
@@ -60,7 +60,7 @@ export function ColorPaletteSelector({
 
       {/* Palette Grid */}
       {isOpen && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 p-4 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-900 max-h-96 overflow-y-auto">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 p-4 border border-gray-300 rounded-lg bg-gray-50 max-h-96 overflow-y-auto">
           {COLOR_PALETTES.map((palette) => (
             <button
               key={palette.id}
@@ -71,9 +71,9 @@ export function ColorPaletteSelector({
               }}
               className={`p-3 rounded-lg border-2 transition-all hover:scale-105 ${
                 palette.id === selectedPalette
-                  ? 'border-primary-500 dark:border-primary-400 shadow-lg'
-                  : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
-              } bg-white dark:bg-gray-800`}
+                  ? 'border-primary-500 shadow-lg'
+                  : 'border-gray-200 hover:border-gray-300'
+              } bg-white`}
             >
               {/* Color Gradient Preview */}
               <div
@@ -82,12 +82,12 @@ export function ColorPaletteSelector({
               />
               
               {/* Palette Name */}
-              <div className="text-sm font-medium text-gray-900 dark:text-gray-100 text-center">
+              <div className="text-sm font-medium text-gray-900 text-center">
                 {palette.name}
               </div>
               
               {/* Description */}
-              <div className="text-xs text-gray-500 dark:text-gray-400 text-center mt-1">
+              <div className="text-xs text-gray-500 text-center mt-1">
                 {palette.description}
               </div>
               
@@ -95,17 +95,17 @@ export function ColorPaletteSelector({
               {showPreview && (
                 <div className="flex gap-1 mt-2 justify-center">
                   <div
-                    className="w-6 h-6 rounded-full border border-gray-200 dark:border-gray-600"
+                    className="w-6 h-6 rounded-full border border-gray-200"
                     style={{ backgroundColor: palette.primary }}
                     title="Primary"
                   />
                   <div
-                    className="w-6 h-6 rounded-full border border-gray-200 dark:border-gray-600"
+                    className="w-6 h-6 rounded-full border border-gray-200"
                     style={{ backgroundColor: palette.secondary }}
                     title="Secondary"
                   />
                   <div
-                    className="w-6 h-6 rounded-full border border-gray-200 dark:border-gray-600"
+                    className="w-6 h-6 rounded-full border border-gray-200"
                     style={{ backgroundColor: palette.accent }}
                     title="Accent"
                   />
@@ -114,7 +114,7 @@ export function ColorPaletteSelector({
               
               {/* Selected Indicator */}
               {palette.id === selectedPalette && (
-                <div className="mt-2 flex items-center justify-center gap-1 text-primary-600 dark:text-primary-400">
+                <div className="mt-2 flex items-center justify-center gap-1 text-primary-600">
                   <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                     <path
                       fillRule="evenodd"
