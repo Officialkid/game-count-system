@@ -37,14 +37,13 @@ export function Navbar() {
   const authNavLinks: NavLink[] = [
     { label: 'Dashboard', href: '/dashboard', icon: <Home className="w-5 h-5" /> },
     { label: 'Events', href: '/events', icon: <Calendar className="w-5 h-5" /> },
-    // Recap entry points to Dashboard with recap context (not a separate page)
-    ...(hasRecap ? [{ label: 'Your Recap', href: '/dashboard?recap=1', icon: <Home className="w-5 h-5" /> }] : []),
   ];
 
   // Navigation for public pages
   const publicNavLinks: NavLink[] = [
     { label: 'Home', href: '/', icon: <Home className="w-5 h-5" /> },
-    { label: 'Public Events', href: '/public', icon: <Calendar className="w-5 h-5" /> },
+    { label: 'Dashboard', href: '/dashboard', icon: <Calendar className="w-5 h-5" /> },
+    { label: 'Events', href: '/events', icon: <Calendar className="w-5 h-5" /> },
   ];
 
   const isActive = (href: string) => {
@@ -58,45 +57,14 @@ export function Navbar() {
   };
 
   // Determine which nav links to show
-  const navLinks = isAuthenticated ? authNavLinks : publicNavLinks;
+  const navLinks = authNavLinks;
 
-  // Check recap eligibility: has ≥1 completed event OR recap data exists
+  // Check recap eligibility
   useEffect(() => {
-    let active = true;
-    (async () => {
-      try {
-        // Wait for auth to be fully ready to avoid 401s during initialization
-        if (!authReady || !isAuthenticated || !user?.id) return;
-        const [eventsRes, recapSummary] = await Promise.all([
-          eventsService.getEvents(user.id, { status: 'completed', limit: 1 }),
-          recapsService.getSummary(user.id),
-        ]);
-        const completedCount = (eventsRes?.data?.events || []).length;
-        const recapExists = !!(recapSummary?.success && recapSummary?.data && (
-          (recapSummary.data.totalGames ?? 0) > 0 || !!recapSummary.data.mvpTeam || !!recapSummary.data.topTeam
-        ));
-        const eligible = (completedCount > 0) || recapExists;
-        if (active) setHasRecap(eligible);
-        // One-time NEW badge per user
-        if (eligible) {
-          const key = `recap_new_badge_shown_${user.id}`;
-          const shown = typeof window !== 'undefined' ? window.localStorage.getItem(key) : '1';
-          if (active) setShowNewBadge(!shown);
-        } else {
-          if (active) setShowNewBadge(false);
-        }
-      } catch {
-        // keep hidden if error
-        if (active) {
-          setHasRecap(false);
-          setShowNewBadge(false);
-        }
-      }
-    })();
-    return () => {
-      active = false;
-    };
-  }, [user?.id, authReady, isAuthenticated]);
+    // TODO: Fetch actual recap data when available
+    setHasRecap(false);
+    setShowNewBadge(false);
+  }, []);
 
   return (
     <nav className="sticky top-0 z-50 bg-white/95 backdrop-blur-sm border-b border-neutral-200 shadow-sm">

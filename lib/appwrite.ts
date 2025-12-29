@@ -17,8 +17,8 @@ if (!process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT) {
   throw new Error('Missing NEXT_PUBLIC_APPWRITE_ENDPOINT environment variable');
 }
 
-if (!process.env.NEXT_PUBLIC_APPWRITE_PROJECT) {
-  throw new Error('Missing NEXT_PUBLIC_APPWRITE_PROJECT environment variable');
+if (!process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID) {
+  throw new Error('Missing NEXT_PUBLIC_APPWRITE_PROJECT_ID environment variable');
 }
 
 /**
@@ -27,7 +27,7 @@ if (!process.env.NEXT_PUBLIC_APPWRITE_PROJECT) {
  */
 export const client = new Client()
   .setEndpoint(process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT)
-  .setProject(process.env.NEXT_PUBLIC_APPWRITE_PROJECT);
+  .setProject(process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID);
 
 /**
  * Account SDK
@@ -114,7 +114,7 @@ export function getServerClient() {
 
   const serverClient = new Client()
     .setEndpoint(process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT!)
-    .setProject(process.env.NEXT_PUBLIC_APPWRITE_PROJECT!);
+    .setProject(process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID!);
 
   // Note: In Appwrite SDK for Web, API key authentication is handled
   // differently than in server SDKs. For Next.js API routes, you may

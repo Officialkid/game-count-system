@@ -7,6 +7,7 @@
 
 import { databases } from '@/lib/appwrite';
 import { Query, ID, Permission } from 'appwrite';
+import { handleAppwriteError } from '@/lib/error-handler';
 
 const DATABASE_ID = 'main';
 const COLLECTION_ID = 'teams';
@@ -34,7 +35,7 @@ export async function getTeams(eventId: string) {
       data: { teams: result.documents as unknown as Team[] },
     };
   } catch (err: any) {
-    return { success: false, error: err.message || 'Failed to fetch teams' };
+    return handleAppwriteError(err, 'Teams');
   }
 }
 
@@ -58,11 +59,12 @@ export async function createTeam(userId: string, teamData: TeamData) {
       created_at: new Date().toISOString(),
     };
 
-    // Document-level permission: creator only
+    // Document-level permission: creator write + public read for scoreboards
     const permissions = [
       Permission.read(`user:${userId}`),
       Permission.update(`user:${userId}`),
       Permission.delete(`user:${userId}`),
+      Permission.read('any'), // Allow public read for scoreboards
     ];
 
     const team = await databases.createDocument(

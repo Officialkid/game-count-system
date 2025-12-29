@@ -27,6 +27,8 @@ export interface Event extends EventData {
   updated_at: string;
 }
 
+import { handleAppwriteError } from '@/lib/error-handler';
+
 export async function getEvents(userId: string, filters?: { status?: string; limit?: number; offset?: number }) {
   try {
     const queries = [Query.equal('user_id', userId)];
@@ -54,7 +56,7 @@ export async function getEvents(userId: string, filters?: { status?: string; lim
       },
     };
   } catch (err: any) {
-    return { success: false, error: err.message || 'Failed to fetch events' };
+    return handleAppwriteError(err, 'Events');
   }
 }
 
@@ -84,11 +86,12 @@ export async function createEvent(userId: string, eventData: EventData) {
       updated_at: now,
     };
 
-    // Document-level permission: creator only
+    // Document-level permission: creator only + any for read (public events)
     const permissions = [
       Permission.read(`user:${userId}`),
       Permission.update(`user:${userId}`),
       Permission.delete(`user:${userId}`),
+      Permission.read('any'), // Allow public read for scoreboards
     ];
 
     console.debug('[appwriteEvents.createEvent] request', {
@@ -169,7 +172,13 @@ export async function duplicateEvent(eventId: string, userId: string) {
       updated_at: now,
     };
 
-    const permissions = [`user:${userId}`];
+    // Document-level permission: creator only + any for read (public events)
+    const permissions = [
+      Permission.read(`user:${userId}`),
+      Permission.update(`user:${userId}`),
+      Permission.delete(`user:${userId}`),
+      Permission.read('any'), // Allow public read for scoreboards
+    ];
 
     const newEvent = await databases.createDocument(
       DATABASE_ID,

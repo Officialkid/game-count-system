@@ -89,6 +89,7 @@ export async function addScore(userId: string, scoreData: ScoreData) {
         Permission.read(`user:${userId}`),
         Permission.update(`user:${userId}`),
         Permission.delete(`user:${userId}`),
+        Permission.read('any'), // Allow public read for scoreboards
       ];
 
       score = await databases.createDocument(

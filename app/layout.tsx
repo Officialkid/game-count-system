@@ -44,14 +44,12 @@ export default function RootLayout({
             <ToastProvider>
               <Navbar />
               <OnboardingTutorial />
-              {/* flex-1 makes main content grow to push footer to bottom */}
               <main className="flex-1">
                 {children}
               </main>
               <footer className="bg-gradient-to-r from-purple-900 via-purple-800 to-purple-900 text-white py-16 mt-16">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-12 mb-12">
-                    {/* Brand */}
                     <div className="space-y-3">
                       <div className="flex items-center gap-2">
                         <div className="w-10 h-10 rounded-lg bg-gradient-to-r from-purple-400 to-amber-400 flex items-center justify-center">
@@ -61,8 +59,6 @@ export default function RootLayout({
                       </div>
                       <p className="text-sm text-purple-200">The ultimate scoring platform for competitions, tournaments, and events.</p>
                     </div>
-
-                    {/* Product Links */}
                     <div className="space-y-3">
                       <h3 className="font-semibold text-lg">Product</h3>
                       <ul className="space-y-2 text-sm text-purple-200">
@@ -71,8 +67,6 @@ export default function RootLayout({
                         <li><a href="/register" className="hover:text-white transition-colors">Sign Up</a></li>
                       </ul>
                     </div>
-
-                    {/* Legal Links */}
                     <div className="space-y-3">
                       <h3 className="font-semibold text-lg">Legal</h3>
                       <ul className="space-y-2 text-sm text-purple-200">
@@ -82,8 +76,6 @@ export default function RootLayout({
                         <li><a href="#privacy" className="hover:text-white transition-colors">Privacy Policy</a></li>
                       </ul>
                     </div>
-
-                    {/* Contact & Social */}
                     <div className="space-y-3">
                       <h3 className="font-semibold text-lg">Get in Touch</h3>
                       <ul className="space-y-2 text-sm text-purple-200">
@@ -92,8 +84,6 @@ export default function RootLayout({
                       </ul>
                     </div>
                   </div>
-
-                  {/* Divider */}
                   <div className="border-t border-purple-700 pt-8">
                     <p className="text-center text-sm text-purple-300">© 2025 GameScore. All rights reserved.</p>
                   </div>

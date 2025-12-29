@@ -5,7 +5,6 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import { eventsService, recapsService, scoresService } from '@/lib/services';
 import type { Event as AppwriteEvent } from '@/lib/services/appwriteEvents';
-import { ProtectedPage } from '@/components/AuthGuard';
 import { Home, Trophy, Settings as SettingsIcon, Plus, Sparkles, Users } from 'lucide-react';
 import { EventSetupWizard } from '@/components/EventSetupWizard';
 import { EventCard } from '@/components/EventCard';
@@ -524,24 +523,6 @@ function DashboardContent() {
               actionLabel="Create your first event"
               onAction={() => setShowCreateWizard(true)}
               icon={<Sparkles className="w-12 h-12 text-purple-600" aria-hidden />}
-              secondaryActionLabel="Create Demo Event"
-              onSecondaryAction={async () => {
-                try {
-                  if (!authUser?.id) return;
-                  const create = await eventsService.createEvent(authUser.id, {
-                    event_name: 'Demo Event',
-                    theme_color: 'purple',
-                    allow_negative: false,
-                    display_mode: 'cumulative',
-                    num_teams: 3,
-                    status: 'active',
-                  });
-                  if (create.success && create.data) {
-                    localStorage.setItem('demoActive', 'true');
-                    setEvents([create.data.event]);
-                  }
-                } catch {}
-              }}
               tips={[
                 'Use the Create Event wizard to set teams and rules quickly.',
                 'Swipe cards on mobile to manage events (delete/duplicate).',
@@ -584,32 +565,11 @@ function DashboardContent() {
           />
         </div>
       </div>
-      {/* Demo banner */}
-      {typeof window !== 'undefined' && localStorage.getItem('demoActive') === 'true' ? (
-        <div className="fixed bottom-20 left-0 right-0 mx-auto max-w-7xl px-4">
-          <div className="rounded-lg border border-amber-300 bg-amber-50 text-amber-900 p-3 flex items-center justify-between">
-            <span className="text-sm">Demo data active</span>
-            <button
-              className="text-sm font-medium underline"
-              onClick={() => {
-                localStorage.removeItem('demoActive');
-                // Optionally clear demo events from UI
-              }}
-            >
-              Remove Demo
-            </button>
-          </div>
-        </div>
-      ) : null}
     </>
   );
 }
 
-// Export the wrapped component with AuthGuard
+// Export the component without AuthGuard
 export default function DashboardPage() {
-  return (
-    <ProtectedPage returnUrl="/dashboard">
-      <DashboardContent />
-    </ProtectedPage>
-  );
+  return <DashboardContent />;
 }

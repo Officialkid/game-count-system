@@ -10,17 +10,21 @@
  * - Respects prefers-reduced-motion
  */
 
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 @layer components {
   /* ============================================================================
      EASING UTILITIES (Tailwind extensions)
      ============================================================================ */
   
   .ease-out-entrance {
-    @apply ease-out;
+    transition-timing-function: cubic-bezier(0, 0, 0.2, 1);
   }
   
   .ease-in-exit {
-    @apply ease-in;
+    transition-timing-function: cubic-bezier(0.4, 0, 1, 1);
   }
 
   /* ============================================================================
@@ -179,7 +183,7 @@
      ============================================================================ */
   
   .stagger-item {
-    @apply opacity-0;
+    opacity: 0;
   }
 
   .stagger-item[data-stagger-index="0"] {
@@ -315,15 +319,21 @@
      ============================================================================ */
   
   .transition-smooth {
-    @apply transition-all duration-300 ease-out;
+    transition-property: all;
+    transition-duration: 300ms;
+    transition-timing-function: cubic-bezier(0, 0, 0.2, 1);
   }
 
   .transition-smooth-slow {
-    @apply transition-all duration-500 ease-out;
+    transition-property: all;
+    transition-duration: 500ms;
+    transition-timing-function: cubic-bezier(0, 0, 0.2, 1);
   }
 
   .transition-exit {
-    @apply transition-all duration-300 ease-in;
+    transition-property: all;
+    transition-duration: 300ms;
+    transition-timing-function: cubic-bezier(0.4, 0, 1, 1);
   }
 }
 
@@ -331,19 +341,19 @@
  * Utility Classes for Conditional Animations
  */
 .will-animate {
-  @apply will-change-transform will-change-opacity;
+  will-change: transform, opacity;
 }
 
 .no-animation {
-  @apply !animate-none !transition-none;
+  animation: none !important;
+  transition: none !important;
 }
 
 /**
  * Performance optimizations for animations
  */
 .gpu-accelerated {
-  @apply transform-gpu;
-  /* Use 3D transforms to enable GPU acceleration */
+  transform: translateZ(0);
   perspective: 1000px;
 }
 
@@ -351,9 +361,9 @@
  * Group animations (for slide transitions)
  */
 .slide-exit {
-  @apply animate-fade-out;
+  animation: fade-out 300ms ease-in forwards;
 }
 
 .slide-enter {
-  @apply animate-fade-in;
+  animation: fade-in 400ms ease-out forwards;
 }

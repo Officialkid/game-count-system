@@ -6,6 +6,8 @@ import Link from 'next/link';
 import { Input } from './Input';
 import { Button } from './Button';
 import { Card } from './Card';
+import MfaChallenge from './MfaChallenge';
+import { useAuth } from '@/lib/auth-context';
 
 interface AuthFormProps {
   type: 'login' | 'register';
@@ -21,11 +23,13 @@ export interface AuthFormData {
 }
 
 export function AuthForm({ type, onSubmit, loading = false, error }: AuthFormProps) {
+  const { requiresMfa, mfaFactors, handleMfaSuccess } = useAuth();
   const [formData, setFormData] = useState<AuthFormData>({
     name: '',
     email: '',
     password: '',
   });
+  const [mfaError, setMfaError] = useState('');
 
   const [fieldErrors, setFieldErrors] = useState<{ name?: string; email?: string; password?: string }>({});
   const [touched, setTouched] = useState<{ name?: boolean; email?: boolean; password?: boolean }>({});
@@ -78,6 +82,32 @@ export function AuthForm({ type, onSubmit, loading = false, error }: AuthFormPro
   };
 
   const isRegister = type === 'register';
+
+  // Show MFA challenge if required
+  if (requiresMfa && mfaFactors.length > 0) {
+    return (
+      <div className="max-w-md mx-auto px-4 py-8 sm:py-16">
+        <Card>
+          <div className="text-center mb-6">
+            <div className="text-4xl mb-3">🔐</div>
+            <h1 className="text-2xl sm:text-3xl font-bold">Security Verification</h1>
+          </div>
+          
+          {mfaError && (
+            <div className="bg-red-50 text-red-600 p-3 rounded-lg mb-4 text-sm">
+              {mfaError}
+            </div>
+          )}
+          
+          <MfaChallenge
+            factors={mfaFactors}
+            onSuccess={handleMfaSuccess}
+            onError={setMfaError}
+          />
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-md mx-auto px-4 py-8 sm:py-16">
