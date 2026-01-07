@@ -1,6 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-import { client } from '@/lib/appwrite';
-import { DATABASE_ID, COLLECTIONS } from '@/lib/appwrite';
 
 type ScoreEvent = {
   type: 'score_added' | 'score_updated' | 'score_deleted';
@@ -10,74 +8,58 @@ type ScoreEvent = {
 
 /**
  * useEventStream
- * Subscribes to Appwrite Realtime for score changes for a given event_id.
+ * Polls for score changes for a given event using public token.
  * Returns connection status and last update event.
- * Falls back gracefully if Appwrite is disabled.
+ * 
+ * In a real implementation, this would use SSE (Server-Sent Events)
+ * or WebSockets for true real-time updates.
  */
-export function useEventStream(eventId: string | null, enabled: boolean = true) {
+export function useEventStream(publicToken: string | null, enabled: boolean = true) {
   const [isConnected, setIsConnected] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<ScoreEvent | null>(null);
-  const unsubRef = useRef<(() => void) | null>(null);
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    // If not enabled, no eventId, or not in browser, do nothing
-    if (typeof window === 'undefined' || !eventId || !enabled) {
+    // If not enabled, no publicToken, or not in browser, do nothing
+    if (typeof window === 'undefined' || !publicToken || !enabled) {
       setIsConnected(false);
       return;
     }
 
-    // If Appwrite services disabled, skip
-    const useAppwrite = process.env.NEXT_PUBLIC_USE_APPWRITE_SERVICES === 'true';
-    if (!useAppwrite) {
-      setIsConnected(false);
-      return;
-    }
-
-    const channel = `databases.${DATABASE_ID}.collections.${COLLECTIONS.SCORES}.documents`;
-
-    try {
-      const unsub = client.subscribe(channel, (response: any) => {
-        try {
-          const payload = response.payload || {};
-          // Filter by event_id
-          if (!payload || payload.event_id !== eventId) return;
-
-          const events: string[] = response.events || [];
-          const evtType = events.some((e) => e.endsWith('.create'))
-            ? 'score_added'
-            : events.some((e) => e.endsWith('.delete'))
-            ? 'score_deleted'
-            : 'score_updated';
-
-          setLastUpdate({
-            type: evtType,
-            document: payload,
-            timestamp: Date.now(),
-          });
-        } catch {
-          // no-op
+    const pollScoreboard = async () => {
+      try {
+        const response = await fetch(`/events/${publicToken}`);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success) {
+            setLastUpdate({
+              type: 'score_updated',
+              document: data.data,
+              timestamp: Date.now(),
+            });
+            setIsConnected(true);
+          }
         }
-      });
+      } catch (err) {
+        console.warn('Failed to poll scoreboard:', err);
+        setIsConnected(false);
+      }
+    };
 
-      unsubRef.current = unsub;
-      setIsConnected(true);
-    } catch (err) {
-      console.warn('Failed to subscribe to Appwrite Realtime:', err);
-      setIsConnected(false);
-    }
+    // Initial fetch
+    pollScoreboard();
+
+    // Poll every 5 seconds
+    intervalRef.current = setInterval(pollScoreboard, 5000);
 
     return () => {
-      try {
-        if (unsubRef.current) {
-          unsubRef.current();
-          unsubRef.current = null;
-        }
-      } catch {
-        // ignore
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
       }
       setIsConnected(false);
     };
-  }, [eventId, enabled]);
+  }, [publicToken, enabled]);
 
   return { isConnected, lastUpdate };
 }

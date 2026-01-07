@@ -37,7 +37,7 @@ cp .env.example .env.local
 # DATABASE_URL=postgresql://user:password@host:5432/database
 
 # Run database migrations
-npm run db:migrate
+psql $DATABASE_URL < migrations/001_initial_schema.sql
 
 # Start development server
 npm run dev
@@ -102,12 +102,6 @@ psql $DATABASE_URL
 
 # Verify tables
 \dt
-```
-
-Or use the migration script:
-
-```bash
-node migrations/run-migration.js
 ```
 
 ---
@@ -226,20 +220,20 @@ ORDER BY d.day_number, points DESC;
 
 ## 📚 API Reference
 
-**Complete API documentation:** [API_CONTRACTS.md](API_CONTRACTS.md)
-
-### Quick Reference
+### Core Endpoints
 
 #### Create Event (Public)
 ```http
-POST /api/events
+POST /api/events/create
 Content-Type: application/json
 
 {
-  "name": "Summer Camp 2026",
+  "name": "Summer Games 2026",
   "mode": "camp",
   "start_at": "2026-06-01T09:00:00Z",
-  "retention_policy": "manual"
+  "end_at": "2026-06-07T17:00:00Z",
+  "retention_policy": "auto_expire",
+  "expires_at": "2026-12-31T23:59:59Z"
 }
 
 Response (201):
@@ -247,23 +241,26 @@ Response (201):
   "success": true,
   "data": {
     "event_id": "uuid",
-    "admin_url": "https://app.com/admin/{token}",
-    "scorer_url": "https://app.com/score/{token}",
-    "public_url": "https://app.com/events/{token}"
-  },
-  "error": null
+    "name": "Summer Games 2026",
+    "tokens": {
+      "admin": "admin-token-hex",
+      "scorer": "scorer-token-hex",
+      "public": "public-token-hex"
+    }
+  }
 }
 ```
 
-#### Add Team (Admin)
+#### Add Team
 ```http
-POST /api/events/{event_id}/teams
-X-ADMIN-TOKEN: {admin_token}
+POST /api/teams/add
+Authorization: Bearer <scorer-or-admin-token>
 Content-Type: application/json
 
 {
+  "event_id": "event-uuid",
   "name": "Red Dragons",
-  "color": "#ff0000"
+  "color": "#FF0000"
 }
 
 Response (201):
@@ -271,25 +268,24 @@ Response (201):
   "success": true,
   "data": {
     "id": "team-uuid",
+    "event_id": "event-uuid",
     "name": "Red Dragons",
-    "color": "#ff0000",
-    "avatar_url": null,
-    "created_at": "2026-01-12T08:00:00Z"
-  },
-  "error": null
+    "color": "#FF0000"
+  }
 }
 ```
 
-#### Submit Score (Scorer)
+#### Add Score
 ```http
-POST /api/events/{event_id}/scores
-X-SCORER-TOKEN: {scorer_token}
+POST /api/scores/add
+Authorization: Bearer <scorer-or-admin-token>
 Content-Type: application/json
 
 {
-  "day_number": 2,
+  "event_id": "event-uuid",
   "team_id": "team-uuid",
-  "category": "Swimming",
+  "day_id": "day-uuid",
+  "category": "Game 1",
   "points": 50
 }
 
@@ -298,85 +294,129 @@ Response (201):
   "success": true,
   "data": {
     "id": "score-uuid",
-    "points": 50,
-    "created_at": "2026-01-12T14:30:00Z"
-  },
-  "error": null
-}
-```
-
-#### Lock Day (Admin)
-```http
-POST /api/events/{event_id}/days/{day_number}/lock
-X-ADMIN-TOKEN: {admin_token}
-
-Response (200):
-{
-  "success": true,
-  "data": {
-    "day_number": 2,
-    "is_locked": true,
-    "message": "Day 2 locked successfully"
-  },
-  "error": null
+    "points": 50
+  }
 }
 ```
 
 #### Public Scoreboard
 ```http
-GET /events/{public_token}
+GET /api/public/{public-token}
 
 Response (200):
 {
   "success": true,
   "data": {
-    "event": { "name": "...", "mode": "camp" },
-    "days": [...],
+    "event": { ... },
     "teams": [
-      { "id": "uuid", "name": "Red Dragons", "total_points": 120 }
+      {
+        "id": "uuid",
+        "name": "Red Dragons",
+        "total_points": 150
+      }
     ],
-    "breakdown": {
-      "day_1": [...],
-      "day_2": [...]
-    }
-  },
-  "error": null
-}
-```
-
-### Error Response Format
-
-All errors follow this structure:
-
-```json
-{
-  "success": false,
-  "data": null,
-  "error": {
-    "code": "VALIDATION_ERROR | FORBIDDEN | NOT_FOUND | ...",
-    "message": "Human-readable error message"
+    "scores": [ ... ],
+    "scores_by_day": [ ... ]
   }
 }
 ```
 
-**Error Codes:**
-- `401 UNAUTHORIZED` - Missing required token header
-- `403 FORBIDDEN` - Invalid token or access denied
-- `404 NOT_FOUND` - Resource not found
-- `409 CONFLICT` - Duplicate resource
-- `400 VALIDATION_ERROR` - Invalid input
+---
+
+## ⏱️ Retention & Cleanup
+
+### Automatic Expiration
+
+Events with `retention_policy = 'auto_expire'` are deleted when `expires_at < NOW()`.
+
+**Cron Job:** `/api/cron/cleanup` runs daily at 2:00 AM UTC (configured in `vercel.json`).
+
+```sql
+-- Manual cleanup query
+DELETE FROM events
+WHERE retention_policy = 'auto_expire'
+AND expires_at < NOW();
+```
+
+### Retention Policies
+
+| Policy | Behavior |
+|--------|----------|
+| `auto_expire` | Auto-deleted after `expires_at` |
+| `manual` | Never auto-deleted, manual only |
+| `archive` | Marked archived, never deleted |
+
+---
+
+## 🧪 Data Access Layer
+
+All database operations are in `lib/db-access.ts`:
+
+```typescript
+import { 
+  createEvent, 
+  getEventByToken,
+  addTeam,
+  addScore,
+  listTeamsWithTotals,
+  listScoresByDay 
+} from '@/lib/db-access';
+
+// Create event
+const event = await createEvent({
+  name: "My Event",
+  mode: "quick",
+  start_at: new Date(),
+  retention_policy: "auto_expire",
+  expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+});
+
+// Verify token
+const event = await getEventByToken(token, 'scorer');
+
+// Get leaderboard
+const teams = await listTeamsWithTotals(eventId);
+```
+
+### Available Functions
+
+**Events:**
+- `createEvent(input)` → Event with tokens
+- `getEventByToken(token, type)` → Event or null
+- `updateEvent(id, input)` → Event
+- `deleteEvent(id)` → void
+
+**Teams:**
+- `addTeam(input)` → Team
+- `updateTeam(id, input)` → Team
+- `deleteTeam(id)` → void
+- `listTeamsWithTotals(eventId)` → TeamWithTotal[]
+
+**Scores:**
+- `addScore(input)` → Score
+- `listScores(eventId)` → Score[]
+- `listScoresByDay(eventId)` → ScoreByDay[]
+- `deleteScore(id)` → void
+
+**Days:**
+- `createDayIfNotExists(input)` → EventDay
+- `lockEventDay(dayId, isLocked)` → EventDay
+- `listEventDays(eventId)` → EventDay[]
+
+**Cleanup:**
+- `cleanupExpiredEvents()` → number (deleted count)
+
 ---
 
 ## 🔒 Security Features
 
 - ✅ **No passwords** - Token-based access only
-- ✅ **Event-scoped tokens** - Each token grants access to one event
-- ✅ **Crypto-secure tokens** - Generated with `crypto.randomBytes()`
-- ✅ **Timing-safe comparison** - Prevents timing attacks
-- ✅ **Input validation** - Zod schemas on all endpoints
-- ✅ **SQL injection protection** - Parameterized queries only
+- ✅ **Event-scoped** - Tokens grant access to single event
+- ✅ **Crypto-secure** - Tokens use `crypto.randomBytes()`
+- ✅ **Timing-safe** - Token comparison prevents timing attacks
+- ✅ **Input validation** - Zod schemas on all inputs
+- ✅ **SQL injection** - Parameterized queries only
 - ✅ **CASCADE DELETE** - No orphaned records
-- ✅ **Custom headers** - `X-ADMIN-TOKEN`, `X-SCORER-TOKEN` (not Authorization)
 
 ---
 
@@ -385,48 +425,42 @@ All errors follow this structure:
 ```
 game-count-system/
 ├── app/
-│   ├── api/
-│   │   ├── events/
-│   │   │   ├── create/route.ts              # POST /api/events
-│   │   │   └── [event_id]/
-│   │   │       ├── teams/route.ts          # POST /api/events/{id}/teams
-│   │   │       ├── scores/route.ts         # POST /api/events/{id}/scores
-│   │   │       └── days/
-│   │   │           └── [day_number]/
-│   │   │               └── lock/route.ts   # POST /api/events/{id}/days/{n}/lock
-│   │   └── cron/
-│   │       └── cleanup/route.ts            # Automated cleanup
-│   └── events/
-│       └── [token]/route.ts                # GET /events/{public_token}
+│   └── api/
+│       ├── events/create/route.ts
+│       ├── teams/add/route.ts
+│       ├── scores/add/route.ts
+│       ├── public/[token]/route.ts
+│       └── cron/cleanup/route.ts
 ├── lib/
-│   ├── db-client.ts                        # PostgreSQL connection pool
-│   ├── db-access.ts                        # Data access layer
-│   ├── db-validations.ts                   # Zod schemas
-│   ├── tokens.ts                           # Token generation
-│   └── api-responses.ts                    # Standardized response helpers
+│   ├── db-client.ts         # PostgreSQL connection
+│   ├── db-access.ts         # Data access layer
+│   ├── db-validations.ts    # Zod schemas
+│   └── tokens.ts            # Token generation
 ├── migrations/
-│   └── 001_initial_schema.sql              # Database schema
-├── API_CONTRACTS.md                        # Complete API documentation
-├── IMPLEMENTATION_GUIDE.md                 # Setup and deployment guide
-└── package.json
+│   └── 001_initial_schema.sql
+├── package.json
+└── README.md
 ```
 
 ---
 
 ## 📦 Dependencies
 
-**Core:**
-- `next` ^14.0.0 - Next.js framework
-- `pg` ^8.11.0 - PostgreSQL client
-- `zod` ^3.22.4 - Runtime validation
-- `react` ^18.2.0 - React library
+```json
+{
+  "dependencies": {
+    "next": "^14.0.0",
+    "pg": "^8.11.0",
+    "zod": "^3.22.4",
+    "react": "^18.2.0"
+  }
+}
+```
 
-**Utilities:**
-- `nanoid` - Unique ID generation
-- `lucide-react` - Icons
-- `recharts` - Charts (frontend)
-- `papaparse` - CSV export
-- `jspdf` - PDF generation
+**Install pg:**
+```bash
+npm install pg @types/pg
+```
 
 ---
 
@@ -438,26 +472,35 @@ game-count-system/
 2. Connect repository to Vercel
 3. Add environment variables:
    - `DATABASE_URL`
-   - `NEXT_PUBLIC_APP_URL`
    - `CRON_SECRET` (optional)
 4. Deploy
 
 ### Database Providers
 
-**Render PostgreSQL** (Recommended):
-- Free tier: 256 MB RAM, 1 GB storage
+**Render PostgreSQL:**
+```bash
+# Free tier includes:
+- 256 MB RAM
+- 1 GB storage
 - Auto-backups
 - SSL enabled
+```
 
-**Supabase**:
-- Free tier: 500 MB database
+**Supabase:**
+```bash
+# Free tier includes:
+- 500 MB database
 - Unlimited API requests
-- Built-in auth (not used)
+- Auto-scaling
+```
 
-**Neon**:
-- Free tier: 3 GB storage
+**Neon:**
+```bash
+# Free tier includes:
+- 3 GB storage
 - Serverless autoscaling
-- Branch support
+- Branching support
+```
 
 ---
 
@@ -468,9 +511,8 @@ game-count-system/
 DATABASE_URL=postgresql://user:pass@host:5432/db
 POSTGRES_URL=postgresql://user:pass@host:5432/db
 
-# Optional but recommended
-NEXT_PUBLIC_APP_URL=https://your-app.vercel.app
-CRON_SECRET=your-random-secret-here
+# Optional
+CRON_SECRET=your-secret-here
 NODE_ENV=production
 ```
 
@@ -482,12 +524,11 @@ When properly deployed:
 
 - ✅ Any anonymous user can create an event
 - ✅ Tokens provide secure, event-scoped access
-- ✅ Scores aggregate correctly (no stored totals)
-- ✅ Multi-day camps work with day locking
+- ✅ Scores aggregate correctly (no `total_points` column)
+- ✅ Multi-day camps work with locked days
 - ✅ Events expire automatically based on policy
-- ✅ Public scoreboards are shareable
-- ✅ No authentication or user accounts
-- ✅ API contracts are stable and documented
+- ✅ Public scoreboards are shareable and read-only
+- ✅ No authentication or user accounts required
 
 ---
 
@@ -498,9 +539,8 @@ This is production-ready code. When extending:
 - ✅ Use TypeScript everywhere
 - ✅ Validate inputs with Zod
 - ✅ Use parameterized queries (never string concat)
-- ✅ Follow standardized response format
 - ✅ Test token verification
-- ✅ Document API changes in `API_CONTRACTS.md`
+- ✅ Document API changes
 
 ---
 

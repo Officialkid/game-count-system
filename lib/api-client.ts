@@ -1,53 +1,161 @@
-// Appwrite-first API client: thin wrappers around fetch and Appwrite Functions.
-import { functions } from '@/lib/appwrite';
+/**
+ * Clean API Client for REST endpoints
+ * NO Appwrite, NO authentication - Token-based only
+ * 
+ * Supports separate frontend/backend deployment:
+ * - Set NEXT_PUBLIC_API_BASE_URL to point to backend (e.g., Render)
+ * - Defaults to same origin for monolithic deployment
+ */
+
+// API Base URL - defaults to same origin for monolithic deployment
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || '';
 
 type ApiResponse<T = any> = { success: boolean; data?: T; error?: string };
 
-function buildHeaders(token?: string): HeadersInit {
+function buildHeaders(token?: string, tokenType?: 'admin' | 'scorer'): HeadersInit {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (token) headers.Authorization = `Bearer ${token}`;
+  
+  // Use custom headers for token-based access
+  if (token && tokenType === 'admin') {
+    headers['X-ADMIN-TOKEN'] = token;
+  } else if (token && tokenType === 'scorer') {
+    headers['X-SCORER-TOKEN'] = token;
+  }
+  
   return headers;
 }
 
 export const apiClient = {
-  // Thin GET wrapper (expects Next.js API to return JSON)
-  async get(endpoint: string, token?: string): Promise<Response> {
-    return fetch(endpoint, { headers: buildHeaders(token) });
+  /**
+   * GET request
+   */
+  async get(endpoint: string): Promise<Response> {
+    return fetch(`${API_BASE_URL}${endpoint}`, { 
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' }
+    });
   },
 
-  // Thin POST wrapper
-  async post(endpoint: string, data?: any, token?: string): Promise<Response> {
-    return fetch(endpoint, {
+  /**
+   * POST request with optional token
+   */
+  async post(
+    endpoint: string, 
+    data?: any, 
+    token?: string,
+    tokenType?: 'admin' | 'scorer'
+  ): Promise<Response> {
+    return fetch(`${API_BASE_URL}${endpoint}`, {
       method: 'POST',
-      headers: buildHeaders(token),
+      headers: buildHeaders(token, tokenType),
       body: data instanceof FormData ? (data as any) : JSON.stringify(data ?? {}),
     });
   },
 
-  // Thin DELETE wrapper
-  async delete(endpoint: string, token?: string): Promise<Response> {
-    return fetch(endpoint, { method: 'DELETE', headers: buildHeaders(token) });
+  /**
+   * DELETE request with optional token
+   */
+  async delete(endpoint: string, token?: string, tokenType?: 'admin' | 'scorer'): Promise<Response> {
+    return fetch(`${API_BASE_URL}${endpoint}`, { 
+      method: 'DELETE', 
+      headers: buildHeaders(token, tokenType) 
+    });
   },
 
-  // Thin PATCH wrapper
-  async patch(endpoint: string, data?: any, token?: string): Promise<Response> {
-    return fetch(endpoint, {
+  /**
+   * PATCH request with optional token
+   */
+  async patch(
+    endpoint: string, 
+    data?: any, 
+    token?: string,
+    tokenType?: 'admin' | 'scorer'
+  ): Promise<Response> {
+    return fetch(`${API_BASE_URL}${endpoint}`, {
       method: 'PATCH',
-      headers: buildHeaders(token),
+      headers: buildHeaders(token, tokenType),
       body: JSON.stringify(data ?? {}),
     });
   },
 
-  // Optional helper: submit score via Appwrite Function when configured
+  /**
+   * Create a new event (public endpoint)
+   */
+  async createEvent(data: {
+    name: string;
+    mode: 'quick' | 'camp' | 'advanced';
+    start_at: string;
+    retention_policy: 'auto_expire' | 'manual' | 'archive';
+    expires_at?: string;
+  }): Promise<ApiResponse> {
+    const response = await this.post('/api/events/create', data);
+    return response.json();
+  },
+
+  /**
+   * Add a team (requires admin token)
+   */
+  async addTeam(
+    eventId: string,
+    adminToken: string,
+    data: { name: string; color: string }
+  ): Promise<ApiResponse> {
+    const response = await this.post(
+      `/api/events/${eventId}/teams`,
+      data,
+      adminToken,
+      'admin'
+    );
+    return response.json();
+  },
+
+  /**
+   * Submit a score (requires scorer token)
+   */
   async addScore(
-    _token: string | undefined,
-    event_id: string,
-    team_id: string,
-    game_number: number,
-    points: number
-  ): Promise<ApiResponse<{ submitted: boolean; executionId?: string }>> {
-    const fnId = process.env.NEXT_PUBLIC_APPWRITE_FUNCTION_SUBMIT_SCORE;
-    if (!fnId) {
+    eventId: string,
+    scorerToken: string,
+    data: {
+      team_id: string;
+      day_number: number;
+      category: string;
+      points: number;
+    }
+  ): Promise<ApiResponse> {
+    const response = await this.post(
+      `/api/events/${eventId}/scores`,
+      data,
+      scorerToken,
+      'scorer'
+    );
+    return response.json();
+  },
+
+  /**
+   * Lock a day (requires admin token)
+   */
+  async lockDay(
+    eventId: string,
+    dayNumber: number,
+    adminToken: string
+  ): Promise<ApiResponse> {
+    const response = await this.post(
+      `/api/events/${eventId}/days/${dayNumber}/lock`,
+      {},
+      adminToken,
+      'admin'
+    );
+    return response.json();
+  },
+
+  /**
+   * Get public scoreboard (no token required)
+   */
+  async getPublicScoreboard(publicToken: string): Promise<ApiResponse> {
+    const response = await this.get(`/events/${publicToken}`);
+    return response.json();
+  },
+};
       return { success: false, error: 'Submit score function not configured' };
     }
     try {

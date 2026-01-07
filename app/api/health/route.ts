@@ -1,17 +1,20 @@
 // app/api/health/route.ts
 import { NextResponse } from 'next/server';
-import { databases } from '@/lib/appwrite';
+import { query } from '@/lib/db-client';
+import { handleCors } from '@/lib/cors';
 
-export async function GET() {
+export async function GET(request: Request) {
+  // Handle CORS
+  const corsHeaders = handleCors(request);
+  if (request.method === 'OPTIONS') {
+    return corsHeaders;
+  }
+
   const startTime = Date.now();
 
   try {
-    // Check Appwrite database connectivity
-    const dbCheck = await databases.listDocuments(
-      process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID!,
-      'events',
-      []
-    ).catch(() => null);
+    // Check PostgreSQL database connectivity
+    const dbCheck = await query('SELECT NOW() as current_time').catch(() => null);
 
     const responseTime = Date.now() - startTime;
 
@@ -22,13 +25,16 @@ export async function GET() {
       responseTime: `${responseTime}ms`,
       services: {
         database: dbCheck !== null ? 'connected' : 'disconnected',
-        appwrite: dbCheck !== null ? 'operational' : 'degraded',
+        postgresql: dbCheck !== null ? 'operational' : 'degraded',
       },
-      version: '1.0.0',
+      version: '2.0.0',
       environment: process.env.NODE_ENV,
     };
 
-    return NextResponse.json(health, { status: 200 });
+    return NextResponse.json(health, { 
+      status: 200,
+      headers: corsHeaders as HeadersInit
+    });
   } catch (error) {
     const responseTime = Date.now() - startTime;
 

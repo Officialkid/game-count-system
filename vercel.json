@@ -6,14 +6,7 @@
   "regions": ["iad1"],
   "env": {
     "NEXT_PUBLIC_APP_URL": "@app-url",
-    "NEXT_PUBLIC_APPWRITE_ENDPOINT": "@appwrite-endpoint",
-    "NEXT_PUBLIC_APPWRITE_PROJECT_ID": "@appwrite-project-id",
-    "NEXT_PUBLIC_APPWRITE_DATABASE_ID": "@appwrite-database-id",
-    "NEXT_PUBLIC_APPWRITE_BUCKET_LOGOS": "@appwrite-bucket-logos",
-    "NEXT_PUBLIC_APPWRITE_BUCKET_AVATARS": "@appwrite-bucket-avatars",
-    "NEXT_PUBLIC_APPWRITE_FUNCTION_SUBMIT_SCORE": "@appwrite-function-submit-score",
-    "NEXT_PUBLIC_APPWRITE_FUNCTION_GENERATE_RECAP": "@appwrite-function-generate-recap",
-    "NEXT_PUBLIC_APPWRITE_FUNCTION_LOG_AUDIT": "@appwrite-function-log-audit"
+    "NEXT_PUBLIC_API_BASE_URL": "@api-base-url"
   },
   "headers": [
     {
