@@ -18,11 +18,10 @@
     "test:ci": "npm run test && npm run test:e2e"
   },
   "dependencies": {
-    "@vercel/analytics": "^1.6.1",
     "@types/node": "^20.10.0",
-    "@types/pg": "^8.11.0",
-    "autoprefixer": "^10.4.16",
     "@types/papaparse": "^5.5.1",
+    "@vercel/analytics": "^1.6.1",
+    "autoprefixer": "^10.4.16",
     "isomorphic-dompurify": "^2.33.0",
     "jspdf": "^3.0.4",
     "jspdf-autotable": "^5.0.2",
@@ -44,7 +43,7 @@
     "@playwright/test": "^1.40.0",
     "@types/jest": "^29.5.11",
     "@types/papaparse": "^5.5.1",
-    "@types/pg": "^8.11.0",
+    "@types/pg": "^8.16.0",
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
     "concurrently": "^9.2.1",
