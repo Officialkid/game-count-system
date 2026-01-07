@@ -39,28 +39,59 @@ export interface Event {
  * Create a new event with generated tokens
  */
 export async function createEvent(input: CreateEventInput): Promise<Event> {
-  const tokens = generateEventTokens();
+  console.log('[DB-ACCESS] createEvent called with input:', JSON.stringify(input, null, 2));
   
-  const result = await query<Event>(
-    `INSERT INTO events (
-      name, mode, start_at, end_at, retention_policy, expires_at,
-      admin_token, scorer_token, public_token
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-    RETURNING *`,
-    [
-      input.name,
-      input.mode,
-      input.start_at,
-      input.end_at || null,
-      input.retention_policy,
-      input.expires_at || null,
-      tokens.admin_token,
-      tokens.scorer_token,
-      tokens.public_token,
-    ]
-  );
+  let tokens;
+  try {
+    tokens = generateEventTokens();
+    console.log('[DB-ACCESS] Generated tokens:', {
+      admin: tokens.admin_token.substring(0, 8) + '...',
+      scorer: tokens.scorer_token.substring(0, 8) + '...',
+      public: tokens.public_token.substring(0, 8) + '...',
+    });
+  } catch (tokenError: any) {
+    console.error('[DB-ACCESS] Token generation failed:', tokenError);
+    throw new Error(`Token generation failed: ${tokenError.message}`);
+  }
   
-  return result.rows[0];
+  try {
+    console.log('[DB-ACCESS] Executing INSERT query...');
+    const result = await query<Event>(
+      `INSERT INTO events (
+        name, mode, start_at, end_at, retention_policy, expires_at,
+        admin_token, scorer_token, public_token
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      RETURNING *`,
+      [
+        input.name,
+        input.mode,
+        input.start_at,
+        input.end_at || null,
+        input.retention_policy,
+        input.expires_at || null,
+        tokens.admin_token,
+        tokens.scorer_token,
+        tokens.public_token,
+      ]
+    );
+    
+    console.log('[DB-ACCESS] INSERT successful, rows returned:', result.rowCount);
+    
+    if (!result.rows[0]) {
+      throw new Error('No event returned from INSERT query');
+    }
+    
+    return result.rows[0];
+  } catch (dbError: any) {
+    console.error('[DB-ACCESS] Database INSERT failed:', {
+      message: dbError?.message,
+      code: dbError?.code,
+      detail: dbError?.detail,
+      hint: dbError?.hint,
+      position: dbError?.position,
+    });
+    throw dbError;
+  }
 }
 
 /**

@@ -13,6 +13,8 @@ import { handleCors } from '@/lib/cors';
 import { ZodError } from 'zod';
 
 export async function POST(request: Request) {
+  console.log('[CREATE EVENT] Request received');
+  
   // Handle CORS
   const cors = handleCors(request);
   if (cors instanceof Response) {
@@ -21,39 +23,86 @@ export async function POST(request: Request) {
   const corsHeaders = cors;
 
   try {
-    const body = await request.json();
-    
-    // Validate input
-    const validated = CreateEventSchema.parse(body);
-    
-    // Create event with generated tokens
-    const event = await createEvent(validated);
-    
-    // Build URLs with embedded tokens
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-    
-    return NextResponse.json(
-      successResponse({
-        event_id: event.id,
-        admin_url: `${baseUrl}/admin/${event.admin_token}`,
-        scorer_url: `${baseUrl}/score/${event.scorer_token}`,
-        public_url: `${baseUrl}/events/${event.public_token}`,
-      }),
-      { status: 201, headers: corsHeaders as HeadersInit }
-    );
-  } catch (error) {
-    if (error instanceof ZodError) {
+    // Parse request body
+    let body;
+    try {
+      body = await request.json();
+      console.log('[CREATE EVENT] Request body:', JSON.stringify(body, null, 2));
+    } catch (parseError) {
+      console.error('[CREATE EVENT] Failed to parse JSON:', parseError);
       return NextResponse.json(
-        errorResponse('VALIDATION_ERROR', error.errors[0]?.message || 'Invalid input'),
-        { status: ERROR_STATUS_MAP.VALIDATION_ERROR, headers: corsHeaders as HeadersInit }
+        errorResponse('VALIDATION_ERROR', 'Invalid JSON in request body'),
+        { status: 400, headers: corsHeaders as HeadersInit }
       );
     }
     
-    console.error('Create event error:', error);
+    // Validate input with Zod
+    let validated;
+    try {
+      validated = CreateEventSchema.parse(body);
+      console.log('[CREATE EVENT] Validated input:', JSON.stringify(validated, null, 2));
+    } catch (error) {
+      if (error instanceof ZodError) {
+        console.error('[CREATE EVENT] Validation error:', error.errors);
+        return NextResponse.json(
+          errorResponse('VALIDATION_ERROR', error.errors[0]?.message || 'Invalid input'),
+          { status: 400, headers: corsHeaders as HeadersInit }
+        );
+      }
+      throw error;
+    }
+    
+    // Create event with generated tokens
+    let event;
+    try {
+      console.log('[CREATE EVENT] Calling createEvent...');
+      event = await createEvent(validated);
+      console.log('[CREATE EVENT] Event created successfully:', {
+        id: event.id,
+        name: event.name,
+        admin_token: event.admin_token?.substring(0, 8) + '...',
+        scorer_token: event.scorer_token?.substring(0, 8) + '...',
+        public_token: event.public_token?.substring(0, 8) + '...',
+      });
+    } catch (dbError: any) {
+      console.error('[CREATE EVENT] Database error:', {
+        message: dbError?.message,
+        stack: dbError?.stack,
+        code: dbError?.code,
+        detail: dbError?.detail,
+      });
+      return NextResponse.json(
+        errorResponse('INTERNAL_ERROR', `Database error: ${dbError?.message || 'Unknown error'}`),
+        { status: 500, headers: corsHeaders as HeadersInit }
+      );
+    }
+    
+    // Build URLs with embedded tokens
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    console.log('[CREATE EVENT] Using base URL:', baseUrl);
+    
+    const response = {
+      event_id: event.id,
+      admin_url: `${baseUrl}/admin/${event.admin_token}`,
+      scorer_url: `${baseUrl}/score/${event.scorer_token}`,
+      public_url: `${baseUrl}/events/${event.public_token}`,
+    };
+    
+    console.log('[CREATE EVENT] Returning success response');
+    return NextResponse.json(
+      successResponse(response),
+      { status: 201, headers: corsHeaders as HeadersInit }
+    );
+  } catch (error: any) {
+    console.error('[CREATE EVENT] Unexpected error:', {
+      message: error?.message,
+      stack: error?.stack,
+      name: error?.name,
+    });
     
     return NextResponse.json(
-      errorResponse('INTERNAL_ERROR', 'Failed to create event'),
-      { status: ERROR_STATUS_MAP.INTERNAL_ERROR, headers: corsHeaders as HeadersInit }
+      errorResponse('INTERNAL_ERROR', `Server error: ${error?.message || 'Unknown error'}`),
+      { status: 500, headers: corsHeaders as HeadersInit }
     );
   }
 }
