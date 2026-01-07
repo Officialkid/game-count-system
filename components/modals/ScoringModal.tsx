@@ -1,9 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Button } from '@/components/ui/Button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
-import { useToast } from '@/components/ui/Toast';
+import { Button, Card, CardContent, CardHeader, CardTitle, useToast } from '@/components/ui';
 import { soundManager } from '@/lib/sound';
 import { triggerConfetti } from '@/lib/confetti';
 import { getPaletteById } from '@/lib/color-palettes';
