@@ -1,6 +1,5 @@
 // app/event/[eventId]/history/page.tsx
 'use client';
-'use client';
 
 export default function EventHistoryPage() {
   return (
@@ -14,20 +13,6 @@ export default function EventHistoryPage() {
         <li>Use your scorer link to enter scores.</li>
         <li>Use the public or recap links to view results.</li>
       </ul>
-    </div>
-  );
-}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      <div className="mt-8 text-center">
-        <Link href={`/event/${eventId}`} className="btn-secondary">
-          Back to Event
-        </Link>
-      </div>
     </div>
   );
 }

@@ -1,8 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { Badge } from '@/components/ui/Badge';
-import { LoadingSkeleton } from '@/components/ui/LoadingSkeleton';
+import { Badge, LoadingSkeleton } from '@/components/ui';
 
 interface Team {
   id: number;

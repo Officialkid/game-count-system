@@ -14,10 +14,11 @@ import { ZodError } from 'zod';
 
 export async function POST(request: Request) {
   // Handle CORS
-  const corsHeaders = handleCors(request);
-  if (request.method === 'OPTIONS') {
-    return corsHeaders;
+  const cors = handleCors(request);
+  if (cors instanceof Response) {
+    return cors;
   }
+  const corsHeaders = cors;
 
   try {
     const body = await request.json();

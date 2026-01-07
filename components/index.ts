@@ -5,10 +5,7 @@ export { Button } from './Button';
 export { Input } from './Input';
 export { PasswordInput } from './PasswordInput';
 export { Card } from './Card';
-export { Navbar } from './Navbar';
 export { ColorPaletteSelector } from './ColorPaletteSelector';
-export { AuthForm } from './AuthForm';
-export type { AuthFormData } from './AuthForm';
 export { DashboardCard, CreateEventForm } from './DashboardCard';
 export { EventCard, EventGrid } from './EventCard';
 export { TeamCard, TeamList } from './TeamCard';
@@ -36,3 +33,23 @@ export {
   NotFound,
   EmptyState,
 } from './ErrorStates';
+export { Modal } from './Modal';
+export { NumberInput } from './NumberInput';
+export { DeleteConfirmationModal } from './DeleteConfirmationModal';
+export { SearchFilterToolbar } from './SearchFilterToolbar';
+export { ScoresTable } from './ScoresTable';
+export { FormInput } from './FormInput';
+export { AnalyticsDashboard } from './AnalyticsDashboard';
+export { PreferencesMenu } from './PreferencesMenu';
+export { BottomTabBar } from './BottomTabBar';
+export { AutosaveScoreInput } from './AutosaveScoreInput';
+export { SwipeableListItem } from './SwipeableListItem';
+export { ThemedEventPage } from './ThemedEventPage';
+export { ErrorBoundary } from './ErrorBoundary';
+export { ClientSetup } from './ClientSetup';
+export { RecapIntroModal } from './RecapIntroModal';
+export { RecapShareModal } from './RecapShareModal';
+export { RecapSlides } from './RecapSlides';
+export { IntroSlide, GamesPlayedSlide, TeamsParticipatedSlide, RankingsSlide, WinnerSlide, ClosingSlide } from './RecapSlideComponents';
+export { RecapPlayer } from './RecapPlayer';
+export type { RecapSlideType, RecapSlide, RecapData } from './RecapPlayerNew';

@@ -82,11 +82,10 @@ export const enhancedApiClient = {
    * GET request with error classification
    */
   async get<T = any>(
-    endpoint: string,
-    token?: string
+    endpoint: string
   ): Promise<EnhancedApiResponse<T>> {
     try {
-      const response = await apiClient.get(endpoint, token);
+      const response = await apiClient.get(endpoint);
       return classifyApiResponse<T>(response);
     } catch (error) {
       const appError = classifyError(error instanceof Error ? error : new Error(String(error)));

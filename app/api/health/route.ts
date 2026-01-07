@@ -5,10 +5,11 @@ import { handleCors } from '@/lib/cors';
 
 export async function GET(request: Request) {
   // Handle CORS
-  const corsHeaders = handleCors(request);
-  if (request.method === 'OPTIONS') {
-    return corsHeaders;
+  const cors = handleCors(request);
+  if (cors instanceof Response) {
+    return cors;
   }
+  const corsHeaders = cors;
 
   const startTime = Date.now();
 
