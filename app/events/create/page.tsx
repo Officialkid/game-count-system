@@ -110,14 +110,92 @@ export default function CreateEventPage() {
       </form>
 
       {result && (
-        <div className="space-y-2 bg-white border rounded-lg p-4 shadow-sm">
-          <h2 className="text-xl font-semibold">Event created</h2>
-          <p className="text-sm text-neutral-600">Share these links:</p>
-          <div className="space-y-1 text-sm">
-            <div><span className="font-semibold">Admin:</span> {result.admin_url}</div>
-            <div><span className="font-semibold">Scorer:</span> {result.scorer_url}</div>
-            <div><span className="font-semibold">Public:</span> {result.public_url}</div>
-            <div><span className="font-semibold">Recap:</span> {result.public_url?.replace('/events/', '/recap/')}</div>
+        <div className="space-y-4 bg-gradient-to-br from-green-50 to-blue-50 border-2 border-green-300 rounded-lg p-6 shadow-lg">
+          <div className="flex items-center gap-2">
+            <span className="text-3xl">✅</span>
+            <h2 className="text-2xl font-bold text-green-900">Event Created!</h2>
+          </div>
+          
+          <p className="text-green-800 font-medium">Your event is ready. Here are your access links:</p>
+          
+          <div className="space-y-3">
+            <div className="bg-white rounded-lg p-4 border border-green-200">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-semibold text-gray-900 mb-1">👑 Admin Link</p>
+                  <p className="text-xs text-gray-600 mb-2">Manage teams and settings</p>
+                  <a 
+                    href={result.admin_url} 
+                    className="text-sm text-purple-600 hover:underline break-all"
+                    target="_blank"
+                  >
+                    {result.admin_url}
+                  </a>
+                </div>
+                <a
+                  href={result.admin_url}
+                  target="_blank"
+                  className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 font-medium whitespace-nowrap ml-4"
+                >
+                  Open →
+                </a>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-lg p-4 border border-blue-200">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-semibold text-gray-900 mb-1">📝 Scorer Link</p>
+                  <p className="text-xs text-gray-600 mb-2">Add scores during the event</p>
+                  <a 
+                    href={result.scorer_url} 
+                    className="text-sm text-blue-600 hover:underline break-all"
+                    target="_blank"
+                  >
+                    {result.scorer_url}
+                  </a>
+                </div>
+                <a
+                  href={result.scorer_url}
+                  target="_blank"
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-medium whitespace-nowrap ml-4"
+                >
+                  Open →
+                </a>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-lg p-4 border border-gray-200">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-semibold text-gray-900 mb-1">📺 Public Scoreboard</p>
+                  <p className="text-xs text-gray-600 mb-2">Share with everyone</p>
+                  <a 
+                    href={result.public_url} 
+                    className="text-sm text-blue-600 hover:underline break-all"
+                    target="_blank"
+                  >
+                    {result.public_url}
+                  </a>
+                </div>
+                <a
+                  href={result.public_url}
+                  target="_blank"
+                  className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 font-medium whitespace-nowrap ml-4"
+                >
+                  View →
+                </a>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mt-4">
+            <p className="text-sm text-yellow-900 font-medium">💡 Next Steps:</p>
+            <ol className="text-sm text-yellow-800 mt-2 space-y-1 list-decimal list-inside">
+              <li>Click "Open" on the Admin link to add teams</li>
+              <li>Use the Scorer link to enter points during your event</li>
+              <li>Share the Public Scoreboard with your audience</li>
+            </ol>
           </div>
         </div>
       )}

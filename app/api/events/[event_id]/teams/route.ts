@@ -1,14 +1,71 @@
 /**
- * Add Team to Event
- * POST /api/events/{event_id}/teams
- * Requires: X-ADMIN-TOKEN header
+ * Teams API
+ * GET /api/events/{event_id}/teams - List teams
+ * POST /api/events/{event_id}/teams - Add team
+ * Requires: X-ADMIN-TOKEN or X-SCORER-TOKEN header
  */
 
 import { NextResponse } from 'next/server';
-import { addTeam, getEventByToken, getEventById } from '@/lib/db-access';
+import { addTeam, getEventByToken, getEventById, listTeamsWithTotals } from '@/lib/db-access';
 import { CreateTeamSchema } from '@/lib/db-validations';
 import { successResponse, errorResponse, ERROR_STATUS_MAP } from '@/lib/api-responses';
 import { ZodError } from 'zod';
+
+/**
+ * GET - List teams for event
+ */
+export async function GET(
+  request: Request,
+  { params }: { params: { event_id: string } }
+) {
+  try {
+    const { event_id } = params;
+    
+    // Get token from header (admin or scorer)
+    const adminToken = request.headers.get('x-admin-token');
+    const scorerToken = request.headers.get('x-scorer-token');
+    const publicToken = request.headers.get('x-public-token');
+    
+    const token = adminToken || scorerToken || publicToken;
+    
+    if (!token) {
+      return NextResponse.json(
+        errorResponse('UNAUTHORIZED', 'Token required'),
+        { status: ERROR_STATUS_MAP.UNAUTHORIZED }
+      );
+    }
+    
+    // Verify token has access to this event
+    const tokenType = adminToken ? 'admin' : scorerToken ? 'scorer' : 'public';
+    const event = await getEventByToken(token, tokenType);
+    
+    if (!event || event.id !== event_id) {
+      return NextResponse.json(
+        errorResponse('FORBIDDEN', 'Invalid token or access denied'),
+        { status: ERROR_STATUS_MAP.FORBIDDEN }
+      );
+    }
+    
+    // Get teams
+    const teams = await listTeamsWithTotals(event_id);
+    
+    return NextResponse.json(
+      successResponse({ teams }),
+      { status: 200 }
+    );
+  } catch (error) {
+    console.error('Get teams error:', error);
+    
+    return NextResponse.json(
+      errorResponse('INTERNAL_ERROR', 'Failed to get teams'),
+      { status: ERROR_STATUS_MAP.INTERNAL_ERROR }
+    );
+  }
+}
+
+/**
+ * POST - Add team to event
+ */
 
 export async function POST(
   request: Request,
