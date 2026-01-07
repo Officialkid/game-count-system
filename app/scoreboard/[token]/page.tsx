@@ -2,8 +2,7 @@
 
 import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { useEventStream } from '@/hooks/useEventStream';
-import { Badge } from '@/components/ui/Badge';
-import { LoadingSkeleton } from '@/components/ui/LoadingSkeleton';
+import { Badge, LoadingSkeleton } from '@/components/ui';
 import Link from 'next/link';
 
 interface Team {
