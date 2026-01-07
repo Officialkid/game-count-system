@@ -27,17 +27,17 @@ export default function HomePage() {
 
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16">
               <Link
-                href="/dashboard"
+                href="/events/create"
                 className="px-8 py-4 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl hover:shadow-2xl hover:scale-105 transform transition-all duration-300 font-semibold text-lg w-full sm:w-auto group"
               >
                 Start Creating Events
                 <span className="ml-2 inline-block group-hover:translate-x-1 transition-transform">→</span>
               </Link>
               <Link
-                href="/public"
+                href="/events/create"
                 className="px-8 py-4 bg-white/80 backdrop-blur-lg border-2 border-purple-200 text-purple-600 rounded-xl hover:shadow-xl hover:scale-105 transform transition-all duration-300 font-semibold text-lg w-full sm:w-auto"
               >
-                View Public Events
+                Create a Public Scoreboard
               </Link>
             </div>
           </div>
