@@ -41,7 +41,6 @@
     "@playwright/test": "^1.40.0",
     "@types/jest": "^29.5.11",
     "@types/papaparse": "^5.5.1",
-    "@types/cloudinary": "^1.36.3",
     "@types/pg": "^8.11.0",
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
