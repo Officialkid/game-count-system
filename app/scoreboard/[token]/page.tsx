@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useEffect, useMemo, useState, useRef } from 'react';
-import { useEventStream } from '@/hooks/useEventStream';
 import { Badge, LoadingSkeleton } from '@/components/ui';
 import Link from 'next/link';
 
@@ -43,7 +42,6 @@ export default function PublicScoreboardPage({ params }: { params: { token: stri
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
-  const [live, setLive] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [invalid, setInvalid] = useState<string | null>(null);
   const [rankChanges, setRankChanges] = useState<RankChange[]>([]);
@@ -123,64 +121,12 @@ export default function PublicScoreboardPage({ params }: { params: { token: stri
     return () => { mounted = false; clearInterval(id); };
   }, [token, reloadCounter]);
 
-  // Live updates via SSE when we know the eventId (from public API)
-  const eventStream = useEventStream(event?.id ? String(event.id) : '', !!event?.id);
-  const connectionStatus = eventStream?.status ?? 'idle';
+  // Simple polling-based updates (no SSE needed)
   const statusBadge = useMemo(() => {
-    switch (connectionStatus) {
-      case 'connected':
-        return { label: 'Live', variant: 'success', dot: 'bg-green-600' } as const;
-      case 'connecting':
-        return { label: 'Connecting', variant: 'info', dot: 'bg-blue-600' } as const;
-      case 'error':
-        return { label: 'Reconnecting...', variant: 'warning', dot: 'bg-yellow-500' } as const;
-      case 'disconnected':
-        return { label: 'Disconnected', variant: 'default', dot: 'bg-gray-400' } as const;
-      default:
-        return { label: 'Standby', variant: 'default', dot: 'bg-gray-400' } as const;
-    }
-  }, [connectionStatus]);
-  
-  useEffect(() => {
-    if (!eventStream) return;
-    setLive(eventStream.isConnected);
-    if (eventStream.lastUpdate?.type === 'score_added') {
-      // Minimal refetch to update leaderboard and history
-      (async () => {
-        try {
-          const res = await fetch(`/api/public/scoreboard/${token}`);
-          if (!res.ok) return;
-          const payload = await res.json();
-          const data = payload?.data ?? payload;
-          const newTeams = data.teams || [];
-          
-          // Track rank changes
-          const changes: RankChange[] = [];
-          newTeams.forEach((team: Team, newRank: number) => {
-            const oldRank = prevTeamsRef.current.get(team.id);
-            if (oldRank !== undefined && oldRank !== newRank) {
-              changes.push({ teamId: team.id, oldRank, newRank });
-            }
-          });
-          
-          if (changes.length > 0) {
-            setRankChanges(changes);
-            setTimeout(() => setRankChanges([]), 1000);
-          }
-          
-          const newMap = new Map<number, number>();
-          newTeams.forEach((team: Team, idx: number) => {
-            newMap.set(team.id, idx);
-          });
-          prevTeamsRef.current = newMap;
-          
-          setTeams(newTeams);
-          setHistory((data.scores || data.history) || []);
-          setLastUpdate(Date.now());
-        } catch {}
-      })();
-    }
-  }, [eventStream?.isConnected, eventStream?.lastUpdate, token]);
+    if (loading) return { label: 'Loading', variant: 'info' as const, dot: 'bg-blue-600' };
+    if (error) return { label: 'Error', variant: 'warning' as const, dot: 'bg-yellow-500' };
+    return { label: 'Live', variant: 'success' as const, dot: 'bg-green-600' };
+  }, [loading, error]);
 
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
@@ -326,13 +272,13 @@ export default function PublicScoreboardPage({ params }: { params: { token: stri
                   <Badge variant={statusBadge.variant} className="gap-2">
                     <span
                       className={`inline-block w-2.5 h-2.5 rounded-full ${statusBadge.dot} ${
-                        connectionStatus === 'connected' ? 'animate-pulse' : ''
+                        !loading && !error ? 'animate-pulse' : ''
                       }`}
                     ></span>
                     {statusBadge.label}
                   </Badge>
                   <span className="text-sm text-gray-600 flex items-center gap-1.5">
-                    {live ? 'Live events enabled' : 'Fallback: refresh every 6s'}
+                    Refreshes every 6s
                   </span>
                 </div>
               </div>

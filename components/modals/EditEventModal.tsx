@@ -1,8 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Button } from '@/components/ui/Button';
-import { useToast } from '@/components/ui/Toast';
+import { Button, useToast } from '@/components/ui';
 import { getPaletteById } from '@/lib/color-palettes';
 import { getThemeRecommendations } from '@/lib/theme-recommendations';
 
