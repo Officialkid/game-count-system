@@ -58,6 +58,14 @@ export async function generateMetadata({
 }: {
   params: { token: string };
 }): Promise<Metadata> {
+  // Skip metadata fetching during build phase
+  if (process.env.NEXT_PHASE === 'phase-production-build') {
+    return {
+      title: 'Event Results - Game Count System',
+      description: 'View event results and standings',
+    };
+  }
+  
   const data = await getEventResults(params.token);
 
   if (!data?.success) {

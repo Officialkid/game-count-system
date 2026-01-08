@@ -73,16 +73,23 @@ export async function GET(request: NextRequest) {
             ELSE NULL
           END as total_days,
           (
-            SELECT t2.name
-            FROM teams t2
-            WHERE t2.event_id = e.id
-            ORDER BY t2.total_points DESC
+            SELECT t.name
+            FROM teams t
+            LEFT JOIN scores s ON s.team_id = t.id
+            WHERE t.event_id = e.id
+            GROUP BY t.id, t.name
+            ORDER BY COALESCE(SUM(s.points), 0) DESC
             LIMIT 1
           ) as winning_team,
           (
-            SELECT MAX(t3.total_points)
-            FROM teams t3
-            WHERE t3.event_id = e.id
+            SELECT COALESCE(MAX(team_points), 0)
+            FROM (
+              SELECT COALESCE(SUM(s.points), 0) AS team_points
+              FROM teams t
+              LEFT JOIN scores s ON s.team_id = t.id
+              WHERE t.event_id = e.id
+              GROUP BY t.id
+            ) ranked
           ) as winning_points,
           (
             SELECT MAX(s.points)
@@ -90,9 +97,9 @@ export async function GET(request: NextRequest) {
             WHERE s.event_id = e.id
           ) as highest_score,
           (
-            SELECT SUM(t4.total_points)
-            FROM teams t4
-            WHERE t4.event_id = e.id
+            SELECT COALESCE(SUM(s.points), 0)
+            FROM scores s
+            WHERE s.event_id = e.id
           ) as total_points
         FROM events e
         LEFT JOIN teams t ON e.id = t.event_id

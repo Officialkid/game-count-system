@@ -1,17 +1,23 @@
 'use client';
 
 import { useState } from 'react';
+import { usePathname } from 'next/navigation';
 
 /**
  * WhatsApp Floating Action Button
  * Opens WhatsApp chat with pre-filled message
+ * Only visible on landing page
  */
 export function WhatsAppButton() {
   const [isHovered, setIsHovered] = useState(false);
+  const pathname = usePathname();
   
   const phoneNumber = '254745169345'; // Kenya format without +
   const message = 'Hi! I have an inquiry about AlphaTech services and partnerships.';
   const whatsappUrl = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`;
+
+  // Only show on landing page
+  if (pathname !== '/') return null;
 
   return (
     <a

@@ -22,11 +22,12 @@ export async function middleware(request: NextRequest) {
     'Content-Security-Policy',
     [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval'", // TODO: Remove unsafe-inline/eval in production
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://storage.ko-fi.com", // TODO: Remove unsafe-inline/eval in production
       "style-src 'self' 'unsafe-inline'",
-      "img-src 'self' data: https:",
+      "img-src 'self' data: https: https://storage.ko-fi.com https://ko-fi.com",
       "font-src 'self' data:",
-      "connect-src 'self' https://*.appwrite.io https://*.cloud.appwrite.io",
+      "connect-src 'self' https://*.appwrite.io https://*.cloud.appwrite.io https://ko-fi.com",
+      "frame-src https://ko-fi.com https://storage.ko-fi.com",
       "frame-ancestors 'none'",
     ].join('; ')
   );

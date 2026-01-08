@@ -22,12 +22,15 @@ if (typeof window !== 'undefined') {
   throw new Error('Database client can only be used on the server side');
 }
 
-if (!process.env.DATABASE_URL) {
+// Skip database initialization during build phase
+const isBuildPhase = process.env.NEXT_PHASE === 'phase-production-build';
+
+if (!process.env.DATABASE_URL && !isBuildPhase) {
   throw new Error('DATABASE_URL environment variable is required (use Render internal Database URL)');
 }
 
-// Create or reuse a single shared Pool
-const pool = globalThis.pgPool ?? new Pool({
+// Create or reuse a single shared Pool (skip during build)
+const pool = isBuildPhase ? undefined : (globalThis.pgPool ?? new Pool({
   connectionString: process.env.DATABASE_URL,
   // Render requires SSL; disable cert verification within Render's network
   ssl: { rejectUnauthorized: false },
@@ -35,17 +38,17 @@ const pool = globalThis.pgPool ?? new Pool({
   max: 5,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 2000,
-});
+}));
 
 // Cache the pool on the global object to reuse across requests and hot reloads
-if (!globalThis.pgPool) {
+if (!isBuildPhase && !globalThis.pgPool && pool) {
   globalThis.pgPool = pool;
 }
 
 // Test connection on startup (single-run, clear logs, fatal on failure)
-if (!globalThis.pgPoolChecked) {
+if (!isBuildPhase && !globalThis.pgPoolChecked) {
   globalThis.pgPoolChecked = true;
-  void pool
+  void pool!
     .query('SELECT 1')
     .then(() => {
       console.log('DATABASE CONNECTED');
@@ -63,6 +66,11 @@ export async function query<T = any>(
   text: string,
   params?: any[]
 ): Promise<{ rows: T[]; rowCount: number }> {
+  // Skip database queries during build phase
+  if (isBuildPhase || !pool) {
+    return { rows: [], rowCount: 0 };
+  }
+  
   const start = Date.now();
   try {
     const result = await pool.query(text, params);
@@ -88,6 +96,11 @@ export async function query<T = any>(
 export async function transaction<T>(
   callback: (client: any) => Promise<T>
 ): Promise<T> {
+  // Skip transactions during build phase
+  if (isBuildPhase || !pool) {
+    throw new Error('Database transactions not available during build');
+  }
+  
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -106,6 +119,11 @@ export async function transaction<T>(
  * Health check
  */
 export async function healthCheck(): Promise<boolean> {
+  // Skip health check during build phase
+  if (isBuildPhase || !pool) {
+    return false;
+  }
+  
   try {
     const result = await pool.query('SELECT NOW()');
     return !!result.rows[0];
@@ -119,7 +137,9 @@ export async function healthCheck(): Promise<boolean> {
  * Close all connections (for graceful shutdown)
  */
 export async function closePool(): Promise<void> {
-  await pool.end();
+  if (pool) {
+    await pool.end();
+  }
 }
 
 export default pool;

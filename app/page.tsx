@@ -43,15 +43,6 @@ export default function HomePage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-purple-50 to-amber-50">
       <Navbar />
-      {/* WhatsApp Floating Button for inquiries */}
-      <a
-        href="https://wa.me/254745169345?text=Hello%20GameScore%20team%2C%20I%20have%20an%20inquiry."
-        target="_blank"
-        className="fixed bottom-6 right-6 z-50 flex items-center gap-2 px-4 py-3 rounded-full shadow-lg bg-green-500 text-white hover:bg-green-600"
-      >
-        <span className="inline-block w-5 h-5">💬</span>
-        <span className="font-semibold">WhatsApp</span>
-      </a>
 
       {/* Hero Carousel Section */}
       <section id="home" className="pt-16">
