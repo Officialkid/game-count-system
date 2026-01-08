@@ -3,6 +3,9 @@
 import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { Badge, LoadingSkeleton } from '@/components/ui';
 import Link from 'next/link';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { ExpiredEvent, EventNotFoundError } from '@/components/ExpiredEvent';
+import { safeName, safeNumber, safeColor } from '@/lib/safe-ui-helpers';
 
 interface Team {
   id: number;
@@ -61,6 +64,48 @@ export default function PublicScoreboardPage({ params }: { params: { token: stri
   const [reloadCounter, setReloadCounter] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
+  // Wrap entire component in error boundary
+  return (
+    <ErrorBoundary
+      fallback={
+        <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-purple-50 to-blue-50">
+          <div className="max-w-md w-full bg-white rounded-xl shadow-lg p-8 text-center">
+            <div className="text-6xl mb-4">⚠️</div>
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">Scoreboard Error</h1>
+            <p className="text-gray-600 mb-6">
+              Unable to load the scoreboard. Please refresh the page or try again later.
+            </p>
+            <button
+              onClick={() => window.location.reload()}
+              className="px-6 py-3 bg-purple-600 text-white rounded-lg font-semibold hover:bg-purple-700 transition-colors"
+            >
+              Refresh Page
+            </button>
+          </div>
+        </div>
+      }
+    >
+      <ScoreboardContent token={token} />
+    </ErrorBoundary>
+  );
+}
+
+function ScoreboardContent({ token }: { token: string }) {
+  const [event, setEvent] = useState<EventMeta | null>(null);
+  const [teams, setTeams] = useState<Team[]>([]);
+  const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [scoresByDay, setScoresByDay] = useState<DayScore[]>([]);
+  const [selectedDay, setSelectedDay] = useState<number | 'cumulative'>('cumulative');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string>('');
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [invalid, setInvalid] = useState<string | null>(null);
+  const [rankChanges, setRankChanges] = useState<RankChange[]>([]);
+  const prevTeamsRef = useRef<Map<number, number>>(new Map());
+  const [lastUpdate, setLastUpdate] = useState<number>(Date.now());
+  const [reloadCounter, setReloadCounter] = useState(0);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
   // Data loading function
   const loadData = async (isManual = false) => {
     if (isManual) setIsRefreshing(true);
@@ -68,13 +113,23 @@ export default function PublicScoreboardPage({ params }: { params: { token: stri
       setError('');
       // Quick token verify
       const v = await fetch(`/api/public/verify/${token}`);
+      
+      // Handle 404 - event not found
       if (v.status === 404) {
-        setInvalid('Invalid or expired link');
+        setInvalid('not-found');
         setLoading(false);
         return;
       }
+      
+      // Handle 410 - event expired
+      if (v.status === 410) {
+        setInvalid('expired');
+        setLoading(false);
+        return;
+      }
+      
       if (!v.ok && v.status >= 500) {
-        setError('Server error verifying link. Please try again later.');
+        setError('Server error. Please try again later.');
         setLoading(false);
         return;
       }
@@ -275,10 +330,18 @@ export default function PublicScoreboardPage({ params }: { params: { token: stri
     );
   }
 
-  if (invalid) {
+  if (invalid === 'expired') {
     return (
-      <div className="max-w-6xl mx-auto px-4 py-16 text-center">
-        <p className="text-gray-500">{invalid}</p>
+      <div className="max-w-6xl mx-auto px-4 py-16">
+        <ExpiredEvent showWaitlist={true} />
+      </div>
+    );
+  }
+
+  if (invalid === 'not-found') {
+    return (
+      <div className="max-w-6xl mx-auto px-4 py-16">
+        <EventNotFoundError />
       </div>
     );
   }

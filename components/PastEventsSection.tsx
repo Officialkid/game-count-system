@@ -12,6 +12,12 @@ interface PastEvent {
   public_token: string;
   total_teams: number;
   total_days: number | null;
+  summary: {
+    winning_team: string | null;
+    winning_points: number;
+    highest_score: number;
+    total_points: number;
+  };
 }
 
 interface PastEventsSectionProps {
@@ -74,6 +80,38 @@ export default function PastEventsSection({ adminToken }: PastEventsSectionProps
 
   const handleViewResults = (publicToken: string) => {
     router.push(`/recap/${publicToken}`);
+  };
+
+  const handleExportCSV = async (eventId: string, eventName: string) => {
+    try {
+      const response = await fetch(`/api/events/${eventId}/export-csv`, {
+        headers: {
+          'X-ADMIN-TOKEN': adminToken,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to export CSV');
+      }
+
+      // Get the CSV blob
+      const blob = await response.blob();
+      
+      // Create download link
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${eventName.replace(/[^a-zA-Z0-9]/g, '_')}_Final_Results.csv`;
+      document.body.appendChild(a);
+      a.click();
+      
+      // Cleanup
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (err: any) {
+      console.error('Export error:', err);
+      alert('Failed to export CSV: ' + err.message);
+    }
   };
 
   return (
@@ -156,6 +194,38 @@ export default function PastEventsSection({ adminToken }: PastEventsSectionProps
                   </div>
                 </div>
 
+                {/* Summary Stats */}
+                {event.summary && event.summary.winning_team && (
+                  <div className="mb-4 p-3 bg-white rounded-lg border border-gray-200">
+                    <div className="space-y-2 text-xs">
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Winner:</span>
+                        <span className="font-semibold text-gray-900 truncate ml-2">
+                          {event.summary.winning_team}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Winning Points:</span>
+                        <span className="font-semibold text-indigo-700">
+                          {event.summary.winning_points}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Highest Score:</span>
+                        <span className="font-semibold text-green-700">
+                          {event.summary.highest_score}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Total Points:</span>
+                        <span className="font-semibold text-gray-900">
+                          {event.summary.total_points}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Finalized Date */}
                 <div className="mb-4">
                   <p className="text-xs text-gray-600 font-medium">Finalized</p>
@@ -165,13 +235,22 @@ export default function PastEventsSection({ adminToken }: PastEventsSectionProps
                 </div>
               </div>
 
-              {/* CTA Button */}
-              <button
-                onClick={() => handleViewResults(event.public_token)}
-                className="w-full px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg transition-colors duration-200 text-sm"
-              >
-                View Final Results
-              </button>
+              {/* Action Buttons */}
+              <div className="space-y-2">
+                <button
+                  onClick={() => handleViewResults(event.public_token)}
+                  className="w-full px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg transition-colors duration-200 text-sm"
+                >
+                  View Final Results
+                </button>
+                <button
+                  onClick={() => handleExportCSV(event.event_id, event.name)}
+                  className="w-full px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-lg transition-colors duration-200 text-sm flex items-center justify-center gap-2"
+                >
+                  <span>📥</span>
+                  <span>Export CSV</span>
+                </button>
+              </div>
 
               {/* Hover Indicator */}
               <div className="absolute inset-0 rounded-xl pointer-events-none border-2 border-transparent group-hover:border-indigo-300 transition-colors duration-300" />

@@ -13,23 +13,23 @@
  */
 
 import { NextResponse } from 'next/server';
-import {
-  getEventByToken,
-  listTeamsWithTotals,
+import { 
+  getEventByToken, 
+  listTeamsWithTotals, 
   listScores,
   listScoresByDay,
-  listEventDays,
-} from '../../../../lib/db-access';
+  listEventDays
+} from '@/lib/db-access';
 
 export async function GET(
   request: Request,
-  { params }: { params: { token: string } }
+  { params }: { params: { public_token: string } }
 ) {
   try {
-    const { token } = params;
+    const { public_token } = params;
     
     // Resolve event ONLY via public_token - no authentication required
-    const event = await getEventByToken(token, 'public');
+    const event = await getEventByToken(public_token, 'public');
     
     // Token not found - friendly 404
     if (!event) {
@@ -65,10 +65,7 @@ export async function GET(
     ]);
     
     // Calculate totals
-    const totalPoints = teams.reduce(
-      (sum: number, team: { total_points?: number | null }) => sum + (team.total_points ?? 0),
-      0
-    );
+    const totalPoints = teams.reduce((sum, team) => sum + (team.total_points || 0), 0);
     const totalScores = scores.length;
     
     // Return complete event data

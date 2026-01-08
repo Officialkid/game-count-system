@@ -6,6 +6,7 @@ import { useState, useEffect, useRef } from 'react';
 import { TeamCard, TeamList } from './TeamCard';
 import { Card } from './Card';
 import { getPaletteById } from '@/lib/color-palettes';
+import { safeName, safeNumber } from '@/lib/safe-ui-helpers';
 
 interface Team {
   id: string;
@@ -144,7 +145,7 @@ export function PublicScoreboard({
             className="text-3xl sm:text-4xl lg:text-5xl font-bold mb-2 transition-colors duration-300"
             style={{ color: palette.primary }}
           >
-            {event.event_name}
+            {safeName(event?.event_name, 'Game Event')}
           </h1>
           
           <div className="flex items-center justify-center gap-3 text-sm sm:text-base text-gray-500">

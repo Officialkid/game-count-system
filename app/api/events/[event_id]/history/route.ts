@@ -37,21 +37,23 @@ export async function GET(
     }
 
     // Get score history with team details
+    // Use LEFT JOIN for teams to prevent crashes if team is deleted
+    // Always provide fallback values for UI safety
     const result = await query(
       `SELECT 
         s.id,
         s.event_id,
         s.team_id,
+        s.day_id,
         s.points,
         s.category,
         s.created_at,
-        s.updated_at,
-        t.name as team_name,
-        t.color as team_color,
+        COALESCE(t.name, 'Unknown Team') as team_name,
+        COALESCE(t.color, '#6B7280') as team_color,
         d.day_number,
         d.label as day_label
       FROM scores s
-      JOIN teams t ON t.id = s.team_id
+      LEFT JOIN teams t ON t.id = s.team_id
       LEFT JOIN event_days d ON d.id = s.day_id
       WHERE s.event_id = $1
       ORDER BY s.created_at DESC`,

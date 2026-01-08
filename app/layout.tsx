@@ -6,6 +6,7 @@ import './mobile-optimized.css';
 import { ToastProvider } from '@/components/ui';
 import { ClientSetup } from '@/components/ClientSetup';
 import { WhatsAppButton } from '@/components/WhatsAppButton';
+import { KofiEmbed } from '@/components/KofiEmbed';
 
 export const metadata: Metadata = {
   title: 'Game Count System - Event Scoring & Leaderboards',
@@ -42,6 +43,9 @@ export default function RootLayout({
             <main className="flex-1">
               {children}
             </main>
+
+            {/* Ko-fi Overlay Embed */}
+            <KofiEmbed />
             
             {/* Simplified Footer */}
             <footer className="bg-gradient-to-r from-gray-900 via-gray-800 to-gray-900 text-white py-8 mt-16 border-t border-gray-700">

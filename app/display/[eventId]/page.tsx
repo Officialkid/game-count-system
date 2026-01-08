@@ -2,6 +2,8 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { Badge, LoadingSkeleton } from '@/components/ui';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { safeName, safeNumber } from '@/lib/safe-ui-helpers';
 
 interface Team {
   id: number;
@@ -28,6 +30,32 @@ interface EventMeta {
 }
 
 export default function EventDisplayPage({ params }: { params: { eventId: string } }) {
+  return (
+    <ErrorBoundary
+      fallback={
+        <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-indigo-50 to-purple-50">
+          <div className="max-w-md w-full bg-white rounded-xl shadow-lg p-8 text-center">
+            <div className="text-6xl mb-4">📺</div>
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">Display Error</h1>
+            <p className="text-gray-600 mb-6">
+              Unable to load the live display. Please refresh the page or contact support.
+            </p>
+            <button
+              onClick={() => window.location.reload()}
+              className="px-6 py-3 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700 transition-colors"
+            >
+              Refresh Page
+            </button>
+          </div>
+        </div>
+      }
+    >
+      <DisplayPageContent params={params} />
+    </ErrorBoundary>
+  );
+}
+
+function DisplayPageContent({ params }: { params: { eventId: string } }) {
   const eventId = params.eventId;
   const [event, setEvent] = useState<EventMeta | null>(null);
   const [teams, setTeams] = useState<Team[]>([]);

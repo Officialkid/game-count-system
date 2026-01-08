@@ -8,6 +8,7 @@ import { LoadingSkeleton } from '../ui/LoadingSkeleton';
 import { useSubmissionLock } from '@/lib/hooks/useSubmissionLock';
 import { auth } from '@/lib/api-client';
 import { getPaletteById } from '@/lib/color-palettes';
+import { safeCompare, safeNumber } from '@/lib/safe-ui-helpers';
 import { nanoid } from 'nanoid';
 
 interface Team {
@@ -788,10 +789,12 @@ export function ScoringTab({ eventId, event }: ScoringTabProps) {
           <div className="space-y-2">
             {teams
               .sort((a, b) => {
-                if (b.total_score !== a.total_score) {
-                  return b.total_score - a.total_score;
+                const scoreA = safeNumber(a.total_score);
+                const scoreB = safeNumber(b.total_score);
+                if (scoreB !== scoreA) {
+                  return scoreB - scoreA;
                 }
-                return a.team_name.localeCompare(b.team_name);
+                return safeCompare(a.team_name, b.team_name);
               })
               .map((team, index) => (
                 <div

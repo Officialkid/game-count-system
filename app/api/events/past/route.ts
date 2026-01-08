@@ -71,7 +71,29 @@ export async function GET(request: NextRequest) {
               WHERE event_id = e.id
             )
             ELSE NULL
-          END as total_days
+          END as total_days,
+          (
+            SELECT t2.name
+            FROM teams t2
+            WHERE t2.event_id = e.id
+            ORDER BY t2.total_points DESC
+            LIMIT 1
+          ) as winning_team,
+          (
+            SELECT MAX(t3.total_points)
+            FROM teams t3
+            WHERE t3.event_id = e.id
+          ) as winning_points,
+          (
+            SELECT MAX(s.points)
+            FROM scores s
+            WHERE s.event_id = e.id
+          ) as highest_score,
+          (
+            SELECT SUM(t4.total_points)
+            FROM teams t4
+            WHERE t4.event_id = e.id
+          ) as total_points
         FROM events e
         LEFT JOIN teams t ON e.id = t.event_id
         WHERE 
@@ -93,6 +115,12 @@ export async function GET(request: NextRequest) {
       public_token: row.public_token,
       total_teams: parseInt(row.total_teams) || 0,
       total_days: row.total_days ? parseInt(row.total_days) : null,
+      summary: {
+        winning_team: row.winning_team || null,
+        winning_points: row.winning_points ? parseInt(row.winning_points) : 0,
+        highest_score: row.highest_score ? parseInt(row.highest_score) : 0,
+        total_points: row.total_points ? parseInt(row.total_points) : 0,
+      },
     }));
 
     return NextResponse.json({

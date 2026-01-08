@@ -53,3 +53,5 @@ export { RecapSlides } from './RecapSlides';
 export { IntroSlide, GamesPlayedSlide, TeamsParticipatedSlide, RankingsSlide, WinnerSlide, ClosingSlide } from './RecapSlideComponents';
 export { RecapPlayer } from './RecapPlayer';
 export type { RecapSlideType, RecapSlide, RecapData } from './RecapPlayerNew';
+export { WaitlistSignup } from './WaitlistSignup';
+// Coffee tipping components removed in favor of Ko-fi overlay

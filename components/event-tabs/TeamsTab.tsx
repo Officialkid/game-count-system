@@ -7,7 +7,9 @@ import { apiClient, auth } from '@/lib/api-client';
 import { Card, CardContent, Avatar, Badge, Button, LoadingSkeleton, useToast } from '@/components/ui';
 import { TeamCardSkeletonList } from '@/components/skeletons';
 import { TeamCard } from '../ui/TeamCard';
+import { BulkTeamCreator } from '../BulkTeamCreator';
 import { getPaletteById } from '@/lib/color-palettes';
+import { safeCompare, safeNumber } from '@/lib/safe-ui-helpers';
 
 interface Team {
   id: string | number;
@@ -33,6 +35,7 @@ export function TeamsTab({ eventId, event, refreshTrigger }: TeamsTabProps) {
   const [error, setError] = useState<string>('');
   const [errorType, setErrorType] = useState<'none' | 'network' | 'server' | 'forbidden'>('none');
   const [expandedTeam, setExpandedTeam] = useState<string | number | null>(null);
+  const [showTeamCreator, setShowTeamCreator] = useState(false);
 
   useEffect(() => {
     loadTeams();
@@ -71,13 +74,13 @@ export function TeamsTab({ eventId, event, refreshTrigger }: TeamsTabProps) {
       
       // Sort teams: first by total points (descending), then alphabetically
       const sortedTeams = teamsList.sort((a, b) => {
-        const pointsA = a.total_points ?? a.total_score ?? 0;
-        const pointsB = b.total_points ?? b.total_score ?? 0;
+        const pointsA = safeNumber(a.total_points ?? a.total_score);
+        const pointsB = safeNumber(b.total_points ?? b.total_score);
         
         if (pointsA !== pointsB) {
           return pointsB - pointsA; // Descending by points
         }
-        return a.team_name.localeCompare(b.team_name); // Alphabetical if equal
+        return safeCompare(a.team_name, b.team_name); // Alphabetical if equal
       });
       
       setTeams(sortedTeams);
@@ -122,21 +125,46 @@ export function TeamsTab({ eventId, event, refreshTrigger }: TeamsTabProps) {
 
   if (teams.length === 0) {
     return (
-      <Card>
-        <CardContent className="py-16 text-center">
-          <div className="text-6xl mb-4">👥</div>
-          <h3 className="text-2xl font-bold text-gray-900 mb-2">No Teams Yet</h3>
-          <p className="text-gray-600 mb-6">Add teams to start tracking scores!</p>
-          <Button onClick={() => showToast('Add team functionality coming soon', 'info')}>
-            + Add First Team
-          </Button>
-        </CardContent>
-      </Card>
+      <div className="space-y-6">
+        {!showTeamCreator ? (
+          <Card>
+            <CardContent className="py-16 text-center">
+              <div className="text-6xl mb-4">👥</div>
+              <h3 className="text-2xl font-bold text-gray-900 mb-2">No Teams Yet</h3>
+              <p className="text-gray-600 mb-6">Add teams to start tracking scores!</p>
+              <Button onClick={() => setShowTeamCreator(true)}>
+                + Add Teams
+              </Button>
+            </CardContent>
+          </Card>
+        ) : (
+          <BulkTeamCreator
+            eventId={eventId}
+            onSuccess={() => {
+              setShowTeamCreator(false);
+              loadTeams();
+            }}
+            onCancel={() => setShowTeamCreator(false)}
+          />
+        )}
+      </div>
     );
   }
 
   return (
     <div className="space-y-6">
+      {/* Bulk Team Creator */}
+      {showTeamCreator && (
+        <BulkTeamCreator
+          eventId={eventId}
+          onSuccess={() => {
+            setShowTeamCreator(false);
+            loadTeams();
+          }}
+          onCancel={() => setShowTeamCreator(false)}
+        />
+      )}
+
       {/* Header Section with Creative Layout */}
       <div className="mb-8">
         <div className="flex justify-between items-start mb-2">
@@ -144,7 +172,17 @@ export function TeamsTab({ eventId, event, refreshTrigger }: TeamsTabProps) {
             <h2 className="text-4xl font-black text-gray-900 tracking-tight">🏆 Team Rankings</h2>
             <p className="text-gray-500 mt-2">Live competitive rankings • Click to view history</p>
           </div>
-          <Badge variant="info" className="px-4 py-2 text-base font-semibold">{teams.length} {teams.length === 1 ? 'team' : 'teams'}</Badge>
+          <div className="flex items-center gap-3">
+            <Badge variant="info" className="px-4 py-2 text-base font-semibold">{teams.length} {teams.length === 1 ? 'team' : 'teams'}</Badge>
+            {!showTeamCreator && (
+              <Button
+                onClick={() => setShowTeamCreator(true)}
+                size="sm"
+              >
+                + Add Teams
+              </Button>
+            )}
+          </div>
         </div>
       </div>
 

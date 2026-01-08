@@ -4,6 +4,7 @@
 import { useState } from 'react';
 import { Card } from './Card';
 import { Button } from './Button';
+import { safeCompare, safeName, safeNumber } from '@/lib/safe-ui-helpers';
 
 export interface GameScore {
   id: string;
@@ -46,13 +47,13 @@ export function HistoryList({
     
     switch (sortBy) {
       case 'game':
-        return (a.game_number - b.game_number) * modifier;
+        return (safeNumber(a.game_number) - safeNumber(b.game_number)) * modifier;
       case 'team':
-        return a.team_name.localeCompare(b.team_name) * modifier;
+        return safeCompare(a.team_name, b.team_name) * modifier;
       case 'points':
-        return (a.points - b.points) * modifier;
+        return (safeNumber(a.points) - safeNumber(b.points)) * modifier;
       case 'date':
-        return (new Date(a.created_at).getTime() - new Date(b.created_at).getTime()) * modifier;
+        return (new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime()) * modifier;
       default:
         return 0;
     }

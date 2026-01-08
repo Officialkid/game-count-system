@@ -38,6 +38,22 @@ export async function GET(
       );
     }
     
+    // Check if event is expired
+    if (event.status === 'expired') {
+      return NextResponse.json(
+        {
+          success: false,
+          data: null,
+          error: {
+            code: 'GONE',
+            message: 'Event has expired',
+            expired_at: event.end_at
+          }
+        },
+        { status: 410 }
+      );
+    }
+    
     // Return event info (hide sensitive tokens based on access level)
     const response: any = {
       id: event.id,

@@ -4,6 +4,9 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { generateResultsPDF } from '@/lib/pdf-export';
 import PastEventsSection from '@/components/PastEventsSection';
+import { AdminTutorial, resetAdminTutorial } from '@/components/AdminTutorial';
+import { EventLinksManager } from '@/components/EventLinksManager';
+import { ExpiredEvent, EventNotFoundError } from '@/components/ExpiredEvent';
 
 interface Team {
   id: string;
@@ -43,6 +46,7 @@ export default function AdminPage({ params }: { params: { token: string } }) {
   const [activeDay, setActiveDay] = useState<number>(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [errorType, setErrorType] = useState<'expired' | 'not-found' | null>(null);
   const [teamName, setTeamName] = useState('');
   const [teamColor, setTeamColor] = useState('#3B82F6');
   const [adding, setAdding] = useState(false);
@@ -67,11 +71,24 @@ export default function AdminPage({ params }: { params: { token: string } }) {
     try {
       setLoading(true);
       setError('');
+      setErrorType(null);
 
       // Verify token and get event
       const eventRes = await fetch(`/api/event-by-token/${token}`, {
         headers: { 'X-ADMIN-TOKEN': token }
       });
+
+      if (eventRes.status === 410) {
+        setErrorType('expired');
+        setLoading(false);
+        return;
+      }
+      
+      if (eventRes.status === 404) {
+        setErrorType('not-found');
+        setLoading(false);
+        return;
+      }
 
       if (!eventRes.ok) {
         throw new Error('Invalid admin token');
@@ -329,6 +346,22 @@ export default function AdminPage({ params }: { params: { token: string } }) {
     );
   }
 
+  if (errorType === 'expired') {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
+        <ExpiredEvent showWaitlist={true} />
+      </div>
+    );
+  }
+
+  if (errorType === 'not-found') {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
+        <EventNotFoundError />
+      </div>
+    );
+  }
+
   if (error) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -349,49 +382,55 @@ export default function AdminPage({ params }: { params: { token: string } }) {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-purple-50 to-amber-50 py-10 px-4">
+      {/* Interactive Tutorial */}
+      <AdminTutorial />
+
       <div className="max-w-4xl mx-auto space-y-8">
         {/* Header */}
         <div className="relative overflow-hidden rounded-2xl bg-white shadow-lg">
           <div className="absolute inset-0 bg-gradient-to-r from-purple-600/10 via-pink-600/10 to-amber-500/10" />
           <div className="relative p-8">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-lg bg-gradient-to-r from-purple-600 to-pink-600 flex items-center justify-center text-white font-bold">A</div>
-              <h1 className="text-3xl md:text-4xl font-extrabold text-gray-900 tracking-tight">{event?.name}</h1>
-            </div>
-            <p className="text-gray-600">Admin Control Panel</p>
-            <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <a
-                href={`/score/${event?.scorer_token}`}
-                target="_blank"
-                className="group rounded-xl border border-purple-200 bg-white p-4 hover:shadow-md transition-all flex flex-col"
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-gradient-to-r from-purple-600 to-pink-600 flex items-center justify-center text-white font-bold">A</div>
+                <h1 className="text-3xl md:text-4xl font-extrabold text-gray-900 tracking-tight">{event?.name}</h1>
+              </div>
+              <button
+                onClick={resetAdminTutorial}
+                className="px-3 py-2 text-sm font-medium text-purple-600 hover:text-purple-700 hover:bg-purple-50 rounded-lg transition-colors flex items-center gap-2"
+                title="Restart tutorial"
               >
-                <span className="text-sm text-gray-500">Scorer Link</span>
-                <span className="mt-1 text-purple-700 font-semibold truncate group-hover:underline text-sm">{typeof window !== 'undefined' ? `${window.location.origin}/score/${event?.scorer_token}` : `/score/${event?.scorer_token}`}</span>
-              </a>
+                <span className="text-lg">❓</span>
+                <span className="hidden sm:inline">Tutorial</span>
+              </button>
+            </div>
+            <p className="text-gray-600 mb-4">Admin Control Panel</p>
+            
+            {/* Event Links Manager */}
+            <EventLinksManager
+              eventId={event?.id || ''}
+              eventName={event?.name || ''}
+              adminToken={token}
+              scorerToken={event?.scorer_token || ''}
+              publicToken={event?.public_token || ''}
+            />
+            
+            {/* Quick Access Links */}
+            <div className="mt-6 flex flex-wrap gap-3">
               <a
                 href={`/history/${token}`}
-                className="group rounded-xl border border-indigo-200 bg-white p-4 hover:shadow-md transition-all flex flex-col"
+                className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 transition-colors text-sm font-medium"
               >
-                <span className="text-sm text-gray-500">Score History</span>
-                <span className="mt-1 text-indigo-700 font-semibold truncate group-hover:underline text-sm">{typeof window !== 'undefined' ? `${window.location.origin}/history/${token}` : `/history/${token}`}</span>
-              </a>
-              <a
-                href={`/scoreboard/${event?.public_token}`}
-                target="_blank"
-                className="group rounded-xl border border-blue-200 bg-white p-4 hover:shadow-md transition-all flex flex-col"
-              >
-                <span className="text-sm text-gray-500">Public Scoreboard</span>
-                <span className="mt-1 text-blue-700 font-semibold truncate group-hover:underline text-sm">{typeof window !== 'undefined' ? `${window.location.origin}/scoreboard/${event?.public_token}` : `/scoreboard/${event?.public_token}`}</span>
+                <span>📊</span>
+                Score History
               </a>
               <a
                 href={`/recap/${event?.public_token}`}
                 target="_blank"
-                className="group rounded-xl border border-amber-200 bg-white p-4 hover:shadow-md transition-all flex flex-col"
+                className="inline-flex items-center gap-2 px-4 py-2 bg-amber-100 text-amber-700 rounded-lg hover:bg-amber-200 transition-colors text-sm font-medium"
               >
-                <span className="text-sm text-gray-500">
-                  {event?.is_finalized ? 'Final Results' : 'Live Scores'}
-                </span>
-                <span className="mt-1 text-amber-700 font-semibold truncate group-hover:underline text-sm">{typeof window !== 'undefined' ? `${window.location.origin}/recap/${event?.public_token}` : `/recap/${event?.public_token}`}</span>
+                <span>{event?.is_finalized ? '🏆' : '⚡'}</span>
+                {event?.is_finalized ? 'Final Results' : 'Live Scores'}
               </a>
             </div>
           </div>

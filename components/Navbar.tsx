@@ -3,10 +3,13 @@
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
+import { Modal } from '@/components/Modal';
+import { WaitlistSignup } from '@/components/WaitlistSignup';
 
 export default function Navbar() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [showWaitlistModal, setShowWaitlistModal] = useState(false);
   const [activeSection, setActiveSection] = useState('home');
   const pathname = usePathname();
 
@@ -110,6 +113,12 @@ export default function Navbar() {
               >
                 Create Event
               </Link>
+              <button
+                onClick={() => setShowWaitlistModal(true)}
+                className="px-6 py-2 bg-amber-100 text-amber-900 rounded-lg font-semibold hover:bg-amber-200 transition-all border-2 border-amber-300"
+              >
+                Pro Waitlist
+              </button>
             </div>
 
             {/* Mobile Hamburger Button */}
@@ -194,9 +203,35 @@ export default function Navbar() {
             >
               Create Event
             </Link>
+            <button
+              onClick={() => {
+                setShowWaitlistModal(true);
+                setIsMobileMenuOpen(false);
+              }}
+              className="block w-full px-6 py-3 bg-amber-100 text-amber-900 rounded-lg font-semibold text-center hover:bg-amber-200 transition-all border-2 border-amber-300"
+            >
+              Pro Waitlist
+            </button>
           </div>
         </div>
       </div>
+
+      {/* Waitlist Modal */}
+      <Modal
+        isOpen={showWaitlistModal}
+        onClose={() => setShowWaitlistModal(false)}
+        title="Join the Pro Waitlist"
+        size="md"
+      >
+        <WaitlistSignup
+          source="landing-page"
+          onSuccess={() => {
+            setTimeout(() => setShowWaitlistModal(false), 2000);
+          }}
+          title="Join the Pro Waitlist"
+          description="Get exclusive access to extended event storage, advanced analytics, and more."
+        />
+      </Modal>
     </>
   );
 }

@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { safeInitial } from '@/lib/safe-ui-helpers';
 
 interface TeamCardProps {
   rank: number;
@@ -64,7 +65,7 @@ export function TeamCard({ rank, name, score, avatarUrl, highlight, paletteColor
             className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg shadow-md"
             style={{ background: paletteColor }}
           >
-            {name.charAt(0).toUpperCase()}
+            {safeInitial(name)}
           </div>
         )}
         

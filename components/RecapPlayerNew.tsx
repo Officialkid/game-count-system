@@ -11,6 +11,7 @@ import {
   ClosingSlide,
 } from './RecapSlideComponents';
 import { RecapShareModal } from './RecapShareModal';
+import { safeName } from '@/lib/safe-ui-helpers';
 
 /**
  * Legacy Slide Types for backward compatibility
@@ -395,13 +396,13 @@ export function RecapPlayer({
           isOpen={showShareModal}
           onClose={() => setShowShareModal(false)}
           recapData={{
-            winner: recapData.winner.name,
+            winner: safeName(recapData.winner.name, 'Champion'),
             points: recapData.winner.points,
             gamesCount: recapData.gamesCount,
             eventName: recapData.eventName,
             teams: recapData.teams,
           }}
-          shareUrl={`${typeof window !== 'undefined' ? window.location.origin : ''}/recap/${recapData.winner.name.toLowerCase().replace(/\s+/g, '-')}`}
+          shareUrl={`${typeof window !== 'undefined' ? window.location.origin : ''}/recap/${safeName(recapData.winner.name, 'champion').toLowerCase().replace(/\s+/g, '-')}`}
           branding={{ brandName: 'GameScore' }}
         />
       )}

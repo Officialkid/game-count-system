@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { WifiOff, Wifi, RefreshCw, LogOut } from 'lucide-react';
+import { ExpiredEvent, EventNotFoundError } from '@/components/ExpiredEvent';
 import { 
   saveToCache, 
   loadFromCache, 
@@ -36,6 +37,7 @@ export default function ScorerPage({ params }: { params: { token: string } }) {
   const [teams, setTeams] = useState<Team[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [errorType, setErrorType] = useState<'expired' | 'not-found' | null>(null);
   const [selectedTeamId, setSelectedTeamId] = useState('');
   const [points, setPoints] = useState('');
   const [category, setCategory] = useState('');
@@ -88,12 +90,25 @@ export default function ScorerPage({ params }: { params: { token: string } }) {
     try {
       setLoading(true);
       setError('');
+      setErrorType(null);
       setUsingCache(false);
 
       // Verify token and get event
       const eventRes = await fetch(`/api/event-by-token/${token}`, {
         headers: { 'X-SCORER-TOKEN': token }
       });
+
+      if (eventRes.status === 410) {
+        setErrorType('expired');
+        setLoading(false);
+        return;
+      }
+      
+      if (eventRes.status === 404) {
+        setErrorType('not-found');
+        setLoading(false);
+        return;
+      }
 
       if (!eventRes.ok) {
         throw new Error('Invalid scorer token');
@@ -347,6 +362,22 @@ export default function ScorerPage({ params }: { params: { token: string } }) {
           <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
           <p className="text-gray-600">Loading...</p>
         </div>
+      </div>
+    );
+  }
+
+  if (errorType === 'expired') {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
+        <ExpiredEvent showWaitlist={true} />
+      </div>
+    );
+  }
+
+  if (errorType === 'not-found') {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
+        <EventNotFoundError />
       </div>
     );
   }

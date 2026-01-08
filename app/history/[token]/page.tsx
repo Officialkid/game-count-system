@@ -2,6 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { ExpiredEvent, EventNotFoundError } from '@/components/ExpiredEvent';
+import { safeName, safeNumber, safeColor } from '@/lib/safe-ui-helpers';
 
 interface ScoreEntry {
   id: string;
@@ -22,12 +25,39 @@ interface Event {
 }
 
 export default function HistoryPage({ params }: { params: { token: string } }) {
+  return (
+    <ErrorBoundary
+      fallback={
+        <div className="min-h-screen flex items-center justify-center p-4 bg-gray-50">
+          <div className="max-w-md w-full bg-white rounded-xl shadow-lg p-8 text-center border border-red-200">
+            <div className="text-6xl mb-4">📊</div>
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">History Unavailable</h1>
+            <p className="text-gray-600 mb-6">
+              Unable to load score history. Please refresh the page or try again later.
+            </p>
+            <button
+              onClick={() => window.location.reload()}
+              className="px-6 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors"
+            >
+              Refresh Page
+            </button>
+          </div>
+        </div>
+      }
+    >
+      <HistoryPageContent params={params} />
+    </ErrorBoundary>
+  );
+}
+
+function HistoryPageContent({ params }: { params: { token: string } }) {
   const router = useRouter();
   const { token } = params;
   const [event, setEvent] = useState<Event | null>(null);
   const [scores, setScores] = useState<ScoreEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [errorType, setErrorType] = useState<'expired' | 'not-found' | null>(null);
   const [editingScore, setEditingScore] = useState<ScoreEntry | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
@@ -39,11 +69,24 @@ export default function HistoryPage({ params }: { params: { token: string } }) {
     try {
       setLoading(true);
       setError('');
+      setErrorType(null);
 
       // Verify token and get event
       const eventRes = await fetch(`/api/event-by-token/${token}`, {
         headers: { 'X-ADMIN-TOKEN': token, 'X-SCORER-TOKEN': token }
       });
+
+      if (eventRes.status === 410) {
+        setErrorType('expired');
+        setLoading(false);
+        return;
+      }
+      
+      if (eventRes.status === 404) {
+        setErrorType('not-found');
+        setLoading(false);
+        return;
+      }
 
       if (!eventRes.ok) {
         throw new Error('Invalid token');
@@ -124,6 +167,22 @@ export default function HistoryPage({ params }: { params: { token: string } }) {
           <div className="w-12 h-12 border-4 border-purple-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
           <p className="text-gray-600">Loading history...</p>
         </div>
+      </div>
+    );
+  }
+
+  if (errorType === 'expired') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-purple-50 to-amber-50 flex items-center justify-center p-4">
+        <ExpiredEvent showWaitlist={true} />
+      </div>
+    );
+  }
+
+  if (errorType === 'not-found') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-purple-50 to-amber-50 flex items-center justify-center p-4">
+        <EventNotFoundError />
       </div>
     );
   }
