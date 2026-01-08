@@ -31,6 +31,8 @@ export interface Event {
   scorer_token: string;
   public_token: string;
   status: 'active' | 'completed' | 'expired' | 'archived';
+  is_finalized: boolean;
+  finalized_at: Date | null;
   created_at: Date;
   updated_at: Date;
 }

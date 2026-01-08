@@ -10,6 +10,7 @@ export default function CreateEventPage() {
   const [duration, setDuration] = useState<'24h' | '48h' | '7d' | 'custom'>('24h');
   const [startAt, setStartAt] = useState('2026-01-08T09:00');
   const [retention, setRetention] = useState<'manual' | 'auto_expire' | 'archive'>('manual');
+  const [numberOfDays, setNumberOfDays] = useState(3);
   const [result, setResult] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -48,6 +49,7 @@ export default function CreateEventPage() {
           start_at: new Date(startAt).toISOString(),
           end_at: endTime,
           retention_policy: retention,
+          number_of_days: mode === 'camp' ? numberOfDays : undefined,
         }),
       });
 
@@ -125,6 +127,53 @@ export default function CreateEventPage() {
             </div>
           </div>
 
+          {/* Camp Days Configuration (only for camp mode) */}
+          {mode === 'camp' && (
+            <div className="bg-gradient-to-br from-indigo-50 to-indigo-100 border border-indigo-200 rounded-xl p-6 shadow-md hover:shadow-lg transition-shadow">
+              <label className="block text-indigo-900 font-semibold mb-3 text-lg">
+                🏕️ Number of Days
+              </label>
+              <p className="text-sm text-indigo-700 mb-4">How many days will your camp event last?</p>
+              <div className="flex items-center gap-4">
+                <button
+                  type="button"
+                  onClick={() => setNumberOfDays(Math.max(1, numberOfDays - 1))}
+                  className="px-4 py-2 bg-white border-2 border-indigo-300 rounded-lg font-bold text-indigo-700 hover:bg-indigo-50 transition"
+                >
+                  -
+                </button>
+                <div className="flex-1 text-center">
+                  <div className="text-4xl font-bold text-indigo-900">{numberOfDays}</div>
+                  <div className="text-sm text-indigo-600 mt-1">{numberOfDays === 1 ? 'Day' : 'Days'}</div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setNumberOfDays(Math.min(30, numberOfDays + 1))}
+                  className="px-4 py-2 bg-white border-2 border-indigo-300 rounded-lg font-bold text-indigo-700 hover:bg-indigo-50 transition"
+                >
+                  +
+                </button>
+              </div>
+              <div className="mt-4 grid grid-cols-4 gap-2">
+                {[3, 5, 7, 14].map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => setNumberOfDays(preset)}
+                    className={`px-3 py-2 rounded-lg border-2 text-sm font-medium transition ${
+                      numberOfDays === preset
+                        ? 'border-indigo-500 bg-indigo-100 text-indigo-900'
+                        : 'border-indigo-200 bg-white text-indigo-700 hover:border-indigo-300'
+                    }`}
+                  >
+                    {preset} days
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 
           {/* Duration Selector Card */}
           <div className="bg-gradient-to-br from-amber-50 to-amber-100 border border-amber-200 rounded-xl p-6 shadow-md hover:shadow-lg transition-shadow">
             <label className="block text-amber-900 font-semibold mb-3 text-lg">

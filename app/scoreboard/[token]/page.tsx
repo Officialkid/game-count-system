@@ -12,6 +12,14 @@ interface Team {
   previousRank?: number;
 }
 
+interface DayScore {
+  day_number: number;
+  day_label: string | null;
+  team_name: string;
+  team_id: string;
+  points: number;
+}
+
 interface HistoryItem {
   id: number;
   game_number: number;
@@ -24,6 +32,7 @@ interface HistoryItem {
 interface EventMeta {
   id: number;
   event_name: string;
+  mode?: string;
   theme_color: string;
   logo_url: string | null;
   created_at: string;
@@ -40,6 +49,8 @@ export default function PublicScoreboardPage({ params }: { params: { token: stri
   const [event, setEvent] = useState<EventMeta | null>(null);
   const [teams, setTeams] = useState<Team[]>([]);
   const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [scoresByDay, setScoresByDay] = useState<DayScore[]>([]);
+  const [selectedDay, setSelectedDay] = useState<number | 'cumulative'>('cumulative');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -48,37 +59,40 @@ export default function PublicScoreboardPage({ params }: { params: { token: stri
   const prevTeamsRef = useRef<Map<number, number>>(new Map());
   const [lastUpdate, setLastUpdate] = useState<number>(Date.now());
   const [reloadCounter, setReloadCounter] = useState(0);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // Auto-refresh every 5-8 seconds
-  useEffect(() => {
-    let mounted = true;
-    const load = async () => {
-      try {
-        setError('');
-        // Quick token verify
-        const v = await fetch(`/api/public/verify/${token}`);
-        if (v.status === 404) {
-          if (mounted) { setInvalid('Invalid or expired link'); setLoading(false); }
-          return;
-        }
-        if (!v.ok && v.status >= 500) {
-          if (mounted) { setError('Server error verifying link. Please try again later.'); setLoading(false); }
-          return;
-        }
+  // Data loading function
+  const loadData = async (isManual = false) => {
+    if (isManual) setIsRefreshing(true);
+    try {
+      setError('');
+      // Quick token verify
+      const v = await fetch(`/api/public/verify/${token}`);
+      if (v.status === 404) {
+        setInvalid('Invalid or expired link');
+        setLoading(false);
+        return;
+      }
+      if (!v.ok && v.status >= 500) {
+        setError('Server error verifying link. Please try again later.');
+        setLoading(false);
+        return;
+      }
         // Fetch unified public data
-        const res = await fetch(`/api/public/scoreboard/${token}`);
+        const res = await fetch(`/api/public/${token}`);
         if (!res.ok) {
           if (res.status >= 500) {
             throw new Error('Server error');
           }
           throw new Error('Failed to load');
         }
-        const payload = await res.json();
-        const data = payload?.data ?? payload;
-        if (!mounted) return;
-        
-        setEvent(data.event || null);
+      const payload = await res.json();
+      const data = payload?.data ?? payload;
+      
+      setEvent(data.event || null);
         const newTeams = data.teams || [];
+        const scoresByDayData = data.scores_by_day || [];
+        setScoresByDay(scoresByDayData);
         
         // Track rank changes for animation
         const changes: RankChange[] = [];
@@ -103,23 +117,51 @@ export default function PublicScoreboardPage({ params }: { params: { token: stri
         
         setTeams(newTeams);
         const scores = data.scores || data.history || [];
-        setHistory(scores);
-        setInvalid(null);
-        setLastUpdate(Date.now());
-      } catch (e: any) {
-        console.error(e);
-        if (mounted) {
-          const msg = e?.message === 'Server error' ? 'Server error. Please try again later.' : 'Network error. Please check your connection and retry.';
-          setError(msg);
-        }
-      } finally {
-        if (mounted) setLoading(false);
-      }
-    };
-    load();
-    const id = setInterval(load, 6000); // 6 second refresh
-    return () => { mounted = false; clearInterval(id); };
+      setHistory(scores);
+      setInvalid(null);
+      setLastUpdate(Date.now());
+    } catch (e: any) {
+      console.error(e);
+      const msg = e?.message === 'Server error' ? 'Server error. Please try again later.' : 'Network error. Please check your connection and retry.';
+      setError(msg);
+    } finally {
+      setLoading(false);
+      if (isManual) setIsRefreshing(false);
+    }
+  };
+
+  // Manual refresh handler
+  const handleManualRefresh = () => {
+    loadData(true);
+  };
+
+  // Auto-refresh every 5 minutes
+  useEffect(() => {
+    loadData();
+    const id = setInterval(() => loadData(), 300000); // 5 minute refresh (300000ms)
+    return () => { clearInterval(id); };
   }, [token, reloadCounter]);
+
+  // Format relative time for last update
+  const getRelativeTime = (timestamp: number): string => {
+    const seconds = Math.floor((Date.now() - timestamp) / 1000);
+    if (seconds < 60) return 'just now';
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes}m ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h ago`;
+    return 'a while ago';
+  };
+
+  const [relativeTime, setRelativeTime] = useState(getRelativeTime(lastUpdate));
+
+  // Update relative time every 10 seconds
+  useEffect(() => {
+    const id = setInterval(() => {
+      setRelativeTime(getRelativeTime(lastUpdate));
+    }, 10000);
+    return () => clearInterval(id);
+  }, [lastUpdate]);
 
   // Simple polling-based updates (no SSE needed)
   const statusBadge = useMemo(() => {
@@ -144,6 +186,45 @@ export default function PublicScoreboardPage({ params }: { params: { token: stri
       return a.team_name.localeCompare(b.team_name);
     });
   }, [teams]);
+
+  // Get unique days from scores
+  const availableDays = useMemo(() => {
+    const days = new Set<number>();
+    scoresByDay.forEach(score => days.add(score.day_number));
+    return Array.from(days).sort((a, b) => a - b);
+  }, [scoresByDay]);
+
+  // Compute per-day rankings
+  const dayRankings = useMemo(() => {
+    if (selectedDay === 'cumulative') return sortedTeams;
+    
+    // Group scores by team for selected day
+    const teamScores = new Map<string, number>();
+    scoresByDay
+      .filter(score => score.day_number === selectedDay)
+      .forEach(score => {
+        const current = teamScores.get(score.team_name) || 0;
+        teamScores.set(score.team_name, current + score.points);
+      });
+    
+    // Create ranking from day scores
+    const rankings = Array.from(teamScores.entries())
+      .map(([team_name, points]) => {
+        const team = teams.find(t => t.team_name === team_name);
+        return {
+          id: team?.id || 0,
+          team_name,
+          avatar_url: team?.avatar_url || null,
+          total_points: points,
+        };
+      })
+      .sort((a, b) => {
+        if (b.total_points !== a.total_points) return b.total_points - a.total_points;
+        return a.team_name.localeCompare(b.team_name);
+      });
+    
+    return rankings;
+  }, [selectedDay, scoresByDay, teams, sortedTeams]);
 
   const rankEmoji = (rank: number) => (rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `#${rank}`);
   
@@ -278,13 +359,24 @@ export default function PublicScoreboardPage({ params }: { params: { token: stri
                     {statusBadge.label}
                   </Badge>
                   <span className="text-sm text-gray-600 flex items-center gap-1.5">
-                    Refreshes every 6s
+                    ⏱️ Auto-refresh: 5m
+                  </span>
+                  <span className="text-xs text-gray-500 flex items-center gap-1">
+                    Updated {relativeTime}
                   </span>
                 </div>
               </div>
             </div>
             
             <div className="flex items-center gap-3">
+              <button 
+                onClick={handleManualRefresh}
+                disabled={isRefreshing}
+                className="px-4 py-2 rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                <span className={isRefreshing ? 'animate-spin' : ''}>🔄</span>
+                {isRefreshing ? 'Refreshing...' : 'Refresh'}
+              </button>
               <button 
                 onClick={toggleFullscreen} 
                 className="px-4 py-2 rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors text-sm font-medium"
@@ -303,6 +395,40 @@ export default function PublicScoreboardPage({ params }: { params: { token: stri
 
       {/* Main Content */}
       <div className="max-w-6xl mx-auto px-4 py-8">
+        {/* Camp Day Tabs (only for camp mode) */}
+        {event?.mode === 'camp' && availableDays.length > 0 && (
+          <div className="mb-6 bg-white rounded-xl shadow-lg p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-sm font-semibold text-gray-700">📅 View Scores:</span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => setSelectedDay('cumulative')}
+                className={`px-4 py-2 rounded-lg font-medium transition-all ${
+                  selectedDay === 'cumulative'
+                    ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-md scale-105'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                🏆 Cumulative Total
+              </button>
+              {availableDays.map((day) => (
+                <button
+                  key={day}
+                  onClick={() => setSelectedDay(day)}
+                  className={`px-4 py-2 rounded-lg font-medium transition-all ${
+                    selectedDay === day
+                      ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-md scale-105'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  Day {day}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Leaderboard - Main Section */}
           <div className="lg:col-span-2 space-y-6">
@@ -312,17 +438,30 @@ export default function PublicScoreboardPage({ params }: { params: { token: stri
               }}>
                 <h2 className="text-2xl font-bold flex items-center gap-2">
                   🏆 Team Leaderboard
+                  {selectedDay !== 'cumulative' && (
+                    <span className="text-sm font-normal opacity-90">• Day {selectedDay}</span>
+                  )}
                 </h2>
-                <p className="text-sm opacity-90 mt-1">Ranked by total points • Updated live</p>
+                <p className="text-sm opacity-90 mt-1">
+                  {selectedDay === 'cumulative' 
+                    ? 'Ranked by total points • Updated live'
+                    : `Day ${selectedDay} rankings only`
+                  }
+                </p>
               </div>
               
               <div className="p-6 space-y-3">
-                {sortedTeams.length === 0 ? (
+                {dayRankings.length === 0 ? (
                   <div className="text-center py-12">
-                    <p className="text-gray-500 text-lg">Waiting for teams to join...</p>
+                    <p className="text-gray-500 text-lg">
+                      {selectedDay === 'cumulative' 
+                        ? 'Waiting for teams to join...'
+                        : `No scores yet for Day ${selectedDay}`
+                      }
+                    </p>
                   </div>
                 ) : (
-                  sortedTeams.map((team, idx) => {
+                  dayRankings.map((team, idx) => {
                     const isTopThree = idx < 3;
                     const isAnimating = rankChanges.some(c => c.teamId === team.id);
                     

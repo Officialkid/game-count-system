@@ -53,7 +53,8 @@ export const CreateScoreSchema = z.object({
   day_id: z.string().uuid().nullable().optional(),
   team_id: z.string().uuid(),
   category: z.string().min(1).max(100),
-  points: z.number().int().min(0),
+  // allow negative points for penalties/deductions
+  points: z.number().int(),
 });
 
 // Token validation

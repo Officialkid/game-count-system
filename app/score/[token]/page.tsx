@@ -2,6 +2,17 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { WifiOff, Wifi, RefreshCw, LogOut } from 'lucide-react';
+import { 
+  saveToCache, 
+  loadFromCache, 
+  queueScore, 
+  getQueue, 
+  clearQueue,
+  removeFromQueue,
+  updateCachedTeamPoints,
+  type QueuedScore
+} from '@/lib/offline-manager';
 
 interface Team {
   id: string;
@@ -31,6 +42,44 @@ export default function ScorerPage({ params }: { params: { token: string } }) {
   const [submitting, setSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
 
+  // Offline state
+  const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
+  const [queuedScores, setQueuedScores] = useState<QueuedScore[]>([]);
+  const [syncing, setSyncing] = useState(false);
+  const [usingCache, setUsingCache] = useState(false);
+
+  // Update queue count from localStorage
+  useEffect(() => {
+    const updateQueueCount = () => {
+      setQueuedScores(getQueue());
+    };
+    updateQueueCount();
+    const interval = setInterval(updateQueueCount, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Online/offline listeners
+  useEffect(() => {
+    const handleOnline = () => {
+      console.log('Connection restored');
+      setIsOnline(true);
+      syncQueue();
+    };
+    
+    const handleOffline = () => {
+      console.log('Connection lost');
+      setIsOnline(false);
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
   useEffect(() => {
     loadData();
   }, [token]);
@@ -39,6 +88,7 @@ export default function ScorerPage({ params }: { params: { token: string } }) {
     try {
       setLoading(true);
       setError('');
+      setUsingCache(false);
 
       // Verify token and get event
       const eventRes = await fetch(`/api/event-by-token/${token}`, {
@@ -65,17 +115,128 @@ export default function ScorerPage({ params }: { params: { token: string } }) {
         if (loadedTeams.length > 0 && !selectedTeamId) {
           setSelectedTeamId(loadedTeams[0].id);
         }
+        
+        // Save to cache on successful load
+        saveToCache(token, eventInfo, loadedTeams);
       }
     } catch (err: any) {
-      setError(err.message || 'Failed to load event');
+      console.error('Load error:', err);
+      
+      // Try to load from cache if network error
+      const cached = loadFromCache(token);
+      if (cached) {
+        console.log('Loading from cache...');
+        setEvent(cached.event);
+        setTeams(cached.teams);
+        setUsingCache(true);
+        setError('Using cached data - network unavailable');
+        if (cached.teams.length > 0 && !selectedTeamId) {
+          setSelectedTeamId(cached.teams[0].id);
+        }
+      } else {
+        setError(err.message || 'Failed to load event');
+      }
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Sync queued scores when online
+  const syncQueue = async () => {
+    const queue = getQueue();
+    if (queue.length === 0) return;
+
+    setSyncing(true);
+    console.log(`Syncing ${queue.length} queued scores...`);
+
+    for (const queuedScore of queue) {
+      try {
+        if (queuedScore.type === 'bulk') {
+          // Bulk submission
+          await fetch('/api/scores/bulk', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+              event_id: queuedScore.eventId,
+              category: queuedScore.category,
+              items: queuedScore.bulkItems || []
+            })
+          });
+        } else {
+          // Single or quick submission
+          await fetch(`/api/events/${queuedScore.eventId}/scores`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-SCORER-TOKEN': token
+            },
+            body: JSON.stringify({
+              team_id: queuedScore.teamId,
+              day_number: queuedScore.dayNumber,
+              category: queuedScore.category,
+              points: queuedScore.points
+            })
+          });
+        }
+        
+        // Remove from queue on success
+        removeFromQueue(queuedScore.id);
+      } catch (error) {
+        console.error('Failed to sync score:', error);
+        // Keep in queue to retry later
+      }
+    }
+
+    setSyncing(false);
+    
+    // Reload data after sync
+    if (getQueue().length === 0) {
+      setSuccessMessage('All scores synced successfully!');
+      setTimeout(() => setSuccessMessage(''), 3000);
+      loadData();
     }
   };
 
   const handleSubmitScore = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!event || !selectedTeamId || !points) return;
+
+    const pointsValue = parseInt(points);
+    const categoryValue = category.trim() || 'Score';
+    
+    // If offline, queue the score
+    if (!isOnline) {
+      queueScore({
+        eventId: event.id,
+        teamId: selectedTeamId,
+        points: pointsValue,
+        category: categoryValue,
+        dayNumber: 1,
+        type: 'single'
+      });
+      
+      // Update cached team points for optimistic UI
+      updateCachedTeamPoints(token, selectedTeamId, pointsValue);
+      
+      // Update local state
+      setTeams(prevTeams => prevTeams.map(team => 
+        team.id === selectedTeamId 
+          ? { ...team, total_points: (team.total_points || 0) + pointsValue }
+          : team
+      ));
+      
+      const teamName = teams.find(t => t.id === selectedTeamId)?.name || 'Team';
+      setSuccessMessage(`✓ Queued: ${pointsValue} points for ${teamName} (will sync when online)`);
+      setTimeout(() => setSuccessMessage(''), 5000);
+      
+      // Reset form
+      setPoints('');
+      setCategory('');
+      return;
+    }
 
     try {
       setSubmitting(true);
@@ -90,8 +251,8 @@ export default function ScorerPage({ params }: { params: { token: string } }) {
         body: JSON.stringify({
           team_id: selectedTeamId,
           day_number: 1,
-          category: category.trim() || 'Score',
-          points: parseInt(points)
+          category: categoryValue,
+          points: pointsValue
         })
       });
 
@@ -119,6 +280,33 @@ export default function ScorerPage({ params }: { params: { token: string } }) {
 
   const quickAddPoints = async (teamId: string, amount: number) => {
     if (!event) return;
+
+    // If offline, queue the score
+    if (!isOnline) {
+      queueScore({
+        eventId: event.id,
+        teamId: teamId,
+        points: amount,
+        category: 'Quick Add',
+        dayNumber: 1,
+        type: 'quick'
+      });
+      
+      // Update cached team points for optimistic UI
+      updateCachedTeamPoints(token, teamId, amount);
+      
+      // Update local state
+      setTeams(prevTeams => prevTeams.map(team => 
+        team.id === teamId 
+          ? { ...team, total_points: (team.total_points || 0) + amount }
+          : team
+      ));
+      
+      const teamName = teams.find(t => t.id === teamId)?.name || 'Team';
+      setSuccessMessage(`✓ Queued: ${amount > 0 ? '+' : ''}${amount} points for ${teamName}`);
+      setTimeout(() => setSuccessMessage(''), 3000);
+      return;
+    }
 
     try {
       const res = await fetch(`/api/events/${event.id}/scores`, {
@@ -202,20 +390,111 @@ export default function ScorerPage({ params }: { params: { token: string } }) {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8 px-4">
-      <div className="max-w-4xl mx-auto space-y-6">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-purple-50 to-amber-50 py-10 px-4">
+      <div className="max-w-4xl mx-auto space-y-8">
+        {/* Offline/Sync Status Banner */}
+        {!isOnline && (
+          <div className="rounded-xl bg-yellow-50 border-2 border-yellow-400 p-4">
+            <div className="flex items-center gap-3">
+              <WifiOff className="w-6 h-6 text-yellow-600" />
+              <div className="flex-1">
+                <p className="font-semibold text-yellow-900">Offline Mode</p>
+                <p className="text-sm text-yellow-700">
+                  Scores will be queued and synced when connection is restored
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+        
+        {syncing && (
+          <div className="rounded-xl bg-blue-50 border-2 border-blue-400 p-4">
+            <div className="flex items-center gap-3">
+              <RefreshCw className="w-6 h-6 text-blue-600 animate-spin" />
+              <div className="flex-1">
+                <p className="font-semibold text-blue-900">Syncing Scores...</p>
+                <p className="text-sm text-blue-700">
+                  Uploading {queuedScores.length} queued score(s) to server
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+        
+        {queuedScores.length > 0 && !syncing && (
+          <div className="rounded-xl bg-orange-50 border-2 border-orange-400 p-4">
+            <div className="flex items-center gap-3">
+              <RefreshCw className="w-6 h-6 text-orange-600" />
+              <div className="flex-1">
+                <p className="font-semibold text-orange-900">
+                  {queuedScores.length} Score(s) Pending
+                </p>
+                <p className="text-sm text-orange-700">
+                  {isOnline 
+                    ? 'Will sync automatically' 
+                    : 'Waiting for connection to sync'}
+                </p>
+              </div>
+              {isOnline && (
+                <button
+                  onClick={syncQueue}
+                  className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition"
+                >
+                  Sync Now
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {usingCache && (
+          <div className="rounded-xl bg-gray-50 border-2 border-gray-400 p-4">
+            <div className="flex items-center gap-3">
+              <WifiOff className="w-5 h-5 text-gray-600" />
+              <p className="text-sm text-gray-700">
+                Showing cached data - {isOnline ? 'reconnecting...' : 'offline'}
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Header */}
-        <div className="bg-white rounded-lg shadow p-6">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">{event?.name}</h1>
-          <p className="text-gray-600">Score Entry Interface</p>
-          <div className="mt-4 pt-4 border-t">
-            <a
-              href={`/scoreboard/${event?.public_token}`}
-              target="_blank"
-              className="text-sm text-blue-600 hover:underline"
-            >
-              View Live Scoreboard →
-            </a>
+        <div className="relative overflow-hidden rounded-2xl bg-white shadow-lg">
+          <div className="absolute inset-0 bg-gradient-to-r from-blue-600/10 via-purple-600/10 to-pink-500/10" />
+          <div className="relative p-8">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-gradient-to-r from-blue-600 to-purple-600 flex items-center justify-center text-white font-bold">S</div>
+                <h1 className="text-3xl md:text-4xl font-extrabold text-gray-900 tracking-tight">{event?.name}</h1>
+              </div>
+              {/* Online/Offline Indicator */}
+              <div className={`flex items-center gap-2 px-3 py-1 rounded-full ${
+                isOnline ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+              }`}>
+                {isOnline ? (
+                  <><Wifi className="w-4 h-4" /><span className="text-sm font-medium">Online</span></>
+                ) : (
+                  <><WifiOff className="w-4 h-4" /><span className="text-sm font-medium">Offline</span></>
+                )}
+              </div>
+            </div>
+            <p className="text-gray-600">Score Entry Interface</p>
+            <div className="mt-6 flex flex-wrap gap-3">
+              <a
+                href={`/scoreboard/${event?.public_token}`}
+                target="_blank"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 text-white hover:bg-blue-700 transition"
+              >
+                <span>View Live Scoreboard</span>
+                <span>→</span>
+              </a>
+              <a
+                href={`/history/${token}`}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 transition"
+              >
+                <span>📜 Score History</span>
+              </a>
+            </div>
           </div>
         </div>
 
@@ -227,8 +506,9 @@ export default function ScorerPage({ params }: { params: { token: string } }) {
         )}
 
         {/* Score Entry Form */}
-        <div className="bg-white rounded-lg shadow p-6">
-          <h2 className="text-xl font-bold mb-4">Add Score</h2>
+        <div className="bg-white rounded-2xl shadow p-6 hover:shadow-lg transition-shadow">
+          <h2 className="text-xl font-bold mb-2">Add Score</h2>
+          <p className="text-sm text-gray-600 mb-4">Enter positive points for gains or negative values for penalties/deductions.</p>
           <form onSubmit={handleSubmitScore} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -237,7 +517,7 @@ export default function ScorerPage({ params }: { params: { token: string } }) {
               <select
                 value={selectedTeamId}
                 onChange={(e) => setSelectedTeamId(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
                 required
                 disabled={submitting}
               >
@@ -259,22 +539,21 @@ export default function ScorerPage({ params }: { params: { token: string } }) {
                   value={points}
                   onChange={(e) => setPoints(e.target.value)}
                   placeholder="50"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
                   required
-                  min="0"
                   disabled={submitting}
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Category (optional)
+                  Reason / Game Name <span className="text-gray-400">(optional)</span>
                 </label>
                 <input
                   type="text"
                   value={category}
                   onChange={(e) => setCategory(e.target.value)}
-                  placeholder="Game 1"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="e.g., Round 1, Penalty, Bonus Game"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
                   disabled={submitting}
                 />
               </div>
@@ -283,7 +562,7 @@ export default function ScorerPage({ params }: { params: { token: string } }) {
             <button
               type="submit"
               disabled={submitting || !selectedTeamId || !points}
-              className="w-full px-6 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-semibold text-lg"
+              className="w-full px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl hover:shadow-lg hover:scale-[1.02] transition disabled:opacity-50 disabled:cursor-not-allowed font-semibold text-lg"
             >
               {submitting ? 'Adding...' : 'Add Score'}
             </button>
@@ -291,17 +570,17 @@ export default function ScorerPage({ params }: { params: { token: string } }) {
         </div>
 
         {/* Quick Add Section */}
-        <div className="bg-white rounded-lg shadow p-6">
+        <div className="bg-white rounded-2xl shadow p-6">
           <h2 className="text-xl font-bold mb-4">Quick Add Points</h2>
           <div className="space-y-4">
             {teams.map((team) => (
               <div
                 key={team.id}
-                className="flex items-center justify-between p-4 bg-gray-50 rounded-lg"
+                className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-transform hover:scale-[1.01]"
               >
                 <div className="flex items-center gap-3">
                   <div
-                    className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm"
+                    className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm shadow"
                     style={{ backgroundColor: team.color }}
                   >
                     {team.total_points || 0}
@@ -312,13 +591,17 @@ export default function ScorerPage({ params }: { params: { token: string } }) {
                   </div>
                 </div>
                 <div className="flex gap-2">
-                  {[1, 5, 10, 25].map((amount) => (
+                  {[-25, -10, -5, -1, 1, 5, 10, 25].map((amount) => (
                     <button
                       key={amount}
                       onClick={() => quickAddPoints(team.id, amount)}
-                      className="px-3 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 font-medium text-sm"
+                      className={`px-3 py-1 rounded font-medium text-sm transition ${
+                        amount < 0
+                          ? 'bg-red-100 text-red-700 hover:bg-red-200'
+                          : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                      }`}
                     >
-                      +{amount}
+                      {amount > 0 ? `+${amount}` : `${amount}`}
                     </button>
                   ))}
                 </div>
@@ -326,7 +609,148 @@ export default function ScorerPage({ params }: { params: { token: string } }) {
             ))}
           </div>
         </div>
+
+        {/* Bulk Add for All Teams */}
+        <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl shadow p-6 border border-purple-200">
+          <h2 className="text-xl font-bold mb-2">🎯 Bulk Score Entry</h2>
+          <p className="text-sm text-gray-700 mb-4">Enter points for multiple teams at once. Use negative values for penalties or deductions. Perfect for recording all teams' scores from a single game!</p>
+          <BulkAddForm 
+            eventId={event?.id || ''} 
+            token={token} 
+            teams={teams} 
+            onDone={() => loadData()} 
+            isOnline={isOnline}
+            onQueueScore={(bulkItems, category) => {
+              queueScore({
+                eventId: event?.id || '',
+                teamId: '', // not needed for bulk
+                points: 0, // not needed for bulk
+                category: category,
+                dayNumber: 1,
+                type: 'bulk',
+                bulkItems: bulkItems
+              });
+              
+              // Update local state optimistically
+              setTeams(prevTeams => prevTeams.map(team => {
+                const item = bulkItems.find(i => i.team_id === team.id);
+                if (item) {
+                  return { ...team, total_points: (team.total_points || 0) + item.points };
+                }
+                return team;
+              }));
+            }}
+          />
+        </div>
       </div>
     </div>
+  );
+}
+
+interface BulkAddFormProps {
+  eventId: string;
+  token: string;
+  teams: Team[];
+  onDone: () => void;
+  isOnline: boolean;
+  onQueueScore: (items: Array<{ team_id: string; points: number }>, category: string) => void;
+}
+
+function BulkAddForm({ eventId, token, teams, onDone, isOnline, onQueueScore }: BulkAddFormProps) {
+  const [category, setCategory] = useState('Bulk Entry');
+  const [values, setValues] = useState<Record<string, string>>({});
+  const [submitting, setSubmitting] = useState(false);
+  const [message, setMessage] = useState('');
+
+  const setTeamValue = (teamId: string, val: string) => {
+    setValues((prev) => ({ ...prev, [teamId]: val }));
+  };
+
+  const submitBulk = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!eventId) return;
+    const items = teams
+      .map((t) => ({ team_id: t.id, points: parseInt(values[t.id] ?? '0', 10) }))
+      .filter((i) => !Number.isNaN(i.points) && i.points !== 0);
+    if (items.length === 0) {
+      setMessage('Enter at least one non-zero value.');
+      return;
+    }
+    
+    // If offline, queue the bulk scores
+    if (!isOnline) {
+      onQueueScore(items, category);
+      setMessage(`✓ Queued ${items.length} entries (will sync when online)`);
+      setValues({});
+      setTimeout(() => setMessage(''), 5000);
+      return;
+    }
+    
+    try {
+      setSubmitting(true);
+      setMessage('');
+      const res = await fetch('/api/scores/bulk', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ event_id: eventId, category, items }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Bulk add failed');
+      }
+      setMessage(`✅ Added ${items.length} entries.`);
+      setValues({});
+      onDone();
+    } catch (err: any) {
+      setMessage(err.message || 'Bulk add failed');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <form onSubmit={submitBulk} className="space-y-4">
+      <div>
+        <label className="block text-sm font-medium text-gray-900 mb-1">Reason / Game Name</label>
+        <input
+          type="text"
+          value={category}
+          onChange={(e) => setCategory(e.target.value)}
+          placeholder="e.g., Game 1, Penalty Round, Bonus Challenge"
+          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 bg-white"
+        />
+      </div>
+      <div className="bg-white rounded-lg p-4 space-y-3">
+        {teams.map((t) => (
+          <div key={t.id} className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-center p-2 hover:bg-gray-50 rounded transition">
+            <div className="font-semibold text-gray-900 flex items-center gap-2">
+              <span className="w-6 h-6 rounded-full text-xs flex items-center justify-center text-white" style={{ backgroundColor: t.color }}>{t.name.charAt(0)}</span>
+              {t.name}
+            </div>
+            <input
+              type="number"
+              value={values[t.id] ?? ''}
+              onChange={(e) => setTeamValue(t.id, e.target.value)}
+              placeholder="0"
+              className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 bg-white"
+            />
+            <div className="text-sm text-gray-600">Current: <strong>{t.total_points || 0}</strong> pts</div>
+          </div>
+        ))}
+      </div>
+      {message && (
+        <div className={`text-sm font-medium p-3 rounded-lg ${message.startsWith('✅') ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>{message}</div>
+      )}
+      <button
+        type="submit"
+        disabled={submitting}
+        className="w-full px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl hover:shadow-lg hover:scale-[1.02] transition disabled:opacity-50 disabled:cursor-not-allowed font-semibold"
+      >
+        {submitting ? 'Submitting…' : '✅ Submit Bulk Scores'}
+      </button>
+    </form>
   );
 }

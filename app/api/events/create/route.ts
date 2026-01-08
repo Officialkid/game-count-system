@@ -6,7 +6,7 @@
  */
 
 import { NextResponse } from 'next/server';
-import { createEvent } from '@/lib/db-access';
+import { createEvent, createDayIfNotExists } from '@/lib/db-access';
 import { CreateEventSchema } from '@/lib/db-validations';
 import { successResponse, errorResponse, ERROR_STATUS_MAP } from '@/lib/api-responses';
 import { handleCors } from '@/lib/cors';
@@ -60,10 +60,26 @@ export async function POST(request: Request) {
       console.log('[CREATE EVENT] Event created successfully:', {
         id: event.id,
         name: event.name,
+        mode: event.mode,
         admin_token: event.admin_token?.substring(0, 8) + '...',
         scorer_token: event.scorer_token?.substring(0, 8) + '...',
         public_token: event.public_token?.substring(0, 8) + '...',
       });
+
+      // Create event days if this is a camp event with specified days
+      if (event.mode === 'camp' && body.number_of_days) {
+        const numberOfDays = parseInt(body.number_of_days, 10);
+        console.log(`[CREATE EVENT] Creating ${numberOfDays} days for camp event`);
+        
+        for (let dayNum = 1; dayNum <= numberOfDays; dayNum++) {
+          await createDayIfNotExists({
+            event_id: event.id,
+            day_number: dayNum,
+            label: `Day ${dayNum}`
+          });
+        }
+        console.log(`[CREATE EVENT] Created ${numberOfDays} event days`);
+      }
     } catch (dbError: any) {
       console.error('[CREATE EVENT] Database error:', {
         message: dbError?.message,
