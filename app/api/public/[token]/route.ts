@@ -1,6 +1,6 @@
 /**
  * Public Scoreboard API
- * GET /api/public/{public_token}/scores
+ * GET /api/public/{token}/scores
  * 
  * UNAUTHENTICATED - No headers required
  * Returns complete event data with teams, scores, days, and totals
@@ -28,7 +28,7 @@ export async function GET(
   try {
     const { token } = params;
     
-    // Resolve event ONLY via public_token - no authentication required
+    // Resolve event ONLY via token - no authentication required
     const event = await getEventByToken(token, 'public');
     
     // Token not found - friendly 404

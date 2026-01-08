@@ -1,10 +1,10 @@
 /**
  * Public Scoreboard API
- * GET /api/public/{public_token}/scores
- * 
+ * GET /api/public/{token}/scores
+ *
  * UNAUTHENTICATED - No headers required
  * Returns complete event data with teams, scores, days, and totals
- * 
+ *
  * Responses:
  * - 200: Success with full event data
  * - 404: Token not found (friendly message)
@@ -13,36 +13,36 @@
  */
 
 import { NextResponse } from 'next/server';
-import { 
-  getEventByToken, 
-  listTeamsWithTotals, 
+import {
+  getEventByToken,
+  listTeamsWithTotals,
   listScores,
   listScoresByDay,
-  listEventDays
+  listEventDays,
 } from '@/lib/db-access';
 
 export async function GET(
   request: Request,
-  { params }: { params: { public_token: string } }
+  { params }: { params: { token: string } }
 ) {
   try {
-    const { public_token } = params;
-    
-    // Resolve event ONLY via public_token - no authentication required
-    const event = await getEventByToken(public_token, 'public');
-    
+    const { token } = params;
+
+    // Resolve event ONLY via token - no authentication required
+    const event = await getEventByToken(token, 'public');
+
     // Token not found - friendly 404
     if (!event) {
       return NextResponse.json(
-        { 
-          success: false, 
+        {
+          success: false,
           error: 'Event not found',
-          message: 'This event link is invalid or no longer exists. Please check your link and try again.'
+          message: 'This event link is invalid or no longer exists. Please check your link and try again.',
         },
         { status: 404 }
       );
     }
-    
+
     // Event expired - 410 Gone with expiry information
     if (event.status === 'expired') {
       return NextResponse.json(
@@ -55,19 +55,19 @@ export async function GET(
         { status: 410 }
       );
     }
-    
+
     // Get complete event data in parallel
     const [teams, scores, scoresByDay, days] = await Promise.all([
       listTeamsWithTotals(event.id),
       listScores(event.id),
       event.mode === 'camp' ? listScoresByDay(event.id) : Promise.resolve([]),
-      event.mode === 'camp' ? listEventDays(event.id) : Promise.resolve([])
+      event.mode === 'camp' ? listEventDays(event.id) : Promise.resolve([]),
     ]);
-    
+
     // Calculate totals
     const totalPoints = teams.reduce((sum, team) => sum + (team.total_points || 0), 0);
     const totalScores = scores.length;
-    
+
     // Return complete event data
     return NextResponse.json({
       success: true,
@@ -85,18 +85,18 @@ export async function GET(
         teams,
         scores,
         scores_by_day: scoresByDay,
-        days: days,
+        days,
         totals: {
           total_teams: teams.length,
           total_scores: totalScores,
           total_points: totalPoints,
           total_days: days.length,
-        }
+        },
       },
     });
   } catch (error) {
     console.error('Public scoreboard error:', error);
-    
+
     return NextResponse.json(
       {
         success: false,
@@ -110,29 +110,17 @@ export async function GET(
 
 // Block all mutations - read-only endpoint
 export async function POST() {
-  return NextResponse.json(
-    { success: false, error: 'Method not allowed' },
-    { status: 405 }
-  );
+  return NextResponse.json({ success: false, error: 'Method not allowed' }, { status: 405 });
 }
 
 export async function PUT() {
-  return NextResponse.json(
-    { success: false, error: 'Method not allowed' },
-    { status: 405 }
-  );
+  return NextResponse.json({ success: false, error: 'Method not allowed' }, { status: 405 });
 }
 
 export async function DELETE() {
-  return NextResponse.json(
-    { success: false, error: 'Method not allowed' },
-    { status: 405 }
-  );
+  return NextResponse.json({ success: false, error: 'Method not allowed' }, { status: 405 });
 }
 
 export async function PATCH() {
-  return NextResponse.json(
-    { success: false, error: 'Method not allowed' },
-    { status: 405 }
-  );
+  return NextResponse.json({ success: false, error: 'Method not allowed' }, { status: 405 });
 }

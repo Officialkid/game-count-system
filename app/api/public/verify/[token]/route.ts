@@ -1,10 +1,10 @@
 /**
  * Public Token Verify API
- * GET /api/public/verify/{public_token}
- * 
+ * GET /api/public/verify/{token}
+ *
  * UNAUTHENTICATED - No headers required
  * Returns event summary if public token is valid
- * 
+ *
  * Responses:
  * - 200: Token valid, event active
  * - 404: Token not found (friendly message)
@@ -17,21 +17,21 @@ import { getEventByToken } from '@/lib/db-access';
 
 export async function GET(
   request: Request,
-  { params }: { params: { public_token: string } }
+  { params }: { params: { token: string } }
 ) {
   try {
-    const { public_token } = params;
-    
-    // Resolve event ONLY via public_token - no authentication
-    const event = await getEventByToken(public_token, 'public');
+    const { token } = params;
+
+    // Resolve event ONLY via token - no authentication
+    const event = await getEventByToken(token, 'public');
 
     // Token not found - friendly 404
     if (!event) {
       return NextResponse.json(
-        { 
-          success: false, 
+        {
+          success: false,
           error: 'Event not found',
-          message: 'This event link is invalid or no longer exists. Please check your link and try again.'
+          message: 'This event link is invalid or no longer exists. Please check your link and try again.',
         },
         { status: 404 }
       );
@@ -65,10 +65,10 @@ export async function GET(
   } catch (error) {
     console.error('Public token verify error:', error);
     return NextResponse.json(
-      { 
-        success: false, 
+      {
+        success: false,
         error: 'Server error',
-        message: 'Unable to verify event. Please try again later.'
+        message: 'Unable to verify event. Please try again later.',
       },
       { status: 500 }
     );
@@ -77,29 +77,17 @@ export async function GET(
 
 // Block all mutations - read-only endpoint
 export async function POST() {
-  return NextResponse.json(
-    { success: false, error: 'Method not allowed' },
-    { status: 405 }
-  );
+  return NextResponse.json({ success: false, error: 'Method not allowed' }, { status: 405 });
 }
 
 export async function PUT() {
-  return NextResponse.json(
-    { success: false, error: 'Method not allowed' },
-    { status: 405 }
-  );
+  return NextResponse.json({ success: false, error: 'Method not allowed' }, { status: 405 });
 }
 
 export async function DELETE() {
-  return NextResponse.json(
-    { success: false, error: 'Method not allowed' },
-    { status: 405 }
-  );
+  return NextResponse.json({ success: false, error: 'Method not allowed' }, { status: 405 });
 }
 
 export async function PATCH() {
-  return NextResponse.json(
-    { success: false, error: 'Method not allowed' },
-    { status: 405 }
-  );
+  return NextResponse.json({ success: false, error: 'Method not allowed' }, { status: 405 });
 }

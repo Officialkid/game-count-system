@@ -25,17 +25,20 @@ type EventData = {
       avatar_url: string | null;
       total_points: number;
     }>;
-    breakdown: Record<string, Array<{
-      team_name: string;
-      points: number;
-    }>>;
+    breakdown: Record<
+      string,
+      Array<{
+        team_name: string;
+        points: number;
+      }>
+    >;
   };
 };
 
-async function getEventResults(publicToken: string): Promise<EventData | null> {
+async function getEventResults(token: string): Promise<EventData | null> {
   try {
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-    const res = await fetch(`${baseUrl}/events/${publicToken}`, {
+    const res = await fetch(`${baseUrl}/events/${token}`, {
       cache: 'no-store',
     });
 
@@ -53,9 +56,9 @@ async function getEventResults(publicToken: string): Promise<EventData | null> {
 export async function generateMetadata({
   params,
 }: {
-  params: { public_token: string };
+  params: { token: string };
 }): Promise<Metadata> {
-  const data = await getEventResults(params.public_token);
+  const data = await getEventResults(params.token);
 
   if (!data?.success) {
     return {
@@ -72,9 +75,9 @@ export async function generateMetadata({
 export default async function RecapPage({
   params,
 }: {
-  params: { public_token: string };
+  params: { token: string };
 }) {
-  const data = await getEventResults(params.public_token);
+  const data = await getEventResults(params.token);
 
   if (!data?.success || !data.data) {
     notFound();
@@ -193,15 +196,9 @@ export default async function RecapPage({
                     >
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">
-                          {team.rank === 1 && (
-                            <span className="text-2xl mr-2">🥇</span>
-                          )}
-                          {team.rank === 2 && (
-                            <span className="text-2xl mr-2">🥈</span>
-                          )}
-                          {team.rank === 3 && (
-                            <span className="text-2xl mr-2">🥉</span>
-                          )}
+                          {team.rank === 1 && <span className="text-2xl mr-2">🥇</span>}
+                          {team.rank === 2 && <span className="text-2xl mr-2">🥈</span>}
+                          {team.rank === 3 && <span className="text-2xl mr-2">🥉</span>}
                           <span className="text-lg font-bold text-slate-900 dark:text-white">
                             #{team.rank}
                           </span>
@@ -223,10 +220,7 @@ export default async function RecapPage({
                         </div>
                       </td>
                       <td className="px-6 py-4 text-right">
-                        <span
-                          className="text-2xl font-bold"
-                          style={{ color: team.color }}
-                        >
+                        <span className="text-2xl font-bold" style={{ color: team.color }}>
                           {team.total_points.toLocaleString()}
                         </span>
                       </td>
@@ -238,120 +232,85 @@ export default async function RecapPage({
           </div>
         </div>
 
-        {/* Day-by-Day Breakdown */}
-        {hasMultipleDays && days.length > 0 && (
+        {/* Daily Breakdown */}
+        {hasMultipleDays && (
           <div className="mb-12">
             <h3 className="text-2xl font-bold text-slate-900 dark:text-white mb-6 flex items-center gap-3">
               <Calendar className="w-6 h-6 text-blue-500" />
-              Day-by-Day Breakdown
+              Daily Breakdown
             </h3>
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {days.map((day) => {
-                const dayScores = breakdown[`day_${day.day_number}`] || [];
-                const dayTotal = dayScores.reduce((sum, s) => sum + s.points, 0);
-
-                return (
-                  <div
-                    key={day.day_number}
-                    className="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-6 hover:shadow-xl transition-shadow"
-                  >
-                    <div className="flex items-center justify-between mb-4">
-                      <h4 className="text-lg font-bold text-slate-900 dark:text-white">
-                        {day.label || `Day ${day.day_number}`}
-                      </h4>
-                      {day.is_locked && (
-                        <span className="px-2 py-1 text-xs font-semibold bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 rounded">
-                          Locked
-                        </span>
-                      )}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {days.map((day) => (
+                <div key={day.day_number} className="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <p className="text-sm text-slate-500 dark:text-slate-400 uppercase tracking-wider">Day {day.day_number}</p>
+                      <h4 className="text-xl font-bold text-slate-900 dark:text-white">{day.label}</h4>
                     </div>
-                    <div className="space-y-3">
-                      {dayScores.length > 0 ? (
-                        <>
-                          {dayScores.map((score, idx) => (
-                            <div
-                              key={idx}
-                              className="flex items-center justify-between py-2 border-b border-slate-200 dark:border-slate-700 last:border-0"
-                            >
-                              <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                                {score.team_name}
-                              </span>
-                              <span className="text-sm font-bold text-slate-900 dark:text-white">
-                                +{score.points}
-                              </span>
-                            </div>
-                          ))}
-                          <div className="pt-3 mt-3 border-t-2 border-slate-300 dark:border-slate-600">
-                            <div className="flex items-center justify-between">
-                              <span className="text-sm font-bold text-slate-900 dark:text-white">
-                                Day Total
-                              </span>
-                              <span className="text-lg font-bold text-blue-600 dark:text-blue-400">
-                                {dayTotal}
-                              </span>
-                            </div>
-                          </div>
-                        </>
-                      ) : (
-                        <p className="text-sm text-slate-500 dark:text-slate-400 italic text-center py-4">
-                          No scores recorded
-                        </p>
-                      )}
-                    </div>
+                    {day.is_locked && (
+                      <span className="text-xs px-3 py-1 rounded-full bg-green-100 text-green-700 font-semibold">
+                        Locked
+                      </span>
+                    )}
                   </div>
-                );
-              })}
+                  <div className="space-y-3">
+                    {breakdown[`day_${day.day_number}`]?.map((item, index) => (
+                      <div key={index} className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg">
+                        <div className="flex items-center gap-3">
+                          <span className="text-sm font-semibold text-slate-500 dark:text-slate-400">#{index + 1}</span>
+                          <span className="font-semibold text-slate-900 dark:text-white">{item.team_name}</span>
+                        </div>
+                        <span className="text-lg font-bold text-blue-600 dark:text-blue-300">{item.points.toLocaleString()} pts</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         )}
 
-        {/* Event Stats */}
-        <div className="grid gap-6 md:grid-cols-3 mb-12">
-          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-6 text-center">
-            <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-blue-100 dark:bg-blue-900/30 mb-3">
-              <Target className="w-6 h-6 text-blue-600 dark:text-blue-400" />
-            </div>
-            <p className="text-3xl font-bold text-slate-900 dark:text-white mb-1">
-              {teams.length}
-            </p>
-            <p className="text-sm text-slate-600 dark:text-slate-400 font-medium">
-              Total Teams
-            </p>
-          </div>
-
-          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-6 text-center">
-            <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-green-100 dark:bg-green-900/30 mb-3">
-              <Calendar className="w-6 h-6 text-green-600 dark:text-green-400" />
-            </div>
-            <p className="text-3xl font-bold text-slate-900 dark:text-white mb-1">
-              {days.length || 1}
-            </p>
-            <p className="text-sm text-slate-600 dark:text-slate-400 font-medium">
-              {hasMultipleDays ? 'Competition Days' : 'Single Day Event'}
-            </p>
-          </div>
-
-          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-6 text-center">
-            <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-amber-100 dark:bg-amber-900/30 mb-3">
-              <Trophy className="w-6 h-6 text-amber-600 dark:text-amber-400" />
-            </div>
-            <p className="text-3xl font-bold text-slate-900 dark:text-white mb-1">
-              {rankedTeams.reduce((sum, t) => sum + t.total_points, 0).toLocaleString()}
-            </p>
-            <p className="text-sm text-slate-600 dark:text-slate-400 font-medium">
-              Total Points Awarded
-            </p>
+        {/* Points Breakdown */}
+        <div className="mb-12">
+          <h3 className="text-2xl font-bold text-slate-900 dark:text-white mb-6 flex items-center gap-3">
+            <Target className="w-6 h-6 text-purple-500" />
+            Points Breakdown
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {Object.entries(breakdown).map(([dayKey, scores]) => (
+              <div key={dayKey} className="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <p className="text-sm text-slate-500 dark:text-slate-400 uppercase tracking-wider">{dayKey.replace('day_', 'Day ')}</p>
+                    <h4 className="text-xl font-bold text-slate-900 dark:text-white">Top Scores</h4>
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  {scores.map((item, index) => (
+                    <div key={index} className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg">
+                      <div className="flex items-center gap-3">
+                        <span className="text-sm font-semibold text-slate-500 dark:text-slate-400">#{index + 1}</span>
+                        <span className="font-semibold text-slate-900 dark:text-white">{item.team_name}</span>
+                      </div>
+                      <span className="text-lg font-bold text-purple-600 dark:text-purple-300">{item.points.toLocaleString()} pts</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
           </div>
         </div>
 
-        {/* Footer */}
-        <div className="text-center text-sm text-slate-500 dark:text-slate-400">
-          <p>Event Status: <span className="capitalize font-semibold">{event.status}</span></p>
-          {event.end_at && (
-            <p className="mt-1">
-              Completed: {new Date(event.end_at).toLocaleDateString()}
-            </p>
-          )}
+        {/* Footer CTA */}
+        <div className="text-center py-8 bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-700">
+          <h3 className="text-2xl font-bold text-slate-900 dark:text-white mb-3">Want your own event page?</h3>
+          <p className="text-slate-600 dark:text-slate-300 mb-6">Create, score, and share events with your team in minutes.</p>
+          <a
+            href="/"
+            className="inline-flex items-center justify-center px-6 py-3 rounded-lg bg-gradient-to-r from-amber-500 to-amber-600 text-white font-semibold shadow-lg hover:from-amber-600 hover:to-amber-700 transition-colors"
+          >
+            Start an Event
+          </a>
         </div>
       </div>
     </div>
