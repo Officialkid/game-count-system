@@ -2,6 +2,8 @@
 
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
+import Navbar from '@/components/Navbar';
+import HeroCarousel from '@/components/HeroCarousel';
 
 export default function HomePage() {
   const [showTutorial, setShowTutorial] = useState(false);
@@ -11,7 +13,7 @@ export default function HomePage() {
     // Check if user has seen tutorial
     const hasSeenTutorial = localStorage.getItem('hasSeenTutorial');
     if (!hasSeenTutorial) {
-      setTimeout(() => setShowTutorial(true), 1000);
+      setTimeout(() => setShowTutorial(true), 2000);
     }
   }, []);
 
@@ -40,61 +42,53 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-purple-50 to-amber-50">
-      {/* Hero Section */}
-      <section className="relative pt-20 pb-12 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto text-center">
-          <div className="relative z-10">
-            <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold mb-6 animate-fade-in leading-tight">
-              <span className="bg-gradient-to-r from-purple-600 via-pink-600 to-amber-500 bg-clip-text text-transparent">
-                Live Scoring,
-              </span>
-              <br />
-              <span className="text-gray-900">
-                Zero Hassle
-              </span>
-            </h1>
+      <Navbar />
 
-            <p className="text-lg sm:text-xl text-gray-600 mb-8 max-w-2xl mx-auto">
-              Track competitions in real-time. Perfect for sports days, tournaments, quiz nights, or any event that keeps score.
-            </p>
+      {/* Hero Carousel Section */}
+      <section id="home" className="pt-16">
+        <HeroCarousel />
 
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-12">
-              <Link
-                href="/events/create"
-                className="px-8 py-4 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl hover:shadow-2xl hover:scale-105 transform transition-all duration-300 font-semibold text-lg w-full sm:w-auto group"
-              >
-                Start Creating Events
-                <span className="ml-2 inline-block group-hover:translate-x-1 transition-transform">→</span>
-              </Link>
-              <button
-                onClick={() => setShowTutorial(true)}
-                className="px-8 py-4 bg-white/80 backdrop-blur-lg border-2 border-purple-200 text-purple-600 rounded-xl hover:shadow-xl hover:scale-105 transform transition-all duration-300 font-semibold text-lg w-full sm:w-auto"
-              >
-                Watch Quick Tutorial
-              </button>
+      </section>
+
+      {/* CTA Buttons */}
+      <section className="py-12 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-7xl mx-auto">
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+            <Link
+              href="/events/create"
+              className="px-8 py-4 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl hover:shadow-2xl hover:scale-105 transform transition-all duration-300 font-semibold text-lg w-full sm:w-auto group"
+            >
+              Start Creating Events
+              <span className="ml-2 inline-block group-hover:translate-x-1 transition-transform">→</span>
+            </Link>
+            <button
+              onClick={() => setShowTutorial(true)}
+              className="px-8 py-4 bg-white/80 backdrop-blur-lg border-2 border-purple-200 text-purple-600 rounded-xl hover:shadow-xl hover:scale-105 transform transition-all duration-300 font-semibold text-lg w-full sm:w-auto"
+            >
+              Watch Quick Tutorial
+            </button>
+          </div>
+
+          {/* Trust badges */}
+          <div className="flex flex-wrap items-center justify-center gap-6 mt-8 text-sm text-gray-500">
+            <div className="flex items-center gap-2">
+              <span className="text-green-500">✓</span>
+              <span>No signup required</span>
             </div>
-
-            {/* Trust badges */}
-            <div className="flex items-center justify-center gap-6 text-sm text-gray-500">
-              <div className="flex items-center gap-2">
-                <span className="text-green-500">✓</span>
-                <span>No signup required</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-green-500">✓</span>
-                <span>Live updates</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-green-500">✓</span>
-                <span>100% free</span>
-              </div>
+            <div className="flex items-center gap-2">
+              <span className="text-green-500">✓</span>
+              <span>Live updates</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-green-500">✓</span>
+              <span>100% free</span>
             </div>
           </div>
         </div>
       </section>
 
       {/* How It Works - 3 Steps */}
-      <section className="py-16 px-4 sm:px-6 lg:px-8">
+      <section id="how-it-works" className="py-16 px-4 sm:px-6 lg:px-8">
         <div className="max-w-6xl mx-auto">
           <h2 className="text-3xl sm:text-4xl font-bold text-center mb-4 text-gray-900">
             How It Works
@@ -150,7 +144,7 @@ export default function HomePage() {
       </section>
 
       {/* Features Section */}
-      <section className="py-16 px-4 sm:px-6 lg:px-8 bg-white/50">
+      <section id="features" className="py-16 px-4 sm:px-6 lg:px-8 bg-white/50">
         <div className="max-w-5xl mx-auto">
           <h2 className="text-3xl font-bold text-center mb-12 text-gray-900">
             Everything You Need
