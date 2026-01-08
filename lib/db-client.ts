@@ -2,37 +2,59 @@
  * Database Connection Client
  * Server-only PostgreSQL connection with pooling
  * 
- * Environment Variables Required:
- * - DATABASE_URL or POSTGRES_URL
+ * Environment Variable Required:
+ * - DATABASE_URL (Render internal PostgreSQL URL, contains .internal)
  */
 
 import { Pool } from 'pg';
+
+/**
+ * Ensure a single global Pool instance (Next.js dev hot-reload safe)
+ */
+declare global {
+  // eslint-disable-next-line no-var
+  var pgPool: Pool | undefined;
+  // eslint-disable-next-line no-var
+  var pgPoolChecked: boolean | undefined;
+}
 
 if (typeof window !== 'undefined') {
   throw new Error('Database client can only be used on the server side');
 }
 
-if (!process.env.DATABASE_URL && !process.env.POSTGRES_URL) {
-  throw new Error('DATABASE_URL or POSTGRES_URL environment variable is required');
+if (!process.env.DATABASE_URL) {
+  throw new Error('DATABASE_URL environment variable is required (use Render internal Database URL)');
 }
 
-// Create connection pool
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL || process.env.POSTGRES_URL,
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
-  max: 20, // Maximum pool size
+// Create or reuse a single shared Pool
+const pool = globalThis.pgPool ?? new Pool({
+  connectionString: process.env.DATABASE_URL,
+  // Render requires SSL; disable cert verification within Render's network
+  ssl: { rejectUnauthorized: false },
+  // Safe pool limits for Render
+  max: 5,
   idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 10000,
+  connectionTimeoutMillis: 2000,
 });
 
-// Test connection on startup
-pool.on('connect', () => {
-  console.log('✓ Database connected');
-});
+// Cache the pool on the global object to reuse across requests and hot reloads
+if (!globalThis.pgPool) {
+  globalThis.pgPool = pool;
+}
 
-pool.on('error', (err) => {
-  console.error('Unexpected database error:', err);
-});
+// Test connection on startup (single-run, clear logs, fatal on failure)
+if (!globalThis.pgPoolChecked) {
+  globalThis.pgPoolChecked = true;
+  void pool
+    .query('SELECT 1')
+    .then(() => {
+      console.log('DATABASE CONNECTED');
+    })
+    .catch((err) => {
+      console.error('DATABASE FAILED', err);
+      throw err; // Fatal: surface error to crash process
+    });
+}
 
 /**
  * Query helper with automatic error handling
