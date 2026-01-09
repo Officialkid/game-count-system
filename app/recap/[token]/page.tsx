@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation';
 import { Trophy, Calendar, Target, Award } from 'lucide-react';
 import type { Metadata } from 'next';
+import { safeInitial } from '@/lib/safe-ui-helpers';
 
 type EventData = {
   success: boolean;
@@ -219,7 +220,7 @@ export default async function RecapPage({
                             style={{ backgroundColor: team.color }}
                           >
                             <span className="text-white font-bold text-sm">
-                              {team.name.charAt(0).toUpperCase()}
+                              {safeInitial(team.name)}
                             </span>
                           </div>
                           <span className="font-semibold text-slate-900 dark:text-white text-lg">

@@ -68,6 +68,30 @@ export function loadFromCache(token: string): CachedData | null {
 }
 
 /**
+ * Clear cached scorer data. If a token is provided, only that cache entry is removed; otherwise all scorer caches are cleared.
+ */
+export function clearCache(token?: string): void {
+  try {
+    if (token) {
+      localStorage.removeItem(CACHE_KEY_PREFIX + token);
+      return;
+    }
+
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith(CACHE_KEY_PREFIX)) {
+        keysToRemove.push(key);
+      }
+    }
+
+    keysToRemove.forEach(key => localStorage.removeItem(key));
+  } catch (error) {
+    console.error('Failed to clear cache:', error);
+  }
+}
+
+/**
  * Add score to offline queue
  */
 export function queueScore(score: Omit<QueuedScore, 'id' | 'timestamp'>): void {
@@ -119,6 +143,19 @@ export function removeFromQueue(scoreId: string): void {
     localStorage.setItem(QUEUE_KEY, JSON.stringify(filtered));
   } catch (error) {
     console.error('Failed to remove from queue:', error);
+  }
+}
+
+/**
+ * Remove queued scores that do not belong to the specified event.
+ */
+export function pruneQueueForEvent(eventId: string): void {
+  try {
+    const queue = getQueue();
+    const filtered = queue.filter(item => item.eventId === eventId);
+    localStorage.setItem(QUEUE_KEY, JSON.stringify(filtered));
+  } catch (error) {
+    console.error('Failed to prune queue:', error);
   }
 }
 

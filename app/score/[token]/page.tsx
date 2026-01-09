@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { WifiOff, Wifi, RefreshCw, LogOut } from 'lucide-react';
 import { ExpiredEvent, EventNotFoundError } from '@/components/ExpiredEvent';
+import { safeInitial } from '@/lib/safe-ui-helpers';
 import { 
   saveToCache, 
   loadFromCache, 
@@ -12,6 +13,7 @@ import {
   clearQueue,
   removeFromQueue,
   updateCachedTeamPoints,
+  pruneQueueForEvent,
   type QueuedScore
 } from '@/lib/offline-manager';
 
@@ -118,6 +120,10 @@ export default function ScorerPage({ params }: { params: { token: string } }) {
       const eventInfo = eventData.data?.event || eventData.event;
       setEvent(eventInfo);
 
+      // Drop queued items from other events when switching tokens
+      pruneQueueForEvent(eventInfo.id);
+      setQueuedScores(getQueue());
+
       // Load teams
       const teamsRes = await fetch(`/api/events/${eventInfo.id}/teams`, {
         headers: { 'X-SCORER-TOKEN': token }
@@ -145,6 +151,10 @@ export default function ScorerPage({ params }: { params: { token: string } }) {
         setTeams(cached.teams);
         setUsingCache(true);
         setError('Using cached data - network unavailable');
+        if (cached.event?.id) {
+          pruneQueueForEvent(cached.event.id);
+          setQueuedScores(getQueue());
+        }
         if (cached.teams.length > 0 && !selectedTeamId) {
           setSelectedTeamId(cached.teams[0].id);
         }
@@ -758,7 +768,7 @@ function BulkAddForm({ eventId, token, teams, onDone, isOnline, onQueueScore }: 
         {teams.map((t) => (
           <div key={t.id} className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-center p-2 hover:bg-gray-50 rounded transition">
             <div className="font-semibold text-gray-900 flex items-center gap-2">
-              <span className="w-6 h-6 rounded-full text-xs flex items-center justify-center text-white" style={{ backgroundColor: t.color }}>{t.name.charAt(0)}</span>
+              <span className="w-6 h-6 rounded-full text-xs flex items-center justify-center text-white" style={{ backgroundColor: t.color }}>{safeInitial(t.name)}</span>
               {t.name}
             </div>
             <input

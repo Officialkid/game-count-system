@@ -7,6 +7,7 @@ import PastEventsSection from '@/components/PastEventsSection';
 import { AdminTutorial, resetAdminTutorial } from '@/components/AdminTutorial';
 import { EventLinksManager } from '@/components/EventLinksManager';
 import { ExpiredEvent, EventNotFoundError } from '@/components/ExpiredEvent';
+import { safeInitial } from '@/lib/safe-ui-helpers';
 
 interface Team {
   id: string;
@@ -878,7 +879,7 @@ function BulkAddForm({ eventId, token, teams, dayNumber, onDone }: { eventId: st
         {teams.map((t) => (
           <div key={t.id} className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-center p-2 hover:bg-gray-50 rounded transition">
             <div className="font-semibold text-gray-900 flex items-center gap-2">
-              <span className="w-6 h-6 rounded-full text-xs flex items-center justify-center text-white" style={{ backgroundColor: t.color }}>{t.name.charAt(0)}</span>
+              <span className="w-6 h-6 rounded-full text-xs flex items-center justify-center text-white" style={{ backgroundColor: t.color }}>{safeInitial(t.name)}</span>
               {t.name}
             </div>
             <input

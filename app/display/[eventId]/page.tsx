@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Badge, LoadingSkeleton } from '@/components/ui';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
-import { safeName, safeNumber } from '@/lib/safe-ui-helpers';
+import { safeName, safeNumber, safeInitial } from '@/lib/safe-ui-helpers';
 
 interface Team {
   id: number;
@@ -142,7 +142,7 @@ function DisplayPageContent({ params }: { params: { eventId: string } }) {
                     <img src={team.avatar_url} alt={team.team_name} className="w-10 h-10 rounded-full object-cover" />
                   ) : (
                     <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 font-semibold">
-                      {team.team_name.charAt(0).toUpperCase()}
+                      {safeInitial(team.team_name)}
                     </div>
                   )}
                   <div className="text-lg font-semibold">{team.team_name}</div>

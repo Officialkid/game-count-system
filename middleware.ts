@@ -24,8 +24,9 @@ export async function middleware(request: NextRequest) {
       "default-src 'self'",
       "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://storage.ko-fi.com", // TODO: Remove unsafe-inline/eval in production
       "style-src 'self' 'unsafe-inline'",
+      "style-src-elem 'self' 'unsafe-inline' https://storage.ko-fi.com https://fonts.googleapis.com",
       "img-src 'self' data: https: https://storage.ko-fi.com https://ko-fi.com",
-      "font-src 'self' data:",
+      "font-src 'self' data: https://fonts.gstatic.com",
       "connect-src 'self' https://*.appwrite.io https://*.cloud.appwrite.io https://ko-fi.com",
       "frame-src https://ko-fi.com https://storage.ko-fi.com",
       "frame-ancestors 'none'",

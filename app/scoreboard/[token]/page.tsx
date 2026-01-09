@@ -5,7 +5,7 @@ import { Badge, LoadingSkeleton } from '@/components/ui';
 import Link from 'next/link';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { ExpiredEvent, EventNotFoundError } from '@/components/ExpiredEvent';
-import { safeName, safeNumber, safeColor } from '@/lib/safe-ui-helpers';
+import { safeName, safeNumber, safeColor, safeInitial } from '@/lib/safe-ui-helpers';
 
 interface Team {
   id: number;
@@ -586,7 +586,7 @@ function ScoreboardContent({ token }: { token: string }) {
                                     className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-base shadow-md"
                                     style={{ backgroundColor: event?.theme_color || '#6b46c1' }}
                                   >
-                                    {team.team_name.charAt(0).toUpperCase()}
+                                    {safeInitial(team.team_name)}
                                   </div>
                                 )}
                                 <div className="truncate">

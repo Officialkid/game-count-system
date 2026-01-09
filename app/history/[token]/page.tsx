@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { ExpiredEvent, EventNotFoundError } from '@/components/ExpiredEvent';
-import { safeName, safeNumber, safeColor } from '@/lib/safe-ui-helpers';
+import { safeName, safeNumber, safeColor, safeInitial } from '@/lib/safe-ui-helpers';
 
 interface ScoreEntry {
   id: string;
@@ -260,7 +260,7 @@ function HistoryPageContent({ params }: { params: { token: string } }) {
                             className="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-sm shadow shrink-0"
                             style={{ backgroundColor: score.team_color }}
                           >
-                            {score.team_name.charAt(0)}
+                            {safeInitial(score.team_name)}
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">

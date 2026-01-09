@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { clearCache, clearQueue } from '@/lib/offline-manager';
 
 export default function CreateEventPage() {
   const router = useRouter();
@@ -57,6 +58,10 @@ export default function CreateEventPage() {
       if (!response.ok || !data.success) {
         throw new Error(data.error || 'Failed to create event');
       }
+
+      // Drop any stale scorer caches or queued scores so the new event opens fresh
+      clearCache();
+      clearQueue();
       setResult(data.data);
     } catch (err: any) {
       setError(err?.message || 'Failed to create event');
