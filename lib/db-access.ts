@@ -199,13 +199,16 @@ export interface EventDay {
 export async function createDayIfNotExists(
   input: CreateEventDayInput
 ): Promise<EventDay> {
+  // Generate a default label if none is provided to satisfy NOT NULL constraint
+  const label = input.label || `Day ${input.day_number}`;
+  
   const result = await query<EventDay>(
     `INSERT INTO event_days (event_id, day_number, label)
      VALUES ($1, $2, $3)
      ON CONFLICT (event_id, day_number) DO UPDATE
      SET label = COALESCE(EXCLUDED.label, event_days.label)
      RETURNING *`,
-    [input.event_id, input.day_number, input.label || null]
+    [input.event_id, input.day_number, label]
   );
   
   return result.rows[0];
