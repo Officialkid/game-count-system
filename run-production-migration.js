@@ -2,7 +2,8 @@ const { Client } = require('pg');
 const fs = require('fs');
 const path = require('path');
 
-const connectionString = 'postgresql://gamescore_db_user:TiyXzFwjLnBldlu4udBbGypsADDvRzJV@dpg-d5el72juibrs738qii2g-a.oregon-postgres.render.com/gamescore_db';
+// Prefer a provided environment variable so we can run this locally against Render DBs.
+const connectionString = process.env.DATABASE_URL || 'postgresql://gamescore_db_user:TiyXzFwjLnBldlu4udBbGypsADDvRzJV@dpg-d5el72juibrs738qii2g-a.oregon-postgres.render.com/gamescore_db';
 
 async function runMigration() {
   const client = new Client({
