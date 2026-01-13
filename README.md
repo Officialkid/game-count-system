@@ -198,6 +198,9 @@ curl http://localhost:3000/api/public/YOUR_PUBLIC_TOKEN
 ```sql
 SELECT 
   t.id, 
+
+<!-- Trigger rebuild: trivial README update to force CI/deploy -->
+
   t.name, 
   COALESCE(SUM(s.points), 0) AS total_points
 FROM teams t
