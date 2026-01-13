@@ -60,6 +60,7 @@ function HistoryPageContent({ params }: { params: { token: string } }) {
   const [errorType, setErrorType] = useState<'expired' | 'not-found' | null>(null);
   const [editingScore, setEditingScore] = useState<ScoreEntry | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -71,10 +72,18 @@ function HistoryPageContent({ params }: { params: { token: string } }) {
       setError('');
       setErrorType(null);
 
-      // Verify token and get event
+      // Verify token and get event - ADMIN ONLY for history
       const eventRes = await fetch(`/api/event-by-token/${token}`, {
-        headers: { 'X-ADMIN-TOKEN': token, 'X-SCORER-TOKEN': token }
+        headers: { 'X-ADMIN-TOKEN': token }
       });
+
+      // If not authorized as admin, show friendly access denied
+      if (eventRes.status === 401 || eventRes.status === 403) {
+        setError('Access denied — history is available to admins only.');
+        setIsAdmin(false);
+        setLoading(false);
+        return;
+      }
 
       if (eventRes.status === 410) {
         setErrorType('expired');
@@ -88,6 +97,7 @@ function HistoryPageContent({ params }: { params: { token: string } }) {
         return;
       }
 
+
       if (!eventRes.ok) {
         throw new Error('Invalid token');
       }
@@ -95,8 +105,10 @@ function HistoryPageContent({ params }: { params: { token: string } }) {
       const eventData = await eventRes.json();
       const eventInfo = eventData.data?.event || eventData.event;
       setEvent(eventInfo);
+      setIsAdmin(true);
 
-      // Load score history
+
+      // Load score history (admin-only endpoint)
       const historyRes = await fetch(`/api/events/${eventInfo.id}/history`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -288,34 +300,40 @@ function HistoryPageContent({ params }: { params: { token: string } }) {
                           </div>
                         </div>
                         <div className="flex gap-2 shrink-0">
-                          <button
-                            onClick={() => setEditingScore(score)}
-                            className="px-3 py-1 text-sm bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition"
-                          >
-                            Edit
-                          </button>
-                          {deleteConfirm === score.id ? (
-                            <div className="flex gap-1">
+                          {isAdmin ? (
+                            <>
                               <button
-                                onClick={() => handleDelete(score.id)}
-                                className="px-2 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700"
+                                onClick={() => setEditingScore(score)}
+                                className="px-3 py-1 text-sm bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition"
                               >
-                                Confirm
+                                Edit
                               </button>
-                              <button
-                                onClick={() => setDeleteConfirm(null)}
-                                className="px-2 py-1 text-xs bg-gray-300 text-gray-700 rounded hover:bg-gray-400"
-                              >
-                                Cancel
-                              </button>
-                            </div>
+                              {deleteConfirm === score.id ? (
+                                <div className="flex gap-1">
+                                  <button
+                                    onClick={() => handleDelete(score.id)}
+                                    className="px-2 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700"
+                                  >
+                                    Confirm
+                                  </button>
+                                  <button
+                                    onClick={() => setDeleteConfirm(null)}
+                                    className="px-2 py-1 text-xs bg-gray-300 text-gray-700 rounded hover:bg-gray-400"
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => setDeleteConfirm(score.id)}
+                                  className="px-3 py-1 text-sm bg-red-100 text-red-700 rounded hover:bg-red-200 transition"
+                                >
+                                  Delete
+                                </button>
+                              )}
+                            </>
                           ) : (
-                            <button
-                              onClick={() => setDeleteConfirm(score.id)}
-                              className="px-3 py-1 text-sm bg-red-100 text-red-700 rounded hover:bg-red-200 transition"
-                            >
-                              Delete
-                            </button>
+                            <div className="text-sm text-gray-500">Read-only</div>
                           )}
                         </div>
                       </div>

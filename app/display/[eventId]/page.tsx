@@ -73,7 +73,7 @@ function WaitingForScoresState({ eventName, onRefresh }: { eventName: string; on
           <span className="font-semibold">{eventName}</span> is active
         </p>
         <p className="text-gray-500 text-sm mb-6">
-          Waiting for the first scores to be added. This page will update automatically every 30 seconds.
+          Waiting for the first scores to be added. This page will update automatically every 60 seconds.
         </p>
         <button
           onClick={onRefresh}
@@ -184,8 +184,8 @@ function DisplayPageContent({ params }: { params: { eventId: string } }) {
 
   useEffect(() => {
     load();
-    // Auto-refresh every 30 seconds to catch new scores
-    const interval = setInterval(load, 30000);
+    // Auto-refresh every 60 seconds to catch new scores
+    const interval = setInterval(load, 60000);
     return () => clearInterval(interval);
   }, [eventId]);
 

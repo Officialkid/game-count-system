@@ -40,6 +40,10 @@ export default function AdminPage({ params }: { params: { token: string } }) {
   const [errorType, setErrorType] = useState<'expired' | 'not-found' | null>(null);
   const [teamName, setTeamName] = useState('');
   const [teamColor, setTeamColor] = useState('#3B82F6');
+  const [bulkRows, setBulkRows] = useState<{ name: string; color: string }[]>([
+    { name: '', color: '#3B82F6' },
+  ]);
+  const [bulkAdding, setBulkAdding] = useState(false);
   const [adding, setAdding] = useState(false);
   
   // Finalization state
@@ -192,15 +196,23 @@ export default function AdminPage({ params }: { params: { token: string } }) {
 
     try {
       setExportingPDF(true);
-      
-      // Fetch scores by day for PDF
+
+      // Re-fetch latest teams using admin token to ensure freshest standings
+      const teamsRes = await fetch(`/api/events/${event.id}/teams`, {
+        headers: { 'X-ADMIN-TOKEN': token }
+      });
+
+      if (!teamsRes.ok) throw new Error('Failed to fetch teams for PDF');
+      const teamsData = await teamsRes.json();
+      const latestTeams = teamsData.data?.teams || teamsData.teams || [];
+
+      // Fetch scores by day (public endpoint is fine for this)
       const res = await fetch(`/api/public/${event.public_token}`);
       if (!res.ok) throw new Error('Failed to fetch data for PDF');
-      
       const data = await res.json();
       const scoresByDay = data.data?.scores_by_day || [];
-      
-      generateResultsPDF({
+
+      await generateResultsPDF({
         event: {
           event_name: event.name,
           mode: event.mode as any,
@@ -208,7 +220,7 @@ export default function AdminPage({ params }: { params: { token: string } }) {
           public_token: event.public_token,
           finalized_at: event.finalized_at
         },
-        teams: teams.map(t => ({
+        teams: latestTeams.map((t: any) => ({
           id: Number(t.id),
           team_name: t.name,
           avatar_url: t.avatar_url || null,
@@ -217,7 +229,7 @@ export default function AdminPage({ params }: { params: { token: string } }) {
         scoresByDay,
         includeLink: true
       });
-      
+
       setSuccessMessage('✅ PDF downloaded successfully');
       setTimeout(() => setSuccessMessage(''), 3000);
     } catch (err: any) {
@@ -309,13 +321,6 @@ export default function AdminPage({ params }: { params: { token: string } }) {
             
             {/* Quick Access Links */}
             <div className="mt-6 flex flex-wrap gap-3">
-              <a
-                href={`/history/${token}`}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 transition-colors text-sm font-medium"
-              >
-                <span>📊</span>
-                Score History
-              </a>
               <a
                 href={`/recap/${event?.public_token}`}
                 target="_blank"
@@ -432,62 +437,109 @@ export default function AdminPage({ params }: { params: { token: string } }) {
           </div>
         )}
 
-        {/* SECTION 1: Create Teams (Primary Action) */}
+        {/* SECTION 1: Bulk Team Creation (Primary Action) */}
         <div className="bg-white rounded-2xl shadow-lg p-6 border-2 border-purple-200">
           <div className="flex items-center gap-3 mb-4">
-            <div className="w-10 h-10 rounded-lg bg-purple-600 flex items-center justify-center text-white font-bold text-xl">
-              +
-            </div>
+            <div className="w-10 h-10 rounded-lg bg-purple-600 flex items-center justify-center text-white font-bold text-xl">＋</div>
             <div>
-              <h2 className="text-xl font-bold text-gray-900">Create Teams</h2>
-              <p className="text-sm text-gray-600">Add teams to your event</p>
+              <h2 className="text-xl font-bold text-gray-900">Bulk Team Creation</h2>
+              <p className="text-sm text-gray-600">Paste one team name per line, then submit to add multiple teams at once.</p>
             </div>
           </div>
-          
-          <form onSubmit={handleAddTeam} className="space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="sm:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Team Name
-                </label>
-                <input
-                  type="text"
-                  value={teamName}
-                  onChange={(e) => setTeamName(e.target.value)}
-                  placeholder="Red Dragons"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 bg-white"
-                  required
-                  minLength={2}
-                  disabled={adding}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Color
-                </label>
-                <input
-                  type="color"
-                  value={teamColor}
-                  onChange={(e) => setTeamColor(e.target.value)}
-                  className="w-full h-12 border border-gray-300 rounded-lg cursor-pointer"
-                  disabled={adding}
-                />
+
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-3">Teams</label>
+              <div className="space-y-2">
+                {bulkRows.map((row, idx) => (
+                  <div key={idx} className="flex gap-2 items-center">
+                    <input
+                      type="text"
+                      value={row.name}
+                      onChange={(e) => {
+                        const copy = [...bulkRows];
+                        copy[idx] = { ...copy[idx], name: e.target.value };
+                        setBulkRows(copy);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          // add new row
+                          setBulkRows(prev => [...prev, { name: '', color: '#3B82F6' }]);
+                        }
+                      }}
+                      placeholder="Team name"
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    />
+                    <input
+                      type="color"
+                      value={row.color}
+                      onChange={(e) => {
+                        const copy = [...bulkRows];
+                        copy[idx] = { ...copy[idx], color: e.target.value };
+                        setBulkRows(copy);
+                      }}
+                      className="w-12 h-10 p-0 border border-gray-300 rounded-lg"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setBulkRows(prev => prev.filter((_, i) => i !== idx))}
+                      className="px-3 py-2 bg-red-50 text-red-700 rounded-lg hover:bg-red-100"
+                      aria-label="Remove row"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
               </div>
             </div>
-            <button
-              type="submit"
-              disabled={adding || !teamName.trim()}
-              className="w-full sm:w-auto px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl hover:shadow-lg hover:scale-[1.02] transition disabled:opacity-50 disabled:cursor-not-allowed font-semibold"
-            >
-              {adding ? 'Adding...' : '+ Add Team'}
-            </button>
-          </form>
 
-          {/* Bulk team creation hint */}
-          <div className="mt-4 pt-4 border-t border-gray-200">
-            <p className="text-sm text-gray-600">
-              💡 <strong>Tip:</strong> Need to add multiple teams at once? Use the bulk team creator in your admin dashboard.
-            </p>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setBulkRows(prev => [...prev, { name: '', color: '#3B82F6' }])}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-800 rounded-lg hover:bg-gray-200"
+                >
+                  + Add Row
+                </button>
+                <p className="text-sm text-gray-500">Tip: Press Enter in a name field to add another row.</p>
+              </div>
+
+              <div>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (!event) return;
+                    const payload = bulkRows.map(r => ({ name: r.name.trim(), color: r.color })).filter(r => r.name.length > 0);
+                    if (payload.length === 0) return;
+                    try {
+                      setBulkAdding(true);
+                      // Use existing bulk teams API if available
+                      const res = await fetch('/api/teams/bulk', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'X-ADMIN-TOKEN': token },
+                        body: JSON.stringify({ event_id: event.id, teams: payload })
+                      });
+                      if (!res.ok) {
+                        const data = await res.json().catch(() => ({}));
+                        throw new Error(data.error || 'Bulk create failed');
+                      }
+                      setBulkRows([{ name: '', color: '#3B82F6' }]);
+                      await loadData();
+                    } catch (err: any) {
+                      alert(err?.message || 'Failed to add teams');
+                    } finally {
+                      setBulkAdding(false);
+                    }
+                  }}
+                  disabled={bulkAdding}
+                  className="px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl hover:shadow-lg transition disabled:opacity-50 font-semibold"
+                >
+                  {bulkAdding ? 'Adding...' : 'Add Teams'}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -531,8 +583,7 @@ export default function AdminPage({ params }: { params: { token: string } }) {
         </div>
 
         {/* SECTION 3: Scorer Link (Primary Operational Link) */}
-        {teams.length > 0 && (
-          <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-300 rounded-2xl p-6 shadow-lg">
+        <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-300 rounded-2xl p-6 shadow-lg">
             <div className="flex items-center gap-3 mb-4">
               <div className="text-4xl">📝</div>
               <div>
@@ -553,7 +604,6 @@ export default function AdminPage({ params }: { params: { token: string } }) {
               <span className="text-xs opacity-75">↗</span>
             </a>
           </div>
-        )}
 
         {/* SECTION 4: Links Section (Collapsed Dropdown) */}
         <div className="bg-white rounded-xl shadow border border-gray-200">

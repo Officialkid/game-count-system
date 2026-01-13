@@ -201,11 +201,11 @@ export function AdminTutorial() {
 
       {/* Tutorial tooltip */}
       <div
-        className="bg-white rounded-xl shadow-2xl max-w-md"
-        style={getTooltipStyle()}
+        className="bg-white rounded-xl shadow-2xl max-w-md w-full"
+        style={{ ...getTooltipStyle(), display: 'flex', flexDirection: 'column', maxWidth: 520 }}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Progress bar */}
+        {/* Progress bar (top) */}
         <div className="h-2 bg-gray-200 rounded-t-xl overflow-hidden">
           <div
             className="h-full bg-gradient-to-r from-blue-500 to-purple-500 transition-all duration-300"
@@ -213,14 +213,15 @@ export function AdminTutorial() {
           />
         </div>
 
-        <div className="p-6">
+        {/* Scrollable content area */}
+        <div style={{ padding: 16, overflow: 'auto', maxHeight: '56vh' }}>
           {/* Header */}
           <div className="flex items-start justify-between mb-4">
-            <div className="flex-1">
-              <h3 className="text-xl font-bold text-gray-900 mb-2">
+            <div className="flex-1 pr-3">
+              <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-2">
                 {step.title}
               </h3>
-              <p className="text-gray-600 leading-relaxed">
+              <p className="text-gray-600 leading-relaxed whitespace-pre-wrap">
                 {step.description}
               </p>
             </div>
@@ -234,7 +235,7 @@ export function AdminTutorial() {
           </div>
 
           {/* Step indicator */}
-          <div className="flex items-center justify-center gap-2 mb-6">
+          <div className="flex items-center justify-center gap-2 mb-4">
             {TUTORIAL_STEPS.map((_, index) => (
               <div
                 key={index}
@@ -249,7 +250,11 @@ export function AdminTutorial() {
             ))}
           </div>
 
-          {/* Navigation buttons */}
+          {/* Additional content placeholder: target explanation or longer text could go here */}
+        </div>
+
+        {/* Fixed footer with navigation buttons */}
+        <div style={{ borderTop: '1px solid #eee', padding: 12, background: 'white', position: 'sticky', bottom: 0 }}>
           <div className="flex items-center justify-between gap-3">
             <Button
               onClick={handleSkip}
@@ -272,7 +277,7 @@ export function AdminTutorial() {
                   Back
                 </Button>
               )}
-              
+
               <Button
                 onClick={handleNext}
                 size="sm"
@@ -291,7 +296,7 @@ export function AdminTutorial() {
           </div>
 
           {/* Step counter */}
-          <p className="text-center text-sm text-gray-500 mt-4">
+          <p className="text-center text-sm text-gray-500 mt-2">
             Step {currentStep + 1} of {TUTORIAL_STEPS.length}
           </p>
         </div>

@@ -7,6 +7,7 @@ import { NextResponse } from 'next/server';
 import { getEventByToken } from '@/lib/db-access';
 import { query } from '@/lib/db-client';
 import { z } from 'zod';
+import { successResponse, errorResponse, ERROR_STATUS_MAP } from '@/lib/api-responses';
 
 const UpdateScoreSchema = z.object({
   score_id: z.string().uuid(),
@@ -16,13 +17,13 @@ const UpdateScoreSchema = z.object({
 
 export async function PATCH(request: Request) {
   try {
-    const authHeader = request.headers.get('authorization') || request.headers.get('x-scorer-token') || request.headers.get('x-admin-token');
+    const authHeader = request.headers.get('authorization') || request.headers.get('x-admin-token');
     const token = authHeader?.replace('Bearer ', '') || authHeader || '';
 
     if (!token) {
       return NextResponse.json(
-        { success: false, error: 'Token required' },
-        { status: 401 }
+        errorResponse('UNAUTHORIZED', 'Token required'),
+        { status: ERROR_STATUS_MAP.UNAUTHORIZED }
       );
     }
 
@@ -46,15 +47,12 @@ export async function PATCH(request: Request) {
 
     const score = scoreResult.rows[0];
 
-    // Verify token has access (scorer or admin)
-    const eventByScorer = await getEventByToken(token, 'scorer');
+    // Only admin may edit score history
     const eventByAdmin = await getEventByToken(token, 'admin');
-    const event = eventByScorer || eventByAdmin;
-
-    if (!event || event.id !== score.event_id) {
+    if (!eventByAdmin || eventByAdmin.id !== score.event_id) {
       return NextResponse.json(
-        { success: false, error: 'Invalid token or access denied' },
-        { status: 403 }
+        errorResponse('FORBIDDEN', 'Admin token required to edit score history'),
+        { status: ERROR_STATUS_MAP.FORBIDDEN }
       );
     }
 
@@ -67,32 +65,32 @@ export async function PATCH(request: Request) {
       [validated.points, validated.category || null, validated.score_id]
     );
 
-    return NextResponse.json({ success: true, data: updateResult.rows[0] });
+    return NextResponse.json(successResponse(updateResult.rows[0]));
   } catch (error: any) {
     if (error?.name === 'ZodError') {
       return NextResponse.json(
-        { success: false, error: 'Validation failed', details: error.errors },
-        { status: 400 }
+        errorResponse('VALIDATION_ERROR', 'Validation failed'),
+        { status: ERROR_STATUS_MAP.VALIDATION_ERROR }
       );
     }
 
     console.error('Update score error:', error);
     return NextResponse.json(
-      { success: false, error: error instanceof Error ? error.message : 'Failed to update score' },
-      { status: 500 }
+      errorResponse('INTERNAL_ERROR', error instanceof Error ? error.message : 'Failed to update score'),
+      { status: ERROR_STATUS_MAP.INTERNAL_ERROR }
     );
   }
 }
 
 export async function DELETE(request: Request) {
   try {
-    const authHeader = request.headers.get('authorization') || request.headers.get('x-scorer-token') || request.headers.get('x-admin-token');
+    const authHeader = request.headers.get('authorization') || request.headers.get('x-admin-token');
     const token = authHeader?.replace('Bearer ', '') || authHeader || '';
 
     if (!token) {
       return NextResponse.json(
-        { success: false, error: 'Token required' },
-        { status: 401 }
+        errorResponse('UNAUTHORIZED', 'Token required'),
+        { status: ERROR_STATUS_MAP.UNAUTHORIZED }
       );
     }
 
@@ -123,27 +121,24 @@ export async function DELETE(request: Request) {
 
     const score = scoreResult.rows[0];
 
-    // Verify token has access (scorer or admin)
-    const eventByScorer = await getEventByToken(token, 'scorer');
+    // Only admin may delete historical score entries
     const eventByAdmin = await getEventByToken(token, 'admin');
-    const event = eventByScorer || eventByAdmin;
-
-    if (!event || event.id !== score.event_id) {
+    if (!eventByAdmin || eventByAdmin.id !== score.event_id) {
       return NextResponse.json(
-        { success: false, error: 'Invalid token or access denied' },
-        { status: 403 }
+        errorResponse('FORBIDDEN', 'Admin token required to delete score history'),
+        { status: ERROR_STATUS_MAP.FORBIDDEN }
       );
     }
 
     // Delete the score
     await query(`DELETE FROM scores WHERE id = $1`, [scoreId]);
 
-    return NextResponse.json({ success: true, message: 'Score deleted' });
+    return NextResponse.json(successResponse({ message: 'Score deleted' }));
   } catch (error) {
     console.error('Delete score error:', error);
     return NextResponse.json(
-      { success: false, error: error instanceof Error ? error.message : 'Failed to delete score' },
-      { status: 500 }
+      errorResponse('INTERNAL_ERROR', error instanceof Error ? error.message : 'Failed to delete score'),
+      { status: ERROR_STATUS_MAP.INTERNAL_ERROR }
     );
   }
 }

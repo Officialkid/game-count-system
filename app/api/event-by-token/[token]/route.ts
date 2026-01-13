@@ -15,21 +15,38 @@ export async function GET(
   try {
     const { token } = params;
     
-    // Get token type from header (default to public)
-    const adminToken = request.headers.get('x-admin-token');
-    const scorerToken = request.headers.get('x-scorer-token');
-    
-    // Determine token type based on which header is provided
-    let tokenType: 'admin' | 'scorer' | 'public' = 'public';
-    
-    if (adminToken === token) {
-      tokenType = 'admin';
-    } else if (scorerToken === token) {
-      tokenType = 'scorer';
+    // Determine token type by checking DB, and require matching header for admin/scorer tokens
+    const headerAdmin = request.headers.get('x-admin-token');
+    const headerScorer = request.headers.get('x-scorer-token');
+
+    // If token corresponds to an admin token in DB, require header to match
+    const adminEvent = await getEventByToken(token, 'admin');
+    let event: any = null;
+    if (adminEvent) {
+      if (!headerAdmin || headerAdmin !== token) {
+        return NextResponse.json(
+          errorResponse('UNAUTHORIZED', 'Admin token required'),
+          { status: ERROR_STATUS_MAP.UNAUTHORIZED }
+        );
+      }
+      // Use admin-level event
+      event = adminEvent;
+    } else {
+      // If token corresponds to a scorer token, require scorer header
+      const scorerEvent = await getEventByToken(token, 'scorer');
+      if (scorerEvent) {
+        if (!headerScorer || headerScorer !== token) {
+          return NextResponse.json(
+            errorResponse('UNAUTHORIZED', 'Scorer token required'),
+            { status: ERROR_STATUS_MAP.UNAUTHORIZED }
+          );
+        }
+        event = scorerEvent;
+      } else {
+        // Treat as public token
+        event = await getEventByToken(token, 'public');
+      }
     }
-    
-    // Get event
-    const event = await getEventByToken(token, tokenType);
     
     if (!event) {
       return NextResponse.json(
@@ -54,7 +71,7 @@ export async function GET(
       );
     }
     
-    // Return event info (hide sensitive tokens based on access level)
+    // Return event info (hide sensitive tokens - only admin receives tokens)
     const response: any = {
       id: event.id,
       name: event.name,
@@ -64,16 +81,10 @@ export async function GET(
       end_at: event.end_at,
       created_at: event.created_at,
     };
-    
     // Include tokens only for admin access
-    if (tokenType === 'admin') {
+    if (adminEvent) {
       response.admin_token = event.admin_token;
       response.scorer_token = event.scorer_token;
-      response.public_token = event.public_token;
-    } else if (tokenType === 'scorer') {
-      response.scorer_token = event.scorer_token;
-      response.public_token = event.public_token;
-    } else {
       response.public_token = event.public_token;
     }
     

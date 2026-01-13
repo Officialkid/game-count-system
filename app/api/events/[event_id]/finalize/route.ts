@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db-client';
 import { getEventByToken } from '@/lib/db-access';
+import { successResponse, errorResponse, ERROR_STATUS_MAP } from '@/lib/api-responses';
 
 /**
  * POST /api/events/[event_id]/finalize
@@ -13,13 +14,13 @@ export async function POST(
 ) {
   try {
     const event_id = params.event_id;
-    const body = await request.json();
-    const { admin_token } = body;
 
+    // Require admin token via header
+    const admin_token = request.headers.get('x-admin-token');
     if (!admin_token) {
       return NextResponse.json(
-        { success: false, error: 'Admin token required' },
-        { status: 401 }
+        errorResponse('UNAUTHORIZED', 'X-ADMIN-TOKEN header required'),
+        { status: ERROR_STATUS_MAP.UNAUTHORIZED }
       );
     }
 
@@ -27,16 +28,24 @@ export async function POST(
     const event = await getEventByToken(admin_token, 'admin');
     if (!event || event.id !== event_id) {
       return NextResponse.json(
-        { success: false, error: 'Invalid admin token or access denied' },
-        { status: 403 }
+        errorResponse('FORBIDDEN', 'Invalid admin token or access denied'),
+        { status: ERROR_STATUS_MAP.FORBIDDEN }
+      );
+    }
+
+    // Expired events cannot be finalized
+    if (event.status === 'expired') {
+      return NextResponse.json(
+        errorResponse('NOT_FOUND', 'Event expired'),
+        { status: 410 }
       );
     }
 
     // Check if already finalized
     if (event.is_finalized) {
       return NextResponse.json(
-        { success: false, error: 'Event already finalized' },
-        { status: 400 }
+        errorResponse('CONFLICT', 'Event already finalized'),
+        { status: ERROR_STATUS_MAP.CONFLICT }
       );
     }
 
@@ -49,13 +58,10 @@ export async function POST(
       [event_id]
     );
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        event: result.rows[0],
-        message: 'Event finalized successfully'
-      }
-    });
+    return NextResponse.json(
+      successResponse({ event: result.rows[0], message: 'Event finalized successfully' }),
+      { status: 200 }
+    );
 
   } catch (error: any) {
     console.error('[API] Finalize event error:', error);
@@ -77,12 +83,12 @@ export async function DELETE(
   try {
     const event_id = params.event_id;
     const { searchParams } = new URL(request.url);
-    const admin_token = searchParams.get('admin_token');
+    const admin_token = request.headers.get('x-admin-token') || searchParams.get('admin_token');
 
     if (!admin_token) {
       return NextResponse.json(
-        { success: false, error: 'Admin token required' },
-        { status: 401 }
+        errorResponse('UNAUTHORIZED', 'Admin token required'),
+        { status: ERROR_STATUS_MAP.UNAUTHORIZED }
       );
     }
 
@@ -90,8 +96,8 @@ export async function DELETE(
     const event = await getEventByToken(admin_token, 'admin');
     if (!event || event.id !== event_id) {
       return NextResponse.json(
-        { success: false, error: 'Invalid admin token or access denied' },
-        { status: 403 }
+        errorResponse('FORBIDDEN', 'Invalid admin token or access denied'),
+        { status: ERROR_STATUS_MAP.FORBIDDEN }
       );
     }
 
@@ -106,18 +112,15 @@ export async function DELETE(
 
     if (result.rows.length === 0) {
       return NextResponse.json(
-        { success: false, error: 'Event not found' },
-        { status: 404 }
+        errorResponse('NOT_FOUND', 'Event not found'),
+        { status: ERROR_STATUS_MAP.NOT_FOUND }
       );
     }
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        event: result.rows[0],
-        message: 'Event unfinalized - you can now edit scores'
-      }
-    });
+    return NextResponse.json(
+      successResponse({ event: result.rows[0], message: 'Event unfinalized - you can now edit scores' }),
+      { status: 200 }
+    );
 
   } catch (error: any) {
     console.error('[API] Unfinalize event error:', error);

@@ -57,16 +57,30 @@ export async function GET(
     }
 
     // Get complete event data in parallel
-    const [teams, scores, scoresByDay, days] = await Promise.all([
+    const [teams, scores, scoresByDayRaw, daysRaw] = await Promise.all([
       listTeamsWithTotals(event.id),
       listScores(event.id),
       event.mode === 'camp' ? listScoresByDay(event.id) : Promise.resolve([]),
       event.mode === 'camp' ? listEventDays(event.id) : Promise.resolve([]),
     ]);
 
+    // Ensure day labels are never null and map scoresByDay labels
+    const days = (daysRaw || []).map((d: any) => ({
+      ...d,
+      label: d.label || `Day ${d.day_number}`,
+    }));
+
+    const scoresByDay = (scoresByDayRaw || []).map((s: any) => ({
+      ...s,
+      day_label: s.day_label || `Day ${s.day_number}`,
+    }));
+
     // Calculate totals
     const totalPoints = teams.reduce((sum, team) => sum + (team.total_points || 0), 0);
     const totalScores = scores.length;
+
+    // Waiting state: active but no teams/scores yet
+    const waiting = event.status === 'active' && teams.length === 0 && totalScores === 0;
 
     // Return complete event data
     return NextResponse.json({
@@ -86,6 +100,7 @@ export async function GET(
         scores,
         scores_by_day: scoresByDay,
         days,
+        waiting,
         totals: {
           total_teams: teams.length,
           total_scores: totalScores,

@@ -35,14 +35,18 @@ interface PDFExportOptions {
  * Generate a PDF export of event final results
  * Includes event name, team rankings, scores, and AlphaTech branding
  */
-export function generateResultsPDF(options: PDFExportOptions): void {
+export async function generateResultsPDF(options: PDFExportOptions): Promise<void> {
   const { event, teams, scoresByDay = [], includeLink = true } = options;
-  
-  const doc = new jsPDF();
+
+  // Use landscape orientation to better fit wide tables
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
   const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
   const primaryColor = event.theme_color || '#6b46c1';
-  
-  let yPosition = 20;
+
+  const marginLeft = 40;
+  const marginRight = 40;
+  let yPosition = 40;
 
   // ===== HEADER: AlphaTech Branding =====
   doc.setFontSize(10);
@@ -105,6 +109,12 @@ export function generateResultsPDF(options: PDFExportOptions): void {
     team.total_points.toString()
   ]);
 
+  // Calculate dynamic column widths to avoid overflow and enable wrapping
+  const availableWidth = pageWidth - marginLeft - marginRight;
+  const col0Width = 50; // Rank
+  const col2Width = 80; // Points
+  const col1Width = Math.max(availableWidth - col0Width - col2Width, 100);
+
   autoTable(doc, {
     startY: yPosition,
     head: [['Rank', 'Team Name', 'Total Points']],
@@ -116,31 +126,27 @@ export function generateResultsPDF(options: PDFExportOptions): void {
       fontStyle: 'bold',
       fontSize: 11
     },
-    bodyStyles: {
-      fontSize: 10
+    styles: {
+      fontSize: 10,
+      cellPadding: 6,
+      overflow: 'linebreak'
     },
     columnStyles: {
-      0: { halign: 'center', cellWidth: 20 },
-      1: { halign: 'left', cellWidth: 100 },
-      2: { halign: 'center', cellWidth: 40 }
+      0: { halign: 'center', cellWidth: col0Width },
+      1: { halign: 'left', cellWidth: col1Width },
+      2: { halign: 'center', cellWidth: col2Width }
     },
-    margin: { left: 15, right: 15 }
+    margin: { left: marginLeft, right: marginRight }
   });
 
-  yPosition = (doc as any).lastAutoTable.finalY + 15;
+  yPosition = (doc as any).lastAutoTable ? (doc as any).lastAutoTable.finalY + 15 : yPosition + 100;
 
   // ===== DAY-BY-DAY BREAKDOWN (for camp events) =====
   if (event.mode === 'camp' && scoresByDay.length > 0) {
-    // Check if we need a new page
-    if (yPosition > 200) {
-      doc.addPage();
-      yPosition = 20;
-    }
-
     doc.setFontSize(16);
     doc.setFont('helvetica', 'bold');
-    doc.text('📅 Day-by-Day Breakdown', 15, yPosition);
-    yPosition += 5;
+    doc.text('📅 Day-by-Day Breakdown', marginLeft, yPosition);
+    yPosition += 8;
 
     // Group scores by day
     const dayGroups = new Map<number, DayScore[]>();
@@ -158,17 +164,11 @@ export function generateResultsPDF(options: PDFExportOptions): void {
       const dayScores = dayGroups.get(dayNum)!;
       const dayLabel = dayScores[0]?.day_label || `Day ${dayNum}`;
 
-      // Check if we need a new page
-      if (yPosition > 230) {
-        doc.addPage();
-        yPosition = 20;
-      }
-
       // Day title
       doc.setFontSize(12);
       doc.setFont('helvetica', 'bold');
-      doc.text(dayLabel, 15, yPosition);
-      yPosition += 2;
+      doc.text(dayLabel, marginLeft, yPosition);
+      yPosition += 6;
 
       // Aggregate scores by team for this day
       const teamDayScores = new Map<string, number>();
@@ -191,6 +191,7 @@ export function generateResultsPDF(options: PDFExportOptions): void {
         team.points.toString()
       ]);
 
+      // For day tables, allow autoTable to paginate as needed and wrap team names
       autoTable(doc, {
         startY: yPosition,
         head: [['Rank', 'Team', 'Points']],
@@ -202,18 +203,20 @@ export function generateResultsPDF(options: PDFExportOptions): void {
           fontStyle: 'bold',
           fontSize: 9
         },
-        bodyStyles: {
-          fontSize: 9
+        styles: {
+          fontSize: 9,
+          cellPadding: 6,
+          overflow: 'linebreak'
         },
         columnStyles: {
-          0: { halign: 'center', cellWidth: 20 },
-          1: { halign: 'left', cellWidth: 100 },
-          2: { halign: 'center', cellWidth: 40 }
+          0: { halign: 'center', cellWidth: col0Width },
+          1: { halign: 'left', cellWidth: col1Width },
+          2: { halign: 'center', cellWidth: col2Width }
         },
-        margin: { left: 15, right: 15 }
+        margin: { left: marginLeft, right: marginRight }
       });
 
-      yPosition = (doc as any).lastAutoTable.finalY + 10;
+      yPosition = (doc as any).lastAutoTable ? (doc as any).lastAutoTable.finalY + 12 : yPosition + 60;
     });
   }
 

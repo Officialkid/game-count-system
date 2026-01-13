@@ -7,6 +7,7 @@ import { NextResponse } from 'next/server';
 import { addTeam, getEventByToken } from '@/lib/db-access';
 import { CreateTeamSchema } from '@/lib/db-validations';
 import { ZodError } from 'zod';
+import { successResponse, errorResponse, ERROR_STATUS_MAP } from '@/lib/api-responses';
 
 export async function POST(request: Request) {
   try {
@@ -16,8 +17,8 @@ export async function POST(request: Request) {
     
     if (!token) {
       return NextResponse.json(
-        { success: false, error: 'Token required' },
-        { status: 401 }
+        errorResponse('UNAUTHORIZED', 'Token required'),
+        { status: ERROR_STATUS_MAP.UNAUTHORIZED }
       );
     }
     
@@ -31,49 +32,36 @@ export async function POST(request: Request) {
     
     if (!event || event.id !== validated.event_id) {
       return NextResponse.json(
-        { success: false, error: 'Invalid token or event access denied' },
-        { status: 403 }
+        errorResponse('FORBIDDEN', 'Invalid token or event access denied'),
+        { status: ERROR_STATUS_MAP.FORBIDDEN }
       );
     }
     
     // Check event is active
     if (event.status !== 'active') {
       return NextResponse.json(
-        { success: false, error: 'Event is not active' },
-        { status: 400 }
+        errorResponse('BAD_REQUEST', 'Event is not active'),
+        { status: ERROR_STATUS_MAP.BAD_REQUEST }
       );
     }
     
     // Add team
     const team = await addTeam(validated);
     
-    return NextResponse.json(
-      {
-        success: true,
-        data: team,
-      },
-      { status: 201 }
-    );
+    return NextResponse.json(successResponse(team), { status: 201 });
   } catch (error) {
     if (error instanceof ZodError) {
       return NextResponse.json(
-        {
-          success: false,
-          error: 'Validation failed',
-          details: error.errors,
-        },
-        { status: 400 }
+        errorResponse('VALIDATION_ERROR', error.errors[0]?.message || 'Invalid input'),
+        { status: ERROR_STATUS_MAP.VALIDATION_ERROR }
       );
     }
-    
+
     console.error('Add team error:', error);
-    
+
     return NextResponse.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : 'Failed to add team',
-      },
-      { status: 500 }
+      errorResponse('INTERNAL_ERROR', error instanceof Error ? error.message : 'Failed to add team'),
+      { status: ERROR_STATUS_MAP.INTERNAL_ERROR }
     );
   }
 }

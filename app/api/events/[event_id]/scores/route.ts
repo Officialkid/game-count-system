@@ -66,8 +66,8 @@ export async function POST(
       // Check if day is locked
       if (day.is_locked) {
         return NextResponse.json(
-          errorResponse('BAD_REQUEST', `Day ${body.day_number} is locked`),
-          { status: ERROR_STATUS_MAP.BAD_REQUEST }
+          errorResponse('CONFLICT', `Day ${body.day_number} is locked`),
+          { status: ERROR_STATUS_MAP.CONFLICT }
         );
       }
       
@@ -84,12 +84,7 @@ export async function POST(
     });
     
     // Validate points >= 0
-    if (validated.points < 0) {
-      return NextResponse.json(
-        errorResponse('VALIDATION_ERROR', 'Points must be >= 0'),
-        { status: ERROR_STATUS_MAP.VALIDATION_ERROR }
-      );
-    }
+    // Allow negative points (penalties) - CreateScoreSchema permits integers
     
     // Add score
     const score = await addScore(validated);

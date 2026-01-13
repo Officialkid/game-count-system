@@ -8,6 +8,7 @@
 
 import { NextResponse } from 'next/server';
 import { cleanupExpiredEvents, markExpiredEvents } from '@/lib/db-access';
+import { successResponse, errorResponse, ERROR_STATUS_MAP } from '@/lib/api-responses';
 
 export async function GET(request: Request) {
   // Verify cron secret to prevent unauthorized access
@@ -16,8 +17,8 @@ export async function GET(request: Request) {
   
   if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
     return NextResponse.json(
-      { error: 'Unauthorized' },
-      { status: 401 }
+      errorResponse('UNAUTHORIZED', 'Invalid cron secret'),
+      { status: ERROR_STATUS_MAP.UNAUTHORIZED }
     );
   }
   
@@ -32,24 +33,20 @@ export async function GET(request: Request) {
     
     const duration = Date.now() - startTime;
     
-    return NextResponse.json({
-      success: true,
-      data: {
+    return NextResponse.json(
+      successResponse({
         marked_expired: markedCount,
         deleted: deletedCount,
         duration_ms: duration,
         timestamp: new Date().toISOString(),
-      },
-    });
+      }),
+      { status: 200 }
+    );
   } catch (error) {
     console.error('Cleanup cron error:', error);
-    
     return NextResponse.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
-      },
-      { status: 500 }
+      errorResponse('INTERNAL_ERROR', error instanceof Error ? error.message : 'Unknown error'),
+      { status: ERROR_STATUS_MAP.INTERNAL_ERROR }
     );
   }
 }

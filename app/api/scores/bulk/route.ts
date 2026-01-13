@@ -113,7 +113,7 @@ export async function POST(request: Request) {
               error: 'Day is locked',
               message: `Day ${validated.day_number} is locked and cannot accept new scores. Please unlock the day first.`
             },
-            { status: 400 }
+            { status: 409 }
           );
         }
         

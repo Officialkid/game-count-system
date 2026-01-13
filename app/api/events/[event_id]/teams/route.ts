@@ -74,18 +74,21 @@ export async function POST(
   try {
     const { event_id } = params;
     
-    // Get admin token from header
+    // Allow admin or scorer to create teams (scorer-only role limited to team creation and scoring)
     const adminToken = request.headers.get('x-admin-token');
-    
-    if (!adminToken) {
+    const scorerToken = request.headers.get('x-scorer-token');
+
+    if (!adminToken && !scorerToken) {
       return NextResponse.json(
-        errorResponse('UNAUTHORIZED', 'X-ADMIN-TOKEN header required'),
+        errorResponse('UNAUTHORIZED', 'X-ADMIN-TOKEN or X-SCORER-TOKEN header required'),
         { status: ERROR_STATUS_MAP.UNAUTHORIZED }
       );
     }
-    
-    // Verify admin token has access to this event
-    const event = await getEventByToken(adminToken, 'admin');
+
+    // Verify token has access to this event (prefer admin)
+    const event = adminToken
+      ? await getEventByToken(adminToken, 'admin')
+      : await getEventByToken(scorerToken!, 'scorer');
     
     if (!event || event.id !== event_id) {
       return NextResponse.json(

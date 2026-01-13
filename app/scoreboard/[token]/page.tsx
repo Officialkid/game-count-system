@@ -170,7 +170,18 @@ function ScoreboardContent({ token }: { token: string }) {
           setTimeout(() => setRankChanges([]), 1000);
         }
         
-        setTeams(newTeams);
+        // Normalize team fields to expected UI shape (`team_name` used in UI)
+        const normalizedTeams: Team[] = newTeams.map((t: any, idx: number) => ({
+          id: t.id,
+          team_name: t.team_name || t.name || `Team ${idx + 1}`,
+          avatar_url: t.avatar_url || null,
+          total_points: Number(t.total_points || 0),
+          previousRank: t.previousRank,
+          // include color if available for UI
+          ...(t.color ? { color: t.color } : {}),
+        }));
+
+        setTeams(normalizedTeams);
         const scores = data.scores || data.history || [];
       setHistory(scores);
       setInvalid(null);
@@ -584,7 +595,7 @@ function ScoreboardContent({ token }: { token: string }) {
                                 ) : (
                                   <div 
                                     className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-base shadow-md"
-                                    style={{ backgroundColor: event?.theme_color || '#6b46c1' }}
+                                    style={{ backgroundColor: (team as any).color || event?.theme_color || '#6b46c1' }}
                                   >
                                     {safeInitial(team.team_name)}
                                   </div>
@@ -650,7 +661,9 @@ function ScoreboardContent({ token }: { token: string }) {
               <h2 className="text-2xl font-bold flex items-center gap-2">
                 📜 Full Game History
               </h2>
-              <p className="text-sm opacity-90 mt-1">{history.length} entries • Most recent first</p>
+              <p className="text-sm opacity-90 mt-1">
+                {event?.mode === 'quick' ? `${history.length} updates • Most recent first` : `${history.length} entries • Most recent first`}
+              </p>
             </div>
             
             <div className="p-6">

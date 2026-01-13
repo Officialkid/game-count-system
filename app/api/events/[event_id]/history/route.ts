@@ -6,33 +6,43 @@
 import { NextResponse } from 'next/server';
 import { getEventByToken } from '@/lib/db-access';
 import { query } from '@/lib/db-client';
+import { successResponse, errorResponse, ERROR_STATUS_MAP } from '@/lib/api-responses';
 
 export async function GET(
   request: Request,
   { params }: { params: { event_id: string } }
 ) {
   try {
-    const authHeader = request.headers.get('authorization') || request.headers.get('x-scorer-token') || request.headers.get('x-admin-token');
+    const authHeader = request.headers.get('authorization') || request.headers.get('x-admin-token') || request.headers.get('x-scorer-token');
     const token = authHeader?.replace('Bearer ', '') || authHeader || '';
 
     if (!token) {
       return NextResponse.json(
-        { success: false, error: 'Token required' },
-        { status: 401 }
+        errorResponse('UNAUTHORIZED', 'Token required'),
+        { status: ERROR_STATUS_MAP.UNAUTHORIZED }
       );
     }
 
     const { event_id } = params;
 
-    // Verify token has access (scorer or admin)
-    const eventByScorer = await getEventByToken(token, 'scorer');
+    // SECURITY: history listing and edit/delete must be admin-only.
+    // Only accept admin tokens here to prevent scorer tokens from accessing edits.
     const eventByAdmin = await getEventByToken(token, 'admin');
-    const event = eventByScorer || eventByAdmin;
 
-    if (!event || event.id !== event_id) {
+    if (!eventByAdmin || eventByAdmin.id !== event_id) {
       return NextResponse.json(
-        { success: false, error: 'Invalid token or access denied' },
-        { status: 403 }
+        errorResponse('FORBIDDEN', 'Invalid token or access denied'),
+        { status: ERROR_STATUS_MAP.FORBIDDEN }
+      );
+    }
+
+    const event = eventByAdmin;
+
+    // Expired events should return 410
+    if (event.status === 'expired') {
+      return NextResponse.json(
+        errorResponse('NOT_FOUND', 'Event expired'),
+        { status: 410 }
       );
     }
 
@@ -60,18 +70,15 @@ export async function GET(
       [event_id]
     );
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        scores: result.rows,
-        total_entries: result.rowCount,
-      },
-    });
+    return NextResponse.json(
+      successResponse({ scores: result.rows, total_entries: result.rowCount }),
+      { status: 200 }
+    );
   } catch (error) {
     console.error('Score history error:', error);
     return NextResponse.json(
-      { success: false, error: error instanceof Error ? error.message : 'Failed to load history' },
-      { status: 500 }
+      errorResponse('INTERNAL_ERROR', error instanceof Error ? error.message : 'Failed to load history'),
+      { status: ERROR_STATUS_MAP.INTERNAL_ERROR }
     );
   }
 }

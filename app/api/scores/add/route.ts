@@ -7,6 +7,7 @@ import { NextResponse } from 'next/server';
 import { addScore, getEventByToken } from '@/lib/db-access';
 import { CreateScoreSchema } from '@/lib/db-validations';
 import { ZodError } from 'zod';
+import { successResponse, errorResponse, ERROR_STATUS_MAP } from '@/lib/api-responses';
 
 export async function POST(request: Request) {
   try {
@@ -16,8 +17,8 @@ export async function POST(request: Request) {
     
     if (!token) {
       return NextResponse.json(
-        { success: false, error: 'Token required' },
-        { status: 401 }
+        errorResponse('UNAUTHORIZED', 'Token required'),
+        { status: ERROR_STATUS_MAP.UNAUTHORIZED }
       );
     }
     
@@ -39,52 +40,35 @@ export async function POST(request: Request) {
     // Check event is active
     if (event.status !== 'active') {
       return NextResponse.json(
-        { success: false, error: 'Event is not active' },
-        { status: 400 }
+        errorResponse('BAD_REQUEST', 'Event is not active'),
+        { status: ERROR_STATUS_MAP.BAD_REQUEST }
       );
     }
     
     // Add score
     const score = await addScore(validated);
     
-    return NextResponse.json(
-      {
-        success: true,
-        data: score,
-      },
-      { status: 201 }
-    );
+    return NextResponse.json(successResponse(score), { status: 201 });
   } catch (error) {
     if (error instanceof ZodError) {
       return NextResponse.json(
-        {
-          success: false,
-          error: 'Validation failed',
-          details: error.errors,
-        },
-        { status: 400 }
+        errorResponse('VALIDATION_ERROR', error.errors[0]?.message || 'Invalid input'),
+        { status: ERROR_STATUS_MAP.VALIDATION_ERROR }
       );
     }
     
     // Handle locked day error
     if (error instanceof Error && error.message.includes('locked')) {
       return NextResponse.json(
-        {
-          success: false,
-          error: error.message,
-        },
-        { status: 400 }
+        errorResponse('CONFLICT', error.message),
+        { status: ERROR_STATUS_MAP.CONFLICT }
       );
     }
     
     console.error('Add score error:', error);
-    
     return NextResponse.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : 'Failed to add score',
-      },
-      { status: 500 }
+      errorResponse('INTERNAL_ERROR', error instanceof Error ? error.message : 'Failed to add score'),
+      { status: ERROR_STATUS_MAP.INTERNAL_ERROR }
     );
   }
 }
