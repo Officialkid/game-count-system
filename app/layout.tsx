@@ -1,3 +1,7 @@
+import './globals-enhanced.css'
+import './animations.css'
+import './mobile-optimized.css'
+
 export default function RootLayout({
   children,
 }: {
