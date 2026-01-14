@@ -110,15 +110,37 @@ export async function POST(
     }
     
     // Handle locked day error
-    if (error instanceof Error && error.message.includes('locked')) {
-      return NextResponse.json(
-        errorResponse('BAD_REQUEST', error.message),
-        { status: ERROR_STATUS_MAP.BAD_REQUEST }
-      );
+    if (error instanceof Error) {
+      const msg = error.message || '';
+      const anyErr = error as any;
+
+      // Locked day
+      if (msg.includes('locked')) {
+        return NextResponse.json(
+          errorResponse('BAD_REQUEST', msg),
+          { status: ERROR_STATUS_MAP.BAD_REQUEST }
+        );
+      }
+
+      // Team validation errors thrown from db-access
+      if (msg.toLowerCase().includes('team')) {
+        return NextResponse.json(
+          errorResponse('BAD_REQUEST', msg),
+          { status: ERROR_STATUS_MAP.BAD_REQUEST }
+        );
+      }
+
+      // Map common Postgres FK error code
+      if (anyErr.code === '23503') {
+        return NextResponse.json(
+          errorResponse('BAD_REQUEST', 'Invalid team or day reference'),
+          { status: ERROR_STATUS_MAP.BAD_REQUEST }
+        );
+      }
     }
-    
+
     console.error('Add score error:', error);
-    
+
     return NextResponse.json(
       errorResponse('INTERNAL_ERROR', 'Failed to add score'),
       { status: ERROR_STATUS_MAP.INTERNAL_ERROR }

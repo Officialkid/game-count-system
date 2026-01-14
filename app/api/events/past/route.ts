@@ -144,13 +144,23 @@ export async function GET(request: NextRequest) {
       detail: error?.detail,
     });
 
-    return NextResponse.json(
-      {
-        success: false,
-        error: error?.message || 'Failed to fetch past events',
-      },
-      { status: 500 }
-    );
+    // If DEBUG_API is enabled, include DB error code/detail in the response
+    const debug = process.env.DEBUG_API === 'true';
+
+    const responseBody: any = {
+      success: false,
+      error: error?.message || 'Failed to fetch past events',
+    };
+
+    if (debug) {
+      responseBody.debug = {
+        code: error?.code || null,
+        detail: error?.detail || null,
+        stack: error?.stack || null,
+      };
+    }
+
+    return NextResponse.json(responseBody, { status: 500 });
   }
 }
 

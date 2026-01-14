@@ -408,26 +408,49 @@ export async function addScore(input: CreateScoreInput): Promise<Score> {
       `SELECT is_locked FROM event_days WHERE id = $1`,
       [input.day_id]
     );
-    
+
     if (dayCheck.rows[0]?.is_locked) {
       throw new Error('Cannot add scores to a locked day');
     }
   }
-  
-  const result = await query<Score>(
-    `INSERT INTO scores (event_id, day_id, team_id, category, points)
-     VALUES ($1, $2, $3, $4, $5)
-     RETURNING *`,
-    [
-      input.event_id,
-      input.day_id || null,
-      input.team_id,
-      input.category,
-      input.points,
-    ]
+
+  // Ensure team exists and belongs to the event to provide clearer errors
+  const teamCheck = await query<{ id: string; event_id: string }>(
+    `SELECT id, event_id FROM teams WHERE id = $1`,
+    [input.team_id]
   );
-  
-  return result.rows[0];
+
+  if (!teamCheck.rows[0]) {
+    throw new Error('Team not found');
+  }
+
+  if (teamCheck.rows[0].event_id !== input.event_id) {
+    throw new Error('Team does not belong to the specified event');
+  }
+
+  try {
+    const result = await query<Score>(
+      `INSERT INTO scores (event_id, day_id, team_id, category, points)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING *`,
+      [
+        input.event_id,
+        input.day_id || null,
+        input.team_id,
+        input.category,
+        input.points,
+      ]
+    );
+
+    return result.rows[0];
+  } catch (error: any) {
+    // Map common Postgres errors to clearer messages where possible
+    if (error?.code === '23503') {
+      // Foreign key violation
+      throw new Error('Invalid reference: team or day not found');
+    }
+    throw error;
+  }
 }
 
 /**
