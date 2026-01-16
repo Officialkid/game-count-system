@@ -1,4 +1,50 @@
 /**
+ * Get or create an event day, ensuring label is never null and table exists.
+ * Throws a controlled error if event_days table is missing.
+ */
+export async function getOrCreateEventDay(event_id: string, day_number: number): Promise<EventDay> {
+  // Check if event_days table exists
+  try {
+    const tableCheck = await query<{ exists: boolean }>(
+      `SELECT EXISTS (
+        SELECT 1 FROM information_schema.tables WHERE table_name = 'event_days'
+      ) AS exists`
+    );
+    if (!tableCheck.rows[0]?.exists) {
+      const err: any = new Error('event_days table is missing');
+      err.status = 500;
+      err.code = 'TABLE_MISSING';
+      throw err;
+    }
+  } catch (err: any) {
+    if (err.code === 'TABLE_MISSING') throw err;
+    // If query itself fails, treat as missing table
+    const error: any = new Error('event_days table is missing or inaccessible');
+    error.status = 500;
+    error.code = 'TABLE_MISSING';
+    throw error;
+  }
+
+  // Try to get the day
+  let day = await getEventDay(event_id, day_number);
+  if (!day) {
+    // Always use default label format
+    day = await createDayIfNotExists({
+      event_id,
+      day_number,
+      label: `Day ${day_number}`,
+    });
+  } else if (!day.label) {
+    // Patch label if missing
+    day = await createDayIfNotExists({
+      event_id,
+      day_number,
+      label: `Day ${day_number}`,
+    });
+  }
+  return day;
+}
+/**
  * Data Access Layer
  * All database operations for GameScore
  * Token-based, event-scoped, no user auth
@@ -402,15 +448,42 @@ export interface ScoreByDay {
  * Add score to team
  */
 export async function addScore(input: CreateScoreInput): Promise<Score> {
-  // Check if day is locked (if day_id provided)
+  // Defensive: Check event_days table and columns if day_id provided
   if (input.day_id) {
-    const dayCheck = await query<{ is_locked: boolean }>(
-      `SELECT is_locked FROM event_days WHERE id = $1`,
-      [input.day_id]
-    );
-
-    if (dayCheck.rows[0]?.is_locked) {
-      throw new Error('Cannot add scores to a locked day');
+    try {
+      // Check if event_days table exists
+      const tableCheck = await query<{ exists: boolean }>(
+        `SELECT EXISTS (
+          SELECT 1 FROM information_schema.tables WHERE table_name = 'event_days'
+        ) AS exists`
+      );
+      if (!tableCheck.rows[0]?.exists) {
+        const err: any = new Error('event_days table is missing');
+        err.status = 500;
+        err.code = 'TABLE_MISSING';
+        throw err;
+      }
+      // Check if columns exist
+      const colCheck = await query<{ column_name: string }>(
+        `SELECT column_name FROM information_schema.columns WHERE table_name = 'event_days' AND column_name IN ('is_locked','label')`
+      );
+      const colNames = colCheck.rows.map(r => r.column_name);
+      if (!colNames.includes('is_locked')) {
+        const err: any = new Error('event_days.is_locked column is missing');
+        err.status = 500;
+        err.code = 'COLUMN_MISSING';
+        throw err;
+      }
+      // Check if day is locked
+      const dayCheck = await query<{ is_locked: boolean }>(
+        `SELECT is_locked FROM event_days WHERE id = $1`,
+        [input.day_id]
+      );
+      if (dayCheck.rows[0]?.is_locked) {
+        throw new Error('Cannot add scores to a locked day');
+      }
+    } catch (err) {
+      throw err;
     }
   }
 
@@ -428,6 +501,7 @@ export async function addScore(input: CreateScoreInput): Promise<Score> {
     throw new Error('Team does not belong to the specified event');
   }
 
+  // Only wrap the DB insert in try/catch for DB errors
   try {
     const result = await query<Score>(
       `INSERT INTO scores (event_id, day_id, team_id, category, points)
@@ -441,14 +515,23 @@ export async function addScore(input: CreateScoreInput): Promise<Score> {
         input.points,
       ]
     );
-
     return result.rows[0];
-  } catch (error: any) {
-    // Map common Postgres errors to clearer messages where possible
-    if (error?.code === '23503') {
+  } catch (err: any) {
+    console.error('[SCORES][DB ERROR]', err);
+    if (err?.code === '23503') {
       // Foreign key violation
-      throw new Error('Invalid reference: team or day not found');
+      const error: any = new Error('Invalid reference: team or day not found');
+      error.status = 409;
+      throw error;
     }
+    if (err?.code === '23514' && /points/.test(err?.message || '')) {
+      // DB check constraint on points
+      const error: any = new Error('Points value not allowed by DB constraint');
+      error.status = 400;
+      throw error;
+    }
+    const error: any = new Error('Failed to record score');
+    error.status = 400;
     throw error;
   }
 }
