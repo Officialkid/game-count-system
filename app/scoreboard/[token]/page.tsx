@@ -49,21 +49,19 @@ interface RankChange {
 
 export default function PublicScoreboardPage({ params }: { params: { token: string } }) {
   const token = params.token;
-  const [event, setEvent] = useState<EventMeta | null>(null);
-  const [teams, setTeams] = useState<Team[]>([]);
-  const [history, setHistory] = useState<HistoryItem[]>([]);
-  const [scoresByDay, setScoresByDay] = useState<DayScore[]>([]);
-  const [selectedDay, setSelectedDay] = useState<number | 'cumulative'>('cumulative');
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string>('');
-  const [isFullscreen, setIsFullscreen] = useState(false);
-  const [invalid, setInvalid] = useState<string | null>(null);
-  const [rankChanges, setRankChanges] = useState<RankChange[]>([]);
-  const prevTeamsRef = useRef<Map<number, number>>(new Map());
-  const [lastUpdate, setLastUpdate] = useState<number>(Date.now());
-  const [reloadCounter, setReloadCounter] = useState(0);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-
+  if (!token || token === 'undefined') {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-purple-50 to-blue-50">
+        <div className="max-w-md w-full bg-white rounded-xl shadow-lg p-8 text-center">
+          <div className="text-6xl mb-4">⚠️</div>
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">Missing or Invalid Token</h1>
+          <p className="text-gray-600 mb-6">
+            No event token was provided in the URL. Please check your link or contact the event organizer for a valid scoreboard link.
+          </p>
+        </div>
+      </div>
+    );
+  }
   // Wrap entire component in error boundary
   return (
     <ErrorBoundary

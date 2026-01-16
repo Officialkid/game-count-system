@@ -107,7 +107,7 @@ export async function GET(request: NextRequest) {
           e.admin_token = $1
           AND e.status = 'archived'
         GROUP BY e.id, e.name, e.mode, e.finalized_at, e.is_finalized, e.public_token
-        ORDER BY COALESCE(e.finalized_at, e.updated_at) DESC
+        ORDER BY COALESCE(e.finalized_at, e.created_at) DESC
       `,
       [admin_token]
     );
