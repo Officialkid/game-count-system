@@ -132,7 +132,7 @@ All foreign keys use `ON DELETE CASCADE`:
 
 ### Option 1: Direct psql
 ```bash
-psql -h localhost -U your_user -d your_database -f migrations/schema-audit-migration.sql
+psql -h game-count-system.onrender.com -U your_user -d your_database -f migrations/schema-audit-migration.sql
 ```
 
 ### Option 2: Via Node.js

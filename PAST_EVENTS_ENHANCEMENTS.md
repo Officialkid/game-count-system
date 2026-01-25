@@ -271,11 +271,11 @@ WHERE t4.event_id = e.id
 ```bash
 # Get past events with summary
 curl -H "X-ADMIN-TOKEN: your-token" \
-  http://localhost:3000/api/events/past
+  https://game-count-system.onrender.com/api/events/past
 
 # Export CSV
 curl -H "X-ADMIN-TOKEN: your-token" \
-  http://localhost:3000/api/events/evt_123/export-csv \
+  https://game-count-system.onrender.com/api/events/evt_123/export-csv \
   --output results.csv
 ```
 

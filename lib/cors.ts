@@ -10,8 +10,7 @@
  */
 
 const ALLOWED_ORIGINS = [
-  'http://localhost:3000',
-  'http://localhost:3001',
+  'https://game-count-system.onrender.com',
   'https://game-count-system.vercel.app',
   'https://game-count-system.onrender.com',
   // Add your custom domain here if needed

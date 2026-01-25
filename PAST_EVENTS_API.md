@@ -164,7 +164,7 @@ None (GET request)
 ### cURL
 
 ```bash
-curl -X GET "http://localhost:3000/api/events/past" \
+curl -X GET "https://game-count-system.onrender.com/api/events/past" \
   -H "X-ADMIN-TOKEN: your-admin-token-here"
 ```
 
@@ -265,7 +265,7 @@ admin_token = 'your-admin-token-here'
 headers = {'X-ADMIN-TOKEN': admin_token}
 
 response = requests.get(
-    'http://localhost:3000/api/events/past',
+    'https://game-count-system.onrender.com/api/events/past',
     headers=headers
 )
 

@@ -9,21 +9,21 @@
  *   node test-past-events.js <admin-token> [api-url]
  * 
  * Example:
- *   node test-past-events.js "your-admin-token-here" "http://localhost:3000"
+ *   node test-past-events.js "your-admin-token-here" "https://game-count-system.onrender.com"
  */
 
 const http = require('http');
 const https = require('https');
 
 const adminToken = process.argv[2];
-const apiUrl = process.argv[3] || 'http://localhost:3000';
+const apiUrl = process.argv[3] || 'https://game-count-system.onrender.com';
 
 if (!adminToken) {
   console.error('❌ Error: Admin token required');
   console.error('\nUsage: node test-past-events.js <admin-token> [api-url]');
   console.error('\nExample:');
   console.error('  node test-past-events.js "your-admin-token-here"');
-  console.error('  node test-past-events.js "your-admin-token-here" "http://localhost:3000"');
+  console.error('  node test-past-events.js "your-admin-token-here" "https://game-count-system.onrender.com"');
   process.exit(1);
 }
 

@@ -34,7 +34,7 @@ class EmailService {
   }
 
   async sendVerificationEmail(email: string, token: string): Promise<boolean> {
-    const appUrl = process.env.APP_URL || 'http://localhost:3000';
+    const appUrl = process.env.APP_URL || 'https://game-count-system.onrender.com';
     const verificationLink = `${appUrl}/verify-email?token=${token}`;
 
     const html = `
@@ -83,7 +83,7 @@ class EmailService {
   }
 
   async sendPasswordResetEmail(email: string, token: string): Promise<boolean> {
-    const appUrl = process.env.APP_URL || 'http://localhost:3000';
+    const appUrl = process.env.APP_URL || 'https://game-count-system.onrender.com';
     const resetLink = `${appUrl}/reset-password?token=${token}`;
 
     const html = `

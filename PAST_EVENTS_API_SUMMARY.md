@@ -149,7 +149,7 @@ ORDER BY COALESCE(e.finalized_at, e.updated_at) DESC
 
 **Usage**:
 ```bash
-# Test with default server (localhost:3000)
+# Test with default server (game-count-system.onrender.com)
 node test-past-events.js "your-admin-token-here"
 
 # Test with custom URL
@@ -160,7 +160,7 @@ node test-past-events.js "your-admin-token-here" "http://api.example.com"
 ```
 🧪 Testing Past Events API
 ══════════════════════════════════════════════════
-📍 Endpoint: http://localhost:3000/api/events/past
+📍 Endpoint: https://game-count-system.onrender.com/api/events/past
 🔑 Admin Token: your-a...here
 ══════════════════════════════════════════════════
 

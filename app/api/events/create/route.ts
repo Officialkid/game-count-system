@@ -94,7 +94,7 @@ export async function POST(request: Request) {
     }
     
     // Build URLs with embedded tokens
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://game-count-system.onrender.com';
     console.log('[CREATE EVENT] Using base URL:', baseUrl);
     
     const response = {

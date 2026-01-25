@@ -3,7 +3,7 @@
 **Status**: ✅ READY FOR TESTING & DEPLOYMENT  
 **Date**: 2024  
 **Build**: ✓ Passing  
-**Dev Server**: ✓ Running at http://localhost:3000
+**Dev Server**: ✓ Running at https://game-count-system.onrender.com
 
 ---
 
@@ -171,7 +171,7 @@ npm run build
 ```bash
 npm run dev
 # Result: ✓ Ready in 6.9s
-# Running at: http://localhost:3000
+# Running at: https://game-count-system.onrender.com
 ```
 
 ### Step 3: Manual Testing
@@ -360,7 +360,7 @@ npm run dev
 
 ### For Testing
 1. Run `npm run dev`
-2. Open http://localhost:3000/score/[valid-token]
+2. Open https://game-count-system.onrender.com/score/[valid-token]
 3. Enable offline in DevTools
 4. Follow `OFFLINE_TESTING.md` procedures
 

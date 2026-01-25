@@ -498,7 +498,7 @@ Reliability
 ║                                                                ║
 ║             COMPLETE, TESTED & PRODUCTION READY               ║
 ║                                                                ║
-║   Dev Server: ✓ Running at http://localhost:3000             ║
+║   Dev Server: ✓ Running at https://game-count-system.onrender.com             ║
 ║   Build Status: ✓ Passing                                     ║
 ║   Documentation: ✓ Comprehensive (4,200+ lines)              ║
 ║   Quality: ✓ Verified                                         ║

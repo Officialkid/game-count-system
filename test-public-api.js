@@ -4,7 +4,7 @@
  * Tests the refactored token-based public APIs
  */
 
-const BASE_URL = process.env.NEXT_PUBLIC_URL || 'http://localhost:3000';
+const BASE_URL = process.env.NEXT_PUBLIC_URL || 'https://game-count-system.onrender.com';
 
 async function testPublicAPIs() {
   console.log('🧪 Testing Public API Endpoints\n');

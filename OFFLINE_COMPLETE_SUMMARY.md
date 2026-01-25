@@ -402,7 +402,7 @@ OFFLINE_CHANGELOG.md                  (changelog - 300+ lines)
 ## 🎯 Next Steps
 
 ### For Testing (Manual)
-1. Open localhost:3000/score/[valid-token]
+1. Open game-count-system.onrender.com/score/[valid-token]
 2. Enable offline in DevTools
 3. Enter a score
 4. Verify "Queued" message appears

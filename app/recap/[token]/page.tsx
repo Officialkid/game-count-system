@@ -38,7 +38,7 @@ type EventData = {
 
 async function getEventResults(token: string): Promise<EventData | null> {
   try {
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://game-count-system.onrender.com';
     const res = await fetch(`${baseUrl}/events/${token}`, {
       cache: 'no-store',
     });

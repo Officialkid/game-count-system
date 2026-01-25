@@ -5,7 +5,7 @@
  * with support for positive and negative points (penalties)
  */
 
-const BASE_URL = process.env.NEXT_PUBLIC_URL || 'http://localhost:3000';
+const BASE_URL = process.env.NEXT_PUBLIC_URL || 'https://game-count-system.onrender.com';
 
 // Example test data
 const testData = {

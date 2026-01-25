@@ -210,23 +210,23 @@ app/api/public/
 
 **Test Verify Endpoint**:
 ```bash
-curl http://localhost:3000/api/public/verify/abc123def456
+curl https://game-count-system.onrender.com/api/public/verify/abc123def456
 ```
 
 **Test Scores Endpoint**:
 ```bash
-curl http://localhost:3000/api/public/abc123def456/scores
+curl https://game-count-system.onrender.com/api/public/abc123def456/scores
 ```
 
 **Test 404**:
 ```bash
-curl http://localhost:3000/api/public/verify/invalid_token
+curl https://game-count-system.onrender.com/api/public/verify/invalid_token
 # Should return 404 with friendly message
 ```
 
 **Test Expired Event (410)**:
 ```bash
-curl http://localhost:3000/api/public/verify/expired_token
+curl https://game-count-system.onrender.com/api/public/verify/expired_token
 # Should return 410 with expiry message
 ```
 

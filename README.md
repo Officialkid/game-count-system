@@ -47,7 +47,7 @@ npm run dev
 
 ```bash
 # Create your first event
-curl -X POST http://localhost:3000/api/events/create \
+curl -X POST https://game-count-system.onrender.com/api/events/create \
   -H "Content-Type: application/json" \
   -d '{
     "name": "Summer Camp 2026",
@@ -126,7 +126,7 @@ node migrations/run-migration.js
 
 ```bash
 # Add a team (requires scorer or admin token)
-curl -X POST http://localhost:3000/api/teams/add \
+curl -X POST https://game-count-system.onrender.com/api/teams/add \
   -H "Authorization: Bearer YOUR_SCORER_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -136,7 +136,7 @@ curl -X POST http://localhost:3000/api/teams/add \
   }'
 
 # Add a score
-curl -X POST http://localhost:3000/api/scores/add \
+curl -X POST https://game-count-system.onrender.com/api/scores/add \
   -H "Authorization: Bearer YOUR_SCORER_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -147,7 +147,7 @@ curl -X POST http://localhost:3000/api/scores/add \
   }'
 
 # View public scoreboard (no auth)
-curl http://localhost:3000/api/public/YOUR_PUBLIC_TOKEN
+curl https://game-count-system.onrender.com/api/public/YOUR_PUBLIC_TOKEN
 ```
 
 ---
