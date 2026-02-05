@@ -11,8 +11,8 @@ export interface EventCardProps {
     event_name: string;
     status?: string;
     team_count?: number;
-    start_date?: string | null;
-    end_date?: string | null;
+    start_at?: string | null;
+    end_at?: string | null;
     is_active?: boolean;
     updated_at?: string | null;
   };
@@ -31,13 +31,13 @@ export const EventCard = React.memo(function EventCard({
 }: EventCardProps) {
   // Calculate event status based on dates
   const calculatedStatus = getEventStatus(
-    event.start_date || null,
-    event.end_date || null,
+    event.start_at || null,
+    event.end_at || null,
     event.is_active !== false
   ) as EventStatus;
 
   const statusConfig = STATUS_BADGE_CONFIG[calculatedStatus];
-  const hasDateRange = event.start_date && event.end_date;
+  const hasDateRange = event.start_at && event.end_at;
 
   const lastUpdated = event.updated_at
     ? new Date(event.updated_at)

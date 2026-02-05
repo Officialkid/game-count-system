@@ -5,8 +5,8 @@
  */
 
 import { NextResponse } from 'next/server';
-import { getEventByToken } from '@/lib/db-access';
-import { successResponse, errorResponse, ERROR_STATUS_MAP } from '@/lib/api-responses';
+import { db } from '@/lib/firebase-admin';
+import { prepareEventForResponse } from '@/lib/firebase-helpers';
 
 export async function GET(
   request: Request,
@@ -15,43 +15,84 @@ export async function GET(
   try {
     const { token } = params;
     
-    // Determine token type by checking DB, and require matching header for admin/scorer tokens
+    // Determine token type by checking Firestore
     const headerAdmin = request.headers.get('x-admin-token');
     const headerScorer = request.headers.get('x-scorer-token');
 
-    // If token corresponds to an admin token in DB, require header to match
-    const adminEvent = await getEventByToken(token, 'admin');
+    // Helper function to get event by token field
+    const getEventByTokenField = async (tokenField: string, tokenValue: string) => {
+      const eventsSnapshot = await db.collection('events')
+        .where(tokenField, '==', tokenValue)
+        .limit(1)
+        .get();
+      
+      if (eventsSnapshot.empty) {
+        return null;
+      }
+      
+      const eventDoc = eventsSnapshot.docs[0];
+      return {
+        id: eventDoc.id,
+        ...eventDoc.data()
+      };
+    };
+
+    // Check if token is an admin token
+    const adminEvent = await getEventByTokenField('adminToken', token);
     let event: any = null;
+    
     if (adminEvent) {
+      // Require admin header to match
       if (!headerAdmin || headerAdmin !== token) {
         return NextResponse.json(
-          errorResponse('UNAUTHORIZED', 'Admin token required'),
-          { status: ERROR_STATUS_MAP.UNAUTHORIZED }
+          {
+            success: false,
+            data: null,
+            error: {
+              code: 'UNAUTHORIZED',
+              message: 'Admin token required'
+            }
+          },
+          { status: 401 }
         );
       }
-      // Use admin-level event
       event = adminEvent;
     } else {
-      // If token corresponds to a scorer token, require scorer header
-      const scorerEvent = await getEventByToken(token, 'scorer');
+      // Check if token is a scorer token
+      const scorerEvent = await getEventByTokenField('scorerToken', token);
       if (scorerEvent) {
+        // Require scorer header to match
         if (!headerScorer || headerScorer !== token) {
           return NextResponse.json(
-            errorResponse('UNAUTHORIZED', 'Scorer token required'),
-            { status: ERROR_STATUS_MAP.UNAUTHORIZED }
+            {
+              success: false,
+              data: null,
+              error: {
+                code: 'UNAUTHORIZED',
+                message: 'Scorer token required'
+              }
+            },
+            { status: 401 }
           );
         }
         event = scorerEvent;
       } else {
         // Treat as public token
-        event = await getEventByToken(token, 'public');
+        event = await getEventByTokenField('token', token);
       }
     }
     
     if (!event) {
       return NextResponse.json(
-        errorResponse('NOT_FOUND', 'Invalid or expired token'),
-        { status: ERROR_STATUS_MAP.NOT_FOUND }
+        {
+          success: false,
+          data: null,
+          error: {
+            code: 'NOT_FOUND',
+            message: 'Invalid or expired token'
+          }
+        },
+        { status: 404 }
       );
     }
     
@@ -64,40 +105,56 @@ export async function GET(
           error: {
             code: 'GONE',
             message: 'Event has expired',
-            expired_at: event.end_at
+            expired_at: event.endDate
           }
         },
         { status: 410 }
       );
     }
     
+    // Prepare event data for response
+    const preparedEvent = prepareEventForResponse(event);
+    
     // Return event info (hide sensitive tokens - only admin receives tokens)
     const response: any = {
-      id: event.id,
-      name: event.name,
-      mode: event.mode,
-      status: event.status,
-      start_at: event.start_at,
-      end_at: event.end_at,
-      created_at: event.created_at,
+      id: preparedEvent.id,
+      name: preparedEvent.name,
+      mode: preparedEvent.mode,
+      status: preparedEvent.status,
+      startDate: preparedEvent.startDate,
+      endDate: preparedEvent.endDate,
+      createdAt: preparedEvent.createdAt,
     };
+    
     // Include tokens only for admin access
     if (adminEvent) {
-      response.admin_token = event.admin_token;
-      response.scorer_token = event.scorer_token;
-      response.public_token = event.public_token;
+      response.adminToken = event.adminToken;
+      response.scorerToken = event.scorerToken;
+      response.token = event.token;
     }
     
     return NextResponse.json(
-      successResponse({ event: response }),
+      {
+        success: true,
+        data: { event: response },
+        error: null
+      },
       { status: 200 }
     );
-  } catch (error) {
+  } catch (error: any) {
     console.error('Get event by token error:', error);
     
     return NextResponse.json(
-      errorResponse('INTERNAL_ERROR', 'Failed to get event'),
-      { status: ERROR_STATUS_MAP.INTERNAL_ERROR }
+      {
+        success: false,
+        data: null,
+        error: {
+          code: 'INTERNAL_ERROR',
+          message: 'Failed to get event',
+          details: error.message
+        }
+      },
+      { status: 500 }
     );
   }
 }

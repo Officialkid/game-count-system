@@ -1,124 +1,211 @@
 /**
- * Create Event API
- * POST /api/events
- * Public endpoint - no authentication required
- * Returns URLs with embedded tokens for admin, scorer, and public access
+ * Events API - Create New Event
+ * Converted from PostgreSQL to Firestore
+ * POST /api/events/create
  */
 
 import { NextResponse } from 'next/server';
-import { createEvent, createDayIfNotExists } from '@/lib/db-access';
-import { CreateEventSchema } from '@/lib/db-validations';
-import { successResponse, errorResponse, ERROR_STATUS_MAP } from '@/lib/api-responses';
-import { handleCors } from '@/lib/cors';
-import { ZodError } from 'zod';
+import { adminCreateDocument, adminQueryCollection } from '@/lib/firestore-admin-helpers';
+import { COLLECTIONS, EventMode, EventStatus, ScoringMode } from '@/lib/firebase-collections';
+import { 
+  calculateAutoCleanupDate, 
+  calculateEndDate, 
+  validateModeConstraints,
+  getEventModeConfig 
+} from '@/lib/event-mode-helpers';
+import { generateEventTokens, generateShareLink } from '@/lib/token-utils';
+
+interface CreateEventRequest {
+  name: string;
+  number_of_days: number;
+  scoringMode?: ScoringMode;
+  
+  // New mode fields
+  eventMode?: EventMode;
+  requiresAuthentication?: boolean;
+  organizationId?: string;
+  organizationName?: string;
+  createdBy?: string;
+}
 
 export async function POST(request: Request) {
-  console.log('[CREATE EVENT] Request received');
-  
-  // Handle CORS
-  const cors = handleCors(request);
-  if (cors instanceof Response) {
-    return cors;
-  }
-  const corsHeaders = cors;
-
   try {
-    // Parse request body
-    let body;
-    try {
-      body = await request.json();
-      console.log('[CREATE EVENT] Request body:', JSON.stringify(body, null, 2));
-    } catch (parseError) {
-      console.error('[CREATE EVENT] Failed to parse JSON:', parseError);
+    const body: CreateEventRequest = await request.json();
+    const { 
+      name, 
+      number_of_days, 
+      scoringMode = 'continuous',
+      eventMode = 'quick',
+      requiresAuthentication,
+      organizationId,
+      organizationName,
+      createdBy,
+    } = body;
+
+    // Validation
+    if (!name || !name.trim()) {
       return NextResponse.json(
-        errorResponse('VALIDATION_ERROR', 'Invalid JSON in request body'),
-        { status: 400, headers: corsHeaders as HeadersInit }
+        { success: false, error: 'Event name is required' },
+        { status: 400 }
       );
     }
-    
-    // Validate input with Zod
-    let validated;
-    try {
-      validated = CreateEventSchema.parse(body);
-      console.log('[CREATE EVENT] Validated input:', JSON.stringify(validated, null, 2));
-    } catch (error) {
-      if (error instanceof ZodError) {
-        console.error('[CREATE EVENT] Validation error:', error.errors);
+
+    if (!number_of_days || number_of_days < 1) {
+      return NextResponse.json(
+        { success: false, error: 'Number of days must be at least 1' },
+        { status: 400 }
+      );
+    }
+
+    // Get mode configuration
+    const modeConfig = getEventModeConfig(eventMode);
+
+    // Determine authentication requirement
+    const authRequired = requiresAuthentication !== undefined 
+      ? requiresAuthentication 
+      : modeConfig.requiresAuth;
+
+    // Validate mode constraints
+    const validation = validateModeConstraints(eventMode, number_of_days, authRequired);
+    if (!validation.valid) {
+      return NextResponse.json(
+        { 
+          success: false, 
+          error: 'Mode validation failed',
+          details: validation.errors 
+        },
+        { status: 400 }
+      );
+    }
+
+    // Advanced mode requires organization for some features
+    if (eventMode === 'advanced' && modeConfig.features.organizations) {
+      if (!organizationId || !organizationName) {
         return NextResponse.json(
-          errorResponse('VALIDATION_ERROR', error.errors[0]?.message || 'Invalid input'),
-          { status: 400, headers: corsHeaders as HeadersInit }
+          { success: false, error: 'Organization information required for Advanced mode' },
+          { status: 400 }
         );
       }
-      throw error;
     }
-    
-    // Create event with generated tokens
-    let event;
-    try {
-      console.log('[CREATE EVENT] Calling createEvent...');
-      event = await createEvent(validated);
-      console.log('[CREATE EVENT] Event created successfully:', {
-        id: event.id,
-        name: event.name,
-        mode: event.mode,
-        admin_token: event.admin_token?.substring(0, 8) + '...',
-        scorer_token: event.scorer_token?.substring(0, 8) + '...',
-        public_token: event.public_token?.substring(0, 8) + '...',
-      });
 
-      // Create event days if this is a camp event with specified days
-      if (event.mode === 'camp' && body.number_of_days) {
-        const numberOfDays = parseInt(body.number_of_days, 10);
-        console.log(`[CREATE EVENT] Creating ${numberOfDays} days for camp event`);
-        
-        for (let dayNum = 1; dayNum <= numberOfDays; dayNum++) {
-          await createDayIfNotExists({
-            event_id: event.id,
-            day_number: dayNum,
-            label: `Day ${dayNum}`
-          });
-        }
-        console.log(`[CREATE EVENT] Created ${numberOfDays} event days`);
-      }
-    } catch (dbError: any) {
-      console.error('[CREATE EVENT] Database error:', {
-        message: dbError?.message,
-        stack: dbError?.stack,
-        code: dbError?.code,
-        detail: dbError?.detail,
-      });
-      return NextResponse.json(
-        errorResponse('INTERNAL_ERROR', `Database error: ${dbError?.message || 'Unknown error'}`),
-        { status: 500, headers: corsHeaders as HeadersInit }
-      );
-    }
-    
-    // Build URLs with embedded tokens
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://game-count-system.onrender.com';
-    console.log('[CREATE EVENT] Using base URL:', baseUrl);
-    
-    const response = {
-      event_id: event.id,
-      admin_url: `${baseUrl}/admin/${event.admin_token}`,
-      scorer_url: `${baseUrl}/score/${event.scorer_token}`,
-      public_url: `${baseUrl}/events/${event.public_token}`,
+    // Generate secure tokens with hashing
+    const tokens = generateEventTokens();
+
+    // Calculate dates
+    const start_at = new Date();
+    const end_at = calculateEndDate(eventMode, start_at, number_of_days);
+    const autoCleanupDate = calculateAutoCleanupDate(eventMode, start_at);
+
+    // Create event in Firestore (store ONLY hashed tokens)
+    const eventData = {
+      name: name.trim(),
+      
+      // Mode configuration
+      eventMode,
+      eventStatus: 'draft' as EventStatus,
+      requiresAuthentication: authRequired,
+      ...(autoCleanupDate && { autoCleanupDate }),
+      
+      // Scoring configuration
+      scoringMode,
+      number_of_days,
+      
+      // Legacy status (for backward compatibility)
+      status: 'active' as const,
+      
+      // Dates
+      start_at: start_at.toISOString(),
+      end_at: end_at.toISOString(),
+      
+      // Security tokens (HASHED - never store plain tokens)
+      ...tokens.hashed,
+      
+      // Finalization
+      is_finalized: false,
+      
+      // Organization (if provided)
+      ...(organizationId && { organization_id: organizationId }),
+      ...(organizationName && { organization_name: organizationName }),
+      
+      // Creator
+      ...(createdBy && { created_by: createdBy }),
     };
-    
-    console.log('[CREATE EVENT] Returning success response');
+
+    const eventId = await adminCreateDocument(COLLECTIONS.EVENTS, eventData);
+
+    // If daily scoring mode, create event days
+    if (scoringMode === 'daily' && modeConfig.features.multiDay) {
+      const dayPromises = [];
+      for (let day = 1; day <= number_of_days; day++) {
+        const dayDate = new Date(start_at);
+        dayDate.setDate(dayDate.getDate() + (day - 1));
+        
+        dayPromises.push(
+          adminCreateDocument(COLLECTIONS.EVENT_DAYS, {
+            event_id: eventId,
+            day_number: day,
+            date: dayDate.toISOString(),
+            is_locked: false,
+          })
+        );
+      }
+      await Promise.all(dayPromises);
+    }
+
+    // Generate shareable links with plain tokens
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
+    const shareLinks = {
+      admin: generateShareLink(eventId, tokens.plain.admin_token, 'admin', baseUrl),
+      scorer: generateShareLink(eventId, tokens.plain.scorer_token, 'scorer', baseUrl),
+      viewer: generateShareLink(eventId, tokens.plain.public_token, 'viewer', baseUrl),
+    };
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        event: {
+          id: eventId,
+          name: eventData.name,
+          eventMode: eventData.eventMode,
+          eventStatus: eventData.eventStatus,
+          start_at: eventData.start_at,
+          end_at: eventData.end_at,
+        },
+        // Return plain tokens ONCE (user must save these)
+        tokens: tokens.plain,
+        // Return shareable links
+        shareLinks,
+        modeInfo: {
+          mode: eventMode,
+          config: modeConfig,
+          autoCleanup: autoCleanupDate ? true : false,
+          maxDuration: modeConfig.maxDuration,
+        },
+      },
+      message: '⚠️ IMPORTANT: Save these tokens! They will not be shown again.',
+    }, { status: 201 });
+
+  } catch (error) {
+    console.error('Create event error:', error);
     return NextResponse.json(
-      successResponse(response),
-      { status: 201, headers: corsHeaders as HeadersInit }
-    );
-  } catch (error: any) {
-    console.error('[CREATE EVENT] Unexpected error:', {
-      message: error?.message,
-      stack: error?.stack,
-      name: error?.name,
-    });
-    
-    return NextResponse.json(
-      errorResponse('INTERNAL_ERROR', `Server error: ${error?.message || 'Unknown error'}`),
-      { status: 500, headers: corsHeaders as HeadersInit }
+      {
+        success: false,
+        error: 'Failed to create event',
+        details: error instanceof Error ? error.message : 'Unknown error',
+      },
+      { status: 500 }
     );
   }
+}
+
+// OPTIONS handler for CORS
+export async function OPTIONS(request: Request) {
+  return new NextResponse(null, {
+    status: 204,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    },
+  });
 }

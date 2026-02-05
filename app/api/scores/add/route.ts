@@ -1,74 +1,133 @@
 /**
- * Add Score API
- * Requires scorer or admin token
+ * Scores API - Add Score
+ * Converted from PostgreSQL to Firestore
+ * POST /api/scores/add
  */
 
 import { NextResponse } from 'next/server';
-import { addScore, getEventByToken } from '@/lib/db-access';
-import { CreateScoreSchema } from '@/lib/db-validations';
-import { ZodError } from 'zod';
-import { successResponse, errorResponse, ERROR_STATUS_MAP } from '@/lib/api-responses';
+import { adminCreateDocument, adminGetDocument, adminQueryCollection } from '@/lib/firestore-admin-helpers';
+import { COLLECTIONS } from '@/lib/firebase-collections';
+
+interface AddScoreRequest {
+  event_id: string;
+  team_id: string;
+  points: number;
+  day?: number;
+  penalty?: number;
+  notes?: string;
+}
 
 export async function POST(request: Request) {
   try {
-    // Get token from header
-    const authHeader = request.headers.get('authorization');
-    const token = authHeader?.replace('Bearer ', '');
-    
-    if (!token) {
+    const body: AddScoreRequest = await request.json();
+    const { event_id, team_id, points, day, penalty = 0, notes } = body;
+
+    // Validation
+    if (!event_id || !team_id) {
       return NextResponse.json(
-        errorResponse('UNAUTHORIZED', 'Token required'),
-        { status: ERROR_STATUS_MAP.UNAUTHORIZED }
+        { success: false, error: 'Event ID and Team ID are required' },
+        { status: 400 }
       );
     }
-    
-    const body = await request.json();
-    const validated = CreateScoreSchema.parse(body);
-    
-    // Verify token has access to this event (scorer or admin)
-    const eventByScorer = await getEventByToken(token, 'scorer');
-    const eventByAdmin = await getEventByToken(token, 'admin');
-    const event = eventByScorer || eventByAdmin;
-    
-    if (!event || event.id !== validated.event_id) {
+
+    if (points === undefined || points === null) {
       return NextResponse.json(
-        { success: false, error: 'Invalid token or event access denied' },
+        { success: false, error: 'Points are required' },
+        { status: 400 }
+      );
+    }
+
+    // Verify event exists
+    const event = await adminGetDocument(COLLECTIONS.EVENTS, event_id);
+    if (!event) {
+      return NextResponse.json(
+        { success: false, error: 'Event not found' },
+        { status: 404 }
+      );
+    }
+
+    // Verify team exists and belongs to this event
+    const team = await adminGetDocument(COLLECTIONS.TEAMS, team_id);
+    if (!team) {
+      return NextResponse.json(
+        { success: false, error: 'Team not found' },
+        { status: 404 }
+      );
+    }
+
+    if ((team as any).event_id !== event_id) {
+      return NextResponse.json(
+        { success: false, error: 'Team does not belong to this event' },
+        { status: 400 }
+      );
+    }
+
+    // Check if event is finalized
+    if ((event as any).is_finalized) {
+      return NextResponse.json(
+        { success: false, error: 'Cannot add scores to a finalized event' },
         { status: 403 }
       );
     }
-    
-    // Check event is active
-    if (event.status !== 'active') {
-      return NextResponse.json(
-        errorResponse('BAD_REQUEST', 'Event is not active'),
-        { status: ERROR_STATUS_MAP.BAD_REQUEST }
-      );
+
+    // For daily mode, verify day number
+    if ((event as any).mode === 'daily' && day) {
+      if (day < 1 || day > (event as any).number_of_days) {
+        return NextResponse.json(
+          { success: false, error: 'Invalid day number' },
+          { status: 400 }
+        );
+      }
+
+      // Check if day is locked
+      const eventDays = await adminQueryCollection(COLLECTIONS.EVENT_DAYS, [
+        { field: 'event_id', operator: '==', value: event_id },
+        { field: 'day_number', operator: '==', value: day },
+      ]);
+
+      if (eventDays.length > 0 && (eventDays[0] as any).is_locked) {
+        return NextResponse.json(
+          { success: false, error: 'This day is locked and cannot accept new scores' },
+          { status: 403 }
+        );
+      }
     }
-    
-    // Add score
-    const score = await addScore(validated);
-    
-    return NextResponse.json(successResponse(score), { status: 201 });
+
+    // Calculate final score
+    const final_score = points - penalty;
+
+    // Create score
+    const scoreData = {
+      event_id,
+      team_id,
+      points,
+      penalty,
+      score: final_score,
+      day_number: day || null,
+      notes: notes || null,
+    };
+
+    const scoreId = await adminCreateDocument(COLLECTIONS.SCORES, scoreData);
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        score: {
+          id: scoreId,
+          ...scoreData,
+        },
+      },
+    }, { status: 201 });
+
   } catch (error) {
-    if (error instanceof ZodError) {
-      return NextResponse.json(
-        errorResponse('VALIDATION_ERROR', error.errors[0]?.message || 'Invalid input'),
-        { status: ERROR_STATUS_MAP.VALIDATION_ERROR }
-      );
-    }
-    
-    // Handle locked day error
-    if (error instanceof Error && error.message.includes('locked')) {
-      return NextResponse.json(
-        errorResponse('CONFLICT', error.message),
-        { status: ERROR_STATUS_MAP.CONFLICT }
-      );
-    }
-    
     console.error('Add score error:', error);
     return NextResponse.json(
-      errorResponse('INTERNAL_ERROR', error instanceof Error ? error.message : 'Failed to add score'),
-      { status: ERROR_STATUS_MAP.INTERNAL_ERROR }
+      {
+        success: false,
+        error: 'Failed to add score',
+        details: error instanceof Error ? error.message : 'Unknown error',
+      },
+      { status: 500 }
     );
   }
 }

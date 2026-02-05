@@ -1,22 +1,10 @@
 // app/api/health/route.ts
 import { NextResponse } from 'next/server';
-import { query } from '@/lib/db-client';
-import { handleCors } from '@/lib/cors';
 
 export async function GET(request: Request) {
-  // Handle CORS
-  const cors = handleCors(request);
-  if (cors instanceof Response) {
-    return cors;
-  }
-  const corsHeaders = cors;
-
   const startTime = Date.now();
 
   try {
-    // Check PostgreSQL database connectivity
-    const dbCheck = await query('SELECT NOW() as current_time').catch(() => null);
-
     const responseTime = Date.now() - startTime;
 
     const health = {
@@ -25,16 +13,15 @@ export async function GET(request: Request) {
       uptime: process.uptime(),
       responseTime: `${responseTime}ms`,
       services: {
-        database: dbCheck !== null ? 'connected' : 'disconnected',
-        postgresql: dbCheck !== null ? 'operational' : 'degraded',
+        firebase: 'ready', // Will be updated when Firebase is configured
       },
-      version: '2.0.0',
+      version: '3.0.0',
       environment: process.env.NODE_ENV,
+      database: 'Firebase Firestore (pending setup)',
     };
 
     return NextResponse.json(health, { 
       status: 200,
-      headers: corsHeaders as HeadersInit
     });
   } catch (error) {
     const responseTime = Date.now() - startTime;
@@ -50,3 +37,4 @@ export async function GET(request: Request) {
     );
   }
 }
+

@@ -1,145 +1,199 @@
 /**
- * Database Connection Client
- * Server-only PostgreSQL connection with pooling
- * 
- * Environment Variable Required:
- * - DATABASE_URL (Render internal PostgreSQL URL, contains .internal)
+ * Database Client - Firestore Connection
+ * Server-side database operations using Firebase Admin SDK
  */
 
-import { Pool } from 'pg';
+import { getAdminDb, initializeFirebaseAdmin } from './firebase-admin';
+import { Firestore, Timestamp, FieldValue } from 'firebase-admin/firestore';
+
+// Initialize Firebase Admin
+initializeFirebaseAdmin();
+
+// Get Firestore instance
+export const db = getAdminDb();
 
 /**
- * Ensure a single global Pool instance (Next.js dev hot-reload safe)
+ * Helper to convert Firestore Timestamp to ISO string
  */
-declare global {
-  // eslint-disable-next-line no-var
-  var pgPool: Pool | undefined;
-  // eslint-disable-next-line no-var
-  var pgPoolChecked: boolean | undefined;
-}
-
-if (typeof window !== 'undefined') {
-  throw new Error('Database client can only be used on the server side');
-}
-
-// Skip database initialization during build phase
-const isBuildPhase = process.env.NEXT_PHASE === 'phase-production-build';
-
-if (!process.env.DATABASE_URL && !isBuildPhase) {
-  throw new Error('DATABASE_URL environment variable is required (use Render internal Database URL)');
-}
-
-// Create or reuse a single shared Pool (skip during build)
-const pool = isBuildPhase ? undefined : (globalThis.pgPool ?? new Pool({
-  connectionString: process.env.DATABASE_URL,
-  // Render requires SSL; disable cert verification within Render's network
-  ssl: { rejectUnauthorized: false },
-  // Safe pool limits for Render
-  max: 5,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 2000,
-}));
-
-// Cache the pool on the global object to reuse across requests and hot reloads
-if (!isBuildPhase && !globalThis.pgPool && pool) {
-  globalThis.pgPool = pool;
-}
-
-// Test connection on startup (single-run, clear logs, fatal on failure)
-if (!isBuildPhase && !globalThis.pgPoolChecked) {
-  globalThis.pgPoolChecked = true;
-  void pool!
-    .query('SELECT 1')
-    .then(() => {
-      console.log('DATABASE CONNECTED');
-    })
-    .catch((err) => {
-      console.error('DATABASE FAILED', err);
-      throw err; // Fatal: surface error to crash process
-    });
+export function timestampToISO(timestamp: any): string | null {
+  if (!timestamp) return null;
+  if (timestamp instanceof Timestamp) {
+    return timestamp.toDate().toISOString();
+  }
+  if (timestamp instanceof Date) {
+    return timestamp.toISOString();
+  }
+  if (typeof timestamp === 'string') {
+    return timestamp;
+  }
+  return null;
 }
 
 /**
- * Query helper with automatic error handling
+ * Helper to convert document data with timestamps to JSON-friendly format
  */
-export async function query<T = any>(
-  text: string,
-  params?: any[]
-): Promise<{ rows: T[]; rowCount: number }> {
-  // Skip database queries during build phase
-  if (isBuildPhase || !pool) {
-    return { rows: [], rowCount: 0 };
+export function convertTimestamps(data: any): any {
+  if (!data) return data;
+  
+  const converted: any = { ...data };
+  
+  // Convert common timestamp fields
+  if (converted.created_at) {
+    converted.created_at = timestampToISO(converted.created_at);
+  }
+  if (converted.updated_at) {
+    converted.updated_at = timestampToISO(converted.updated_at);
+  }
+  if (converted.startDate) {
+    converted.startDate = timestampToISO(converted.startDate);
+  }
+  if (converted.endDate) {
+    converted.endDate = timestampToISO(converted.endDate);
+  }
+  if (converted.completedAt) {
+    converted.completedAt = timestampToISO(converted.completedAt);
+  }
+  if (converted.archivedAt) {
+    converted.archivedAt = timestampToISO(converted.archivedAt);
   }
   
-  const start = Date.now();
-  try {
-    const result = await pool.query(text, params);
-    const duration = Date.now() - start;
-    
-    if (process.env.NODE_ENV === 'development') {
-      console.log('Query executed', { text, duration, rows: result.rowCount });
-    }
-    
-    return {
-      rows: result.rows,
-      rowCount: result.rowCount || 0,
-    };
-  } catch (error) {
-    console.error('Database query error:', { text, error });
-    throw error;
+  return converted;
+}
+
+/**
+ * Query helper - Get document by ID
+ */
+export async function getDocById(collection: string, id: string) {
+  const docRef = db.collection(collection).doc(id);
+  const docSnap = await docRef.get();
+  
+  if (!docSnap.exists) {
+    return null;
   }
+  
+  return {
+    id: docSnap.id,
+    ...convertTimestamps(docSnap.data())
+  };
+}
+
+/**
+ * Query helper - Get all documents in a collection
+ */
+export async function getAllDocs(collection: string, orderBy?: string) {
+  let query = db.collection(collection);
+  
+  if (orderBy) {
+    query = query.orderBy(orderBy) as any;
+  }
+  
+  const snapshot = await query.get();
+  
+  return snapshot.docs.map(doc => ({
+    id: doc.id,
+    ...convertTimestamps(doc.data())
+  }));
+}
+
+/**
+ * Query helper - Get documents with where clause
+ */
+export async function getDocsWhere(
+  collection: string,
+  field: string,
+  operator: FirebaseFirestore.WhereFilterOp,
+  value: any
+) {
+  const snapshot = await db.collection(collection)
+    .where(field, operator, value)
+    .get();
+  
+  return snapshot.docs.map(doc => ({
+    id: doc.id,
+    ...convertTimestamps(doc.data())
+  }));
+}
+
+/**
+ * Query helper - Create document
+ */
+export async function createDoc(collection: string, data: any, id?: string) {
+  const timestamp = new Date().toISOString();
+  const docData = {
+    ...data,
+    created_at: timestamp,
+    updated_at: timestamp
+  };
+  
+  if (id) {
+    await db.collection(collection).doc(id).set(docData);
+    return { id, ...docData };
+  } else {
+    const docRef = await db.collection(collection).add(docData);
+    return { id: docRef.id, ...docData };
+  }
+}
+
+/**
+ * Query helper - Update document
+ */
+export async function updateDoc(collection: string, id: string, data: any) {
+  const docRef = db.collection(collection).doc(id);
+  const updateData = {
+    ...data,
+    updated_at: new Date().toISOString()
+  };
+  
+  await docRef.update(updateData);
+  
+  const updated = await docRef.get();
+  return {
+    id: updated.id,
+    ...convertTimestamps(updated.data())
+  };
+}
+
+/**
+ * Query helper - Delete document
+ */
+export async function deleteDoc(collection: string, id: string) {
+  await db.collection(collection).doc(id).delete();
+  return { id, deleted: true };
 }
 
 /**
  * Transaction helper
  */
-export async function transaction<T>(
-  callback: (client: any) => Promise<T>
+export async function runTransaction<T>(
+  callback: (transaction: FirebaseFirestore.Transaction) => Promise<T>
 ): Promise<T> {
-  // Skip transactions during build phase
-  if (isBuildPhase || !pool) {
-    throw new Error('Database transactions not available during build');
-  }
-  
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    const result = await callback(client);
-    await client.query('COMMIT');
-    return result;
-  } catch (error) {
-    await client.query('ROLLBACK');
-    throw error;
-  } finally {
-    client.release();
-  }
+  return db.runTransaction(callback);
 }
 
 /**
- * Health check
+ * Batch helper
  */
-export async function healthCheck(): Promise<boolean> {
-  // Skip health check during build phase
-  if (isBuildPhase || !pool) {
-    return false;
-  }
-  
-  try {
-    const result = await pool.query('SELECT NOW()');
-    return !!result.rows[0];
-  } catch (error) {
-    console.error('Database health check failed:', error);
-    return false;
-  }
+export function getBatch() {
+  return db.batch();
+}
+
+// ============================================================================
+// BACKWARDS COMPATIBILITY
+// ============================================================================
+
+/**
+ * Legacy query function (for PostgreSQL compatibility)
+ * Now just a wrapper that throws error - routes should use specific functions
+ */
+export async function query(sql: string, params?: any[]) {
+  throw new Error('Direct SQL queries not supported with Firestore. Use db-access.ts functions instead.');
 }
 
 /**
- * Close all connections (for graceful shutdown)
+ * Legacy transaction export
  */
-export async function closePool(): Promise<void> {
-  if (pool) {
-    await pool.end();
-  }
-}
+export const transaction = runTransaction;
 
-export default pool;
+// Export Firestore types
+export { Timestamp, FieldValue };
+export type { Firestore };

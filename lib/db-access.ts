@@ -1,617 +1,576 @@
 /**
- * Get or create an event day, ensuring label is never null and table exists.
- * Throws a controlled error if event_days table is missing.
- */
-export async function getOrCreateEventDay(event_id: string, day_number: number): Promise<EventDay> {
-  // Check if event_days table exists
-  try {
-    const tableCheck = await query<{ exists: boolean }>(
-      `SELECT EXISTS (
-        SELECT 1 FROM information_schema.tables WHERE table_name = 'event_days'
-      ) AS exists`
-    );
-    if (!tableCheck.rows[0]?.exists) {
-      const err: any = new Error('event_days table is missing');
-      err.status = 500;
-      err.code = 'TABLE_MISSING';
-      throw err;
-    }
-  } catch (err: any) {
-    if (err.code === 'TABLE_MISSING') throw err;
-    // If query itself fails, treat as missing table
-    const error: any = new Error('event_days table is missing or inaccessible');
-    error.status = 500;
-    error.code = 'TABLE_MISSING';
-    throw error;
-  }
-
-  // Try to get the day
-  let day = await getEventDay(event_id, day_number);
-  if (!day) {
-    // Always use default label format
-    day = await createDayIfNotExists({
-      event_id,
-      day_number,
-      label: `Day ${day_number}`,
-    });
-  } else if (!day.label) {
-    // Patch label if missing
-    day = await createDayIfNotExists({
-      event_id,
-      day_number,
-      label: `Day ${day_number}`,
-    });
-  }
-  return day;
-}
-/**
- * Data Access Layer
- * All database operations for GameScore
- * Token-based, event-scoped, no user auth
+ * Database Access Layer - Firestore CRUD Operations
+ * All database queries for events, teams, scores, tokens
  */
 
-import { query, transaction } from './db-client';
-import { generateEventTokens } from './tokens';
-import {
-  CreateEventInput,
-  UpdateEventInput,
-  CreateEventDayInput,
-  CreateTeamInput,
-  UpdateTeamInput,
-  CreateScoreInput,
-} from './db-validations';
+import { db, convertTimestamps, timestampToISO } from './db-client';
+import { Timestamp } from 'firebase-admin/firestore';
 
-// ============================================
-// EVENT OPERATIONS
-// ============================================
+// ============================================================================
+// EVENTS
+// ============================================================================
 
 export interface Event {
   id: string;
   name: string;
-  mode: 'quick' | 'camp' | 'advanced';
-  start_at: Date;
-  end_at: Date | null;
-  retention_policy: 'auto_expire' | 'manual' | 'archive';
-  expires_at: Date | null;
-  admin_token: string;
-  scorer_token: string;
-  public_token: string;
-  status: 'active' | 'completed' | 'expired' | 'archived';
-  is_finalized: boolean;
-  finalized_at: Date | null;
-  created_at: Date;
-  updated_at: Date;
+  eventMode: 'quick' | 'multi-day' | 'custom';
+  numberOfDays: number;
+  startDate: string;
+  endDate: string;
+  status: 'active' | 'completed' | 'archived';
+  adminToken: string;
+  scorerToken: string;
+  viewerToken: string;
+  dayLocking?: Record<string, { locked: boolean; lockedAt?: string }>;
+  created_at: string;
+  updated_at: string;
 }
 
-/**
- * Create a new event with generated tokens
- */
-export async function createEvent(input: CreateEventInput): Promise<Event> {
-  console.log('[DB-ACCESS] createEvent called with input:', JSON.stringify(input, null, 2));
+export async function getEvent(eventId: string): Promise<Event | null> {
+  const docRef = db.collection('events').doc(eventId);
+  const docSnap = await docRef.get();
   
-  let tokens;
-  try {
-    tokens = generateEventTokens();
-    console.log('[DB-ACCESS] Generated tokens:', {
-      admin: tokens.admin_token.substring(0, 8) + '...',
-      scorer: tokens.scorer_token.substring(0, 8) + '...',
-      public: tokens.public_token.substring(0, 8) + '...',
-    });
-  } catch (tokenError: any) {
-    console.error('[DB-ACCESS] Token generation failed:', tokenError);
-    throw new Error(`Token generation failed: ${tokenError.message}`);
+  if (!docSnap.exists) {
+    return null;
   }
   
-  try {
-    console.log('[DB-ACCESS] Executing INSERT query...');
-    const result = await query<Event>(
-      `INSERT INTO events (
-        name, mode, start_at, end_at, retention_policy, expires_at,
-        admin_token, scorer_token, public_token
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-      RETURNING *`,
-      [
-        input.name,
-        input.mode,
-        input.start_at,
-        input.end_at || null,
-        input.retention_policy,
-        input.expires_at || null,
-        tokens.admin_token,
-        tokens.scorer_token,
-        tokens.public_token,
-      ]
-    );
+  return {
+    id: docSnap.id,
+    ...convertTimestamps(docSnap.data())
+  } as Event;
+}
+
+export async function getEventByToken(token: string, requiredType?: 'admin' | 'scorer' | 'viewer' | 'public'): Promise<Event | null> {
+  // Search across all events for this token
+  const eventsSnapshot = await db.collection('events').get();
+  
+  for (const eventDoc of eventsSnapshot.docs) {
+    const tokensSnapshot = await db.collection('events')
+      .doc(eventDoc.id)
+      .collection('tokens')
+      .where('token', '==', token)
+      .limit(1)
+      .get();
     
-    console.log('[DB-ACCESS] INSERT successful, rows returned:', result.rowCount);
-    
-    if (!result.rows[0]) {
-      throw new Error('No event returned from INSERT query');
+    if (!tokensSnapshot.empty) {
+      const tokenData = tokensSnapshot.docs[0].data();
+      
+      // If requiredType specified, validate token type
+      if (requiredType && requiredType !== 'public') {
+        const validTypes: Record<string, string[]> = {
+          'admin': ['admin'],
+          'scorer': ['admin', 'scorer'],
+          'viewer': ['admin', 'scorer', 'viewer']
+        };
+        
+        if (!validTypes[requiredType]?.includes(tokenData.type)) {
+          return null; // Token doesn't have required permissions
+        }
+      }
+      
+      return {
+        id: eventDoc.id,
+        ...convertTimestamps(eventDoc.data())
+      } as Event;
     }
-    
-    return result.rows[0];
-  } catch (dbError: any) {
-    console.error('[DB-ACCESS] Database INSERT failed:', {
-      message: dbError?.message,
-      code: dbError?.code,
-      detail: dbError?.detail,
-      hint: dbError?.hint,
-      position: dbError?.position,
-    });
-    throw dbError;
   }
+  
+  return null;
 }
 
-/**
- * Get event by any token type
- */
-export async function getEventByToken(
-  token: string,
-  tokenType: 'admin' | 'scorer' | 'public' = 'public'
-): Promise<Event | null> {
-  const columnMap = {
-    admin: 'admin_token',
-    scorer: 'scorer_token',
-    public: 'public_token',
+export async function getAllEvents(): Promise<Event[]> {
+  const snapshot = await db.collection('events')
+    .orderBy('created_at', 'desc')
+    .get();
+  
+  return snapshot.docs.map(doc => ({
+    id: doc.id,
+    ...convertTimestamps(doc.data())
+  })) as Event[];
+}
+
+export async function getPastEvents(limit: number = 20): Promise<Event[]> {
+  const snapshot = await db.collection('events')
+    .where('status', 'in', ['completed', 'archived'])
+    .orderBy('created_at', 'desc')
+    .limit(limit)
+    .get();
+  
+  return snapshot.docs.map(doc => ({
+    id: doc.id,
+    ...convertTimestamps(doc.data())
+  })) as Event[];
+}
+
+export async function createEvent(data: Partial<Event>): Promise<Event> {
+  const timestamp = new Date().toISOString();
+  const eventData = {
+    ...data,
+    created_at: timestamp,
+    updated_at: timestamp
   };
   
-  const result = await query<Event>(
-    `SELECT * FROM events WHERE ${columnMap[tokenType]} = $1`,
-    [token]
-  );
+  const docRef = await db.collection('events').add(eventData);
   
-  return result.rows[0] || null;
+  return {
+    id: docRef.id,
+    ...eventData
+  } as Event;
 }
 
-/**
- * Get event by ID (server-side only, no token required)
- */
-export async function getEventById(eventId: string): Promise<Event | null> {
-  const result = await query<Event>(
-    `SELECT * FROM events WHERE id = $1`,
-    [eventId]
-  );
+export async function updateEvent(eventId: string, data: Partial<Event>): Promise<Event> {
+  const docRef = db.collection('events').doc(eventId);
+  const updateData = {
+    ...data,
+    updated_at: new Date().toISOString()
+  };
   
-  return result.rows[0] || null;
+  await docRef.update(updateData);
+  
+  const updated = await docRef.get();
+  return {
+    id: updated.id,
+    ...convertTimestamps(updated.data())
+  } as Event;
 }
 
-/**
- * Update event (requires admin token validation before calling)
- */
-export async function updateEvent(
-  eventId: string,
-  input: UpdateEventInput
-): Promise<Event> {
-  const fields: string[] = [];
-  const values: any[] = [];
-  let paramIndex = 1;
-  
-  if (input.name !== undefined) {
-    fields.push(`name = $${paramIndex++}`);
-    values.push(input.name);
-  }
-  if (input.status !== undefined) {
-    fields.push(`status = $${paramIndex++}`);
-    values.push(input.status);
-  }
-  if (input.end_at !== undefined) {
-    fields.push(`end_at = $${paramIndex++}`);
-    values.push(input.end_at);
-  }
-  
-  if (fields.length === 0) {
-    throw new Error('No fields to update');
-  }
-  
-  values.push(eventId);
-  
-  const result = await query<Event>(
-    `UPDATE events SET ${fields.join(', ')}, updated_at = now()
-     WHERE id = $${paramIndex}
-     RETURNING *`,
-    values
-  );
-  
-  if (result.rowCount === 0) {
-    throw new Error('Event not found');
-  }
-  
-  return result.rows[0];
-}
-
-/**
- * Delete event and all related data (CASCADE)
- */
 export async function deleteEvent(eventId: string): Promise<void> {
-  await query(`DELETE FROM events WHERE id = $1`, [eventId]);
+  await db.collection('events').doc(eventId).delete();
 }
 
-// ============================================
-// EVENT DAY OPERATIONS
-// ============================================
-
-export interface EventDay {
-  id: string;
-  event_id: string;
-  day_number: number;
-  label: string | null;
-  is_locked: boolean;
-  created_at: Date;
-}
-
-/**
- * Create event day if it doesn't exist
- */
-export async function createDayIfNotExists(
-  input: CreateEventDayInput
-): Promise<EventDay> {
-  // Generate a default label if none is provided to satisfy NOT NULL constraint
-  const label = input.label || `Day ${input.day_number}`;
-  
-  const result = await query<EventDay>(
-    `INSERT INTO event_days (event_id, day_number, label)
-     VALUES ($1, $2, $3)
-     ON CONFLICT (event_id, day_number) DO UPDATE
-     SET label = COALESCE(EXCLUDED.label, event_days.label)
-     RETURNING *`,
-    [input.event_id, input.day_number, label]
-  );
-  
-  return result.rows[0];
-}
-
-/**
- * Get event day by event and day number
- */
-export async function getEventDay(
-  eventId: string,
-  dayNumber: number
-): Promise<EventDay | null> {
-  const result = await query<EventDay>(
-    `SELECT * FROM event_days WHERE event_id = $1 AND day_number = $2`,
-    [eventId, dayNumber]
-  );
-  
-  return result.rows[0] || null;
-}
-
-/**
- * Lock or unlock an event day (requires admin token)
- */
-export async function lockEventDay(
-  dayId: string,
-  isLocked: boolean
-): Promise<EventDay> {
-  const result = await query<EventDay>(
-    `UPDATE event_days SET is_locked = $1 WHERE id = $2 RETURNING *`,
-    [isLocked, dayId]
-  );
-  
-  if (result.rowCount === 0) {
-    throw new Error('Event day not found');
-  }
-  
-  return result.rows[0];
-}
-
-/**
- * List all days for an event
- */
-export async function listEventDays(eventId: string): Promise<EventDay[]> {
-  const result = await query<EventDay>(
-    `SELECT * FROM event_days WHERE event_id = $1 ORDER BY day_number ASC`,
-    [eventId]
-  );
-  
-  return result.rows;
-}
-
-// ============================================
-// TEAM OPERATIONS
-// ============================================
+// ============================================================================
+// TEAMS
+// ============================================================================
 
 export interface Team {
   id: string;
-  event_id: string;
+  eventId: string;
   name: string;
-  color: string | null;
-  avatar_url: string | null;
-  created_at: Date;
+  color: string;
+  created_at: string;
+  updated_at?: string;
 }
 
-export interface TeamWithTotal extends Team {
-  total_points: number;
+export async function getTeamsByEvent(eventId: string): Promise<Team[]> {
+  const snapshot = await db.collection('events')
+    .doc(eventId)
+    .collection('teams')
+    .orderBy('created_at', 'asc')
+    .get();
+  
+  return snapshot.docs.map(doc => ({
+    id: doc.id,
+    ...convertTimestamps(doc.data())
+  })) as Team[];
 }
 
-/**
- * Add team to event
- */
-export async function addTeam(input: CreateTeamInput): Promise<Team> {
-  try {
-    const result = await query<Team>(
-      `INSERT INTO teams (event_id, name, color, avatar_url)
-       VALUES ($1, $2, $3, $4)
-       RETURNING *`,
-      [input.event_id, input.name, input.color || null, input.avatar_url || null]
-    );
+export async function getTeam(eventId: string, teamId: string): Promise<Team | null> {
+  const docRef = db.collection('events')
+    .doc(eventId)
+    .collection('teams')
+    .doc(teamId);
+  
+  const docSnap = await docRef.get();
+  
+  if (!docSnap.exists) {
+    return null;
+  }
+  
+  return {
+    id: docSnap.id,
+    ...convertTimestamps(docSnap.data())
+  } as Team;
+}
+
+export async function createTeam(eventId: string, data: Partial<Team>): Promise<Team> {
+  const timestamp = new Date().toISOString();
+  const teamData = {
+    eventId,
+    ...data,
+    created_at: timestamp,
+    updated_at: timestamp
+  };
+  
+  const docRef = await db.collection('events')
+    .doc(eventId)
+    .collection('teams')
+    .add(teamData);
+  
+  return {
+    id: docRef.id,
+    ...teamData
+  } as Team;
+}
+
+export async function createTeamsBulk(eventId: string, teams: Partial<Team>[]): Promise<Team[]> {
+  const batch = db.batch();
+  const timestamp = new Date().toISOString();
+  const createdTeams: Team[] = [];
+  
+  teams.forEach(team => {
+    const docRef = db.collection('events')
+      .doc(eventId)
+      .collection('teams')
+      .doc();
     
-    return result.rows[0];
-  } catch (error: any) {
-    if (error.code === '23505') { // Unique constraint violation
-      throw new Error('Team name already exists in this event');
-    }
-    throw error;
-  }
+    const teamData = {
+      eventId,
+      ...team,
+      created_at: timestamp,
+      updated_at: timestamp
+    };
+    
+    batch.set(docRef, teamData);
+    createdTeams.push({
+      id: docRef.id,
+      ...teamData
+    } as Team);
+  });
+  
+  await batch.commit();
+  return createdTeams;
 }
 
-/**
- * Update team
- */
-export async function updateTeam(
-  teamId: string,
-  input: UpdateTeamInput
-): Promise<Team> {
-  const fields: string[] = [];
-  const values: any[] = [];
-  let paramIndex = 1;
+export async function updateTeam(eventId: string, teamId: string, data: Partial<Team>): Promise<Team> {
+  const docRef = db.collection('events')
+    .doc(eventId)
+    .collection('teams')
+    .doc(teamId);
   
-  if (input.name !== undefined) {
-    fields.push(`name = $${paramIndex++}`);
-    values.push(input.name);
-  }
-  if (input.color !== undefined) {
-    fields.push(`color = $${paramIndex++}`);
-    values.push(input.color);
-  }
-  if (input.avatar_url !== undefined) {
-    fields.push(`avatar_url = $${paramIndex++}`);
-    values.push(input.avatar_url);
-  }
+  const updateData = {
+    ...data,
+    updated_at: new Date().toISOString()
+  };
   
-  if (fields.length === 0) {
-    throw new Error('No fields to update');
-  }
+  await docRef.update(updateData);
   
-  values.push(teamId);
-  
-  const result = await query<Team>(
-    `UPDATE teams SET ${fields.join(', ')} WHERE id = $${paramIndex} RETURNING *`,
-    values
-  );
-  
-  if (result.rowCount === 0) {
-    throw new Error('Team not found');
-  }
-  
-  return result.rows[0];
+  const updated = await docRef.get();
+  return {
+    id: updated.id,
+    ...convertTimestamps(updated.data())
+  } as Team;
 }
 
-/**
- * Delete team
- */
-export async function deleteTeam(teamId: string): Promise<void> {
-  await query(`DELETE FROM teams WHERE id = $1`, [teamId]);
+export async function deleteTeam(eventId: string, teamId: string): Promise<void> {
+  await db.collection('events')
+    .doc(eventId)
+    .collection('teams')
+    .doc(teamId)
+    .delete();
 }
 
-/**
- * List teams with computed totals
- */
-export async function listTeamsWithTotals(
-  eventId: string
-): Promise<TeamWithTotal[]> {
-  const result = await query<TeamWithTotal>(
-    `SELECT 
-      t.id,
-      t.event_id,
-      t.name,
-      t.color,
-      t.avatar_url,
-      t.created_at,
-      COALESCE(SUM(s.points), 0) AS total_points
-    FROM teams t
-    LEFT JOIN scores s ON s.team_id = t.id
-    WHERE t.event_id = $1
-    GROUP BY t.id
-    ORDER BY total_points DESC, t.name ASC`,
-    [eventId]
-  );
-  
-  return result.rows;
-}
-
-// ============================================
-// SCORE OPERATIONS
-// ============================================
+// ============================================================================
+// SCORES
+// ============================================================================
 
 export interface Score {
   id: string;
-  event_id: string;
-  day_id: string | null;
-  team_id: string;
-  category: string;
+  eventId: string;
+  teamId: string;
+  day: number;
   points: number;
-  created_at: Date;
+  penalty?: number;
+  bonus?: number;
+  notes?: string;
+  created_at: string;
+  updated_at?: string;
 }
 
-export interface ScoreWithTeam extends Score {
-  team_name: string;
-}
-
-export interface ScoreByDay {
-  day_number: number;
-  day_label: string | null;
-  team_name: string;
-  points: number;
-}
-
-/**
- * Add score to team
- */
-export async function addScore(input: CreateScoreInput): Promise<Score> {
-  // Defensive: Check event_days table and columns if day_id provided
-  if (input.day_id) {
-    try {
-      // Check if event_days table exists
-      const tableCheck = await query<{ exists: boolean }>(
-        `SELECT EXISTS (
-          SELECT 1 FROM information_schema.tables WHERE table_name = 'event_days'
-        ) AS exists`
-      );
-      if (!tableCheck.rows[0]?.exists) {
-        const err: any = new Error('event_days table is missing');
-        err.status = 500;
-        err.code = 'TABLE_MISSING';
-        throw err;
-      }
-      // Check if columns exist
-      const colCheck = await query<{ column_name: string }>(
-        `SELECT column_name FROM information_schema.columns WHERE table_name = 'event_days' AND column_name IN ('is_locked','label')`
-      );
-      const colNames = colCheck.rows.map(r => r.column_name);
-      if (!colNames.includes('is_locked')) {
-        const err: any = new Error('event_days.is_locked column is missing');
-        err.status = 500;
-        err.code = 'COLUMN_MISSING';
-        throw err;
-      }
-      // Check if day is locked
-      const dayCheck = await query<{ is_locked: boolean }>(
-        `SELECT is_locked FROM event_days WHERE id = $1`,
-        [input.day_id]
-      );
-      if (dayCheck.rows[0]?.is_locked) {
-        throw new Error('Cannot add scores to a locked day');
-      }
-    } catch (err) {
-      throw err;
-    }
-  }
-
-  // Ensure team exists and belongs to the event to provide clearer errors
-  const teamCheck = await query<{ id: string; event_id: string }>(
-    `SELECT id, event_id FROM teams WHERE id = $1`,
-    [input.team_id]
-  );
-
-  if (!teamCheck.rows[0]) {
-    throw new Error('Team not found');
-  }
-
-  if (teamCheck.rows[0].event_id !== input.event_id) {
-    throw new Error('Team does not belong to the specified event');
-  }
-
-  // Only wrap the DB insert in try/catch for DB errors
-  try {
-    const result = await query<Score>(
-      `INSERT INTO scores (event_id, day_id, team_id, category, points)
-       VALUES ($1, $2, $3, $4, $5)
-       RETURNING *`,
-      [
-        input.event_id,
-        input.day_id || null,
-        input.team_id,
-        input.category,
-        input.points,
-      ]
-    );
-    return result.rows[0];
-  } catch (err: any) {
-    console.error('[SCORES][DB ERROR]', err);
-    if (err?.code === '23503') {
-      // Foreign key violation
-      const error: any = new Error('Invalid reference: team or day not found');
-      error.status = 409;
-      throw error;
-    }
-    if (err?.code === '23514' && /points/.test(err?.message || '')) {
-      // DB check constraint on points
-      const error: any = new Error('Points value not allowed by DB constraint');
-      error.status = 400;
-      throw error;
-    }
-    const error: any = new Error('Failed to record score');
-    error.status = 400;
-    throw error;
-  }
-}
-
-/**
- * List all scores for an event
- */
-export async function listScores(eventId: string): Promise<ScoreWithTeam[]> {
-  const result = await query<ScoreWithTeam>(
-    `SELECT 
-      s.*,
-      t.name AS team_name
-    FROM scores s
-    JOIN teams t ON t.id = s.team_id
-    WHERE s.event_id = $1
-    ORDER BY s.created_at DESC`,
-    [eventId]
-  );
+export async function getScoresByEvent(eventId: string, day?: number): Promise<Score[]> {
+  let query = db.collection('events')
+    .doc(eventId)
+    .collection('scores') as any;
   
-  return result.rows;
-}
-
-/**
- * List scores grouped by day
- */
-export async function listScoresByDay(eventId: string): Promise<ScoreByDay[]> {
-  const result = await query<ScoreByDay>(
-    `SELECT 
-      d.day_number,
-      d.label AS day_label,
-      t.name AS team_name,
-      SUM(s.points) AS points
-    FROM scores s
-    JOIN teams t ON t.id = s.team_id
-    LEFT JOIN event_days d ON d.id = s.day_id
-    WHERE s.event_id = $1
-    GROUP BY d.day_number, d.label, t.name
-    ORDER BY d.day_number ASC, points DESC`,
-    [eventId]
-  );
+  if (day !== undefined) {
+    query = query.where('day', '==', day);
+  }
   
-  return result.rows;
-}
-
-/**
- * Delete score
- */
-export async function deleteScore(scoreId: string): Promise<void> {
-  await query(`DELETE FROM scores WHERE id = $1`, [scoreId]);
-}
-
-// ============================================
-// CLEANUP OPERATIONS
-// ============================================
-
-/**
- * Delete expired events (for cron job)
- */
-export async function cleanupExpiredEvents(): Promise<number> {
-  const result = await query(
-    `DELETE FROM events
-     WHERE retention_policy = 'auto_expire'
-     AND expires_at < NOW()
-     AND status != 'archived'`
-  );
+  const snapshot = await query.orderBy('created_at', 'desc').get();
   
-  return result.rowCount;
+  return snapshot.docs.map((doc: any) => ({
+    id: doc.id,
+    ...convertTimestamps(doc.data())
+  })) as Score[];
 }
 
-/**
- * Mark events as expired (status update, no deletion)
- */
+export async function getScoresByTeam(eventId: string, teamId: string): Promise<Score[]> {
+  const snapshot = await db.collection('events')
+    .doc(eventId)
+    .collection('scores')
+    .where('teamId', '==', teamId)
+    .orderBy('created_at', 'asc')
+    .get();
+  
+  return snapshot.docs.map(doc => ({
+    id: doc.id,
+    ...convertTimestamps(doc.data())
+  })) as Score[];
+}
+
+export async function createScore(eventId: string, data: Partial<Score>): Promise<Score> {
+  const timestamp = new Date().toISOString();
+  const scoreData = {
+    eventId,
+    ...data,
+    created_at: timestamp,
+    updated_at: timestamp
+  };
+  
+  const docRef = await db.collection('events')
+    .doc(eventId)
+    .collection('scores')
+    .add(scoreData);
+  
+  return {
+    id: docRef.id,
+    ...scoreData
+  } as Score;
+}
+
+export async function createScoresBulk(eventId: string, scores: Partial<Score>[]): Promise<Score[]> {
+  const batch = db.batch();
+  const timestamp = new Date().toISOString();
+  const createdScores: Score[] = [];
+  
+  scores.forEach(score => {
+    const docRef = db.collection('events')
+      .doc(eventId)
+      .collection('scores')
+      .doc();
+    
+    const scoreData = {
+      eventId,
+      ...score,
+      created_at: timestamp,
+      updated_at: timestamp
+    };
+    
+    batch.set(docRef, scoreData);
+    createdScores.push({
+      id: docRef.id,
+      ...scoreData
+    } as Score);
+  });
+  
+  await batch.commit();
+  return createdScores;
+}
+
+export async function updateScore(eventId: string, scoreId: string, data: Partial<Score>): Promise<Score> {
+  const docRef = db.collection('events')
+    .doc(eventId)
+    .collection('scores')
+    .doc(scoreId);
+  
+  const updateData = {
+    ...data,
+    updated_at: new Date().toISOString()
+  };
+  
+  await docRef.update(updateData);
+  
+  const updated = await docRef.get();
+  return {
+    id: updated.id,
+    ...convertTimestamps(updated.data())
+  } as Score;
+}
+
+export async function deleteScore(eventId: string, scoreId: string): Promise<void> {
+  await db.collection('events')
+    .doc(eventId)
+    .collection('scores')
+    .doc(scoreId)
+    .delete();
+}
+
+// ============================================================================
+// TOKENS
+// ============================================================================
+
+export interface Token {
+  id: string;
+  eventId: string;
+  token: string;
+  type: 'admin' | 'scorer' | 'viewer';
+  created_at: string;
+}
+
+export async function getTokensByEvent(eventId: string): Promise<Token[]> {
+  const snapshot = await db.collection('events')
+    .doc(eventId)
+    .collection('tokens')
+    .get();
+  
+  return snapshot.docs.map(doc => ({
+    id: doc.id,
+    ...convertTimestamps(doc.data())
+  })) as Token[];
+}
+
+export async function getTokenByValue(eventId: string, tokenValue: string): Promise<Token | null> {
+  const snapshot = await db.collection('events')
+    .doc(eventId)
+    .collection('tokens')
+    .where('token', '==', tokenValue)
+    .limit(1)
+    .get();
+  
+  if (snapshot.empty) {
+    return null;
+  }
+  
+  return {
+    id: snapshot.docs[0].id,
+    ...convertTimestamps(snapshot.docs[0].data())
+  } as Token;
+}
+
+export async function createToken(eventId: string, data: Partial<Token>): Promise<Token> {
+  const timestamp = new Date().toISOString();
+  const tokenData = {
+    eventId,
+    ...data,
+    created_at: timestamp
+  };
+  
+  const docRef = await db.collection('events')
+    .doc(eventId)
+    .collection('tokens')
+    .add(tokenData);
+  
+  return {
+    id: docRef.id,
+    ...tokenData
+  } as Token;
+}
+
+// ============================================================================
+// SCORE HISTORY
+// ============================================================================
+
+export interface ScoreHistory {
+  id: string;
+  eventId: string;
+  scoreId: string;
+  teamId: string;
+  action: 'created' | 'updated' | 'deleted';
+  previousValue?: any;
+  newValue?: any;
+  created_at: string;
+}
+
+export async function getScoreHistory(eventId: string, scoreId?: string): Promise<ScoreHistory[]> {
+  let query = db.collection('events')
+    .doc(eventId)
+    .collection('score_history') as any;
+  
+  if (scoreId) {
+    query = query.where('scoreId', '==', scoreId);
+  }
+  
+  const snapshot = await query.orderBy('created_at', 'desc').get();
+  
+  return snapshot.docs.map((doc: any) => ({
+    id: doc.id,
+    ...convertTimestamps(doc.data())
+  })) as ScoreHistory[];
+}
+
+export async function createScoreHistory(eventId: string, data: Partial<ScoreHistory>): Promise<ScoreHistory> {
+  const timestamp = new Date().toISOString();
+  const historyData = {
+    eventId,
+    ...data,
+    created_at: timestamp
+  };
+  
+  const docRef = await db.collection('events')
+    .doc(eventId)
+    .collection('score_history')
+    .add(historyData);
+  
+  return {
+    id: docRef.id,
+    ...historyData
+  } as ScoreHistory;
+}
+
+// ============================================================================
+// BACKWARDS COMPATIBILITY ALIASES
+// ============================================================================
+
+// Old function names for compatibility
+export const addTeam = createTeam;
+export const addScore = createScore;
+export const getEventById = getEvent;
+export const listTeamsWithTotals = getTeamsByEvent;
+export const listScores = getScoresByEvent;
+export const listScoresByDay = getScoresByEvent; // Now accepts day parameter
+export const listEventDays = async (eventId: string) => {
+  // For multi-day events, return day info
+  const event = await getEvent(eventId);
+  if (!event) return [];
+  
+  const days = [];
+  for (let i = 1; i <= event.numberOfDays; i++) {
+    days.push({
+      day_number: i,
+      locked: event.dayLocking?.[`day${i}`]?.locked || false
+    });
+  }
+  return days;
+};
+
+// Cleanup functions for expired events
 export async function markExpiredEvents(): Promise<number> {
-  const result = await query(
-    `UPDATE events
-     SET status = 'expired'
-     WHERE retention_policy = 'auto_expire'
-     AND expires_at < NOW()
-     AND status = 'active'`
-  );
+  // Mark events as archived if past end date
+  const events = await getAllEvents();
+  let markedCount = 0;
   
-  return result.rowCount;
+  for (const event of events) {
+    if (event.status === 'active' && new Date(event.endDate) < new Date()) {
+      await updateEvent(event.id, { status: 'archived' });
+      markedCount++;
+    }
+  }
+  
+  return markedCount;
+}
+
+export async function cleanupExpiredEvents(): Promise<number> {
+  // Archive completed events
+  return markExpiredEvents();
+}
+
+// Day management for multi-day events
+export async function createDayIfNotExists(eventId: string, dayNumber: number): Promise<void> {
+  // Days are now part of event document, no separate collection
+  const event = await getEvent(eventId);
+  if (!event) throw new Error('Event not found');
+  
+  // Ensure day is within range
+  if (dayNumber < 1 || dayNumber > event.numberOfDays) {
+    throw new Error(`Invalid day number: ${dayNumber}`);
+  }
+  
+  // Initialize day locking if not present
+  if (!event.dayLocking) {
+    const dayLocking: Record<string, { locked: boolean }> = {};
+    for (let i = 1; i <= event.numberOfDays; i++) {
+      dayLocking[`day${i}`] = { locked: false };
+    }
+    await updateEvent(eventId, { dayLocking });
+  }
+}
+
+export async function getEventDay(eventId: string, dayNumber: number) {
+  const event = await getEvent(eventId);
+  if (!event) return null;
+  
+  return {
+    day_number: dayNumber,
+    locked: event.dayLocking?.[`day${dayNumber}`]?.locked || false,
+    event_id: eventId
+  };
 }

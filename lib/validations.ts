@@ -33,8 +33,8 @@ export const newPasswordSchema = z.object({
 // ============================================================================
 export const createEventSchema = z.object({
   event_name: z.string().min(3, 'Event name must be at least 3 characters').max(255),
-  start_date: z.string().datetime().nullable().optional(),
-  end_date: z.string().datetime().nullable().optional(),
+  start_at: z.string().datetime().nullable().optional(),
+  end_at: z.string().datetime().nullable().optional(),
   theme_color: z.string().min(1).max(50).optional().default('purple'),
   allow_negative: z.boolean().optional().default(false),
   display_mode: z.enum(['cumulative', 'per_day']).optional().default('cumulative'),

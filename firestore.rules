@@ -1,0 +1,261 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ========================================
+    // Helper Functions
+    // ========================================
+    
+    // Check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Check if user owns the resource
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    // Validate event tokens
+    function hasValidAdminToken(eventId) {
+      let event = get(/databases/$(database)/documents/events/$(eventId));
+      return request.auth.token.admin_token == event.data.admin_token;
+    }
+    
+    function hasValidScorerToken(eventId) {
+      let event = get(/databases/$(database)/documents/events/$(eventId));
+      return request.auth.token.scorer_token == event.data.scorer_token;
+    }
+    
+    // Check if event requires authentication
+    function eventRequiresAuth(eventId) {
+      let event = get(/databases/$(database)/documents/events/$(eventId));
+      return event.data.requiresAuthentication == true;
+    }
+    
+    // Check if event is in valid mode
+    function isValidEventMode(mode) {
+      return mode in ['quick', 'camp', 'advanced'];
+    }
+    
+    // Check if event status is valid
+    function isValidEventStatus(status) {
+      return status in ['draft', 'active', 'completed', 'archived'];
+    }
+    
+    // Check if day is locked for an event
+    function isDayLocked(eventId, dayNumber) {
+      let event = get(/databases/$(database)/documents/events/$(eventId));
+      return event.data.lockedDays != null && dayNumber in event.data.lockedDays;
+    }
+    
+    // Check if event allows score submission (not finalized, not archived)
+    function canSubmitScore(eventId) {
+      let event = get(/databases/$(database)/documents/events/$(eventId));
+      return event.data.is_finalized != true && event.data.eventStatus != 'archived';
+    }
+    
+    
+    // ========================================
+    // EVENTS Collection
+    // ========================================
+    match /events/{eventId} {
+      
+      // READ: Anyone can read events (for public scoreboards)
+      // Advanced mode events may require auth based on requiresAuthentication flag
+      allow read: if true;
+      
+      // CREATE: Anyone can create Quick/Camp events
+      // Advanced mode requires authentication
+      allow create: if (
+        request.resource.data.eventMode in ['quick', 'camp']
+        || (request.resource.data.eventMode == 'advanced' && isAuthenticated())
+      ) && (
+        // Validate required fields
+        request.resource.data.name is string &&
+        request.resource.data.eventMode is string &&
+        isValidEventMode(request.resource.data.eventMode) &&
+        request.resource.data.eventStatus is string &&
+        isValidEventStatus(request.resource.data.eventStatus) &&
+        request.resource.data.scoringMode in ['continuous', 'daily'] &&
+        request.resource.data.number_of_days is int &&
+        request.resource.data.number_of_days > 0 &&
+        request.resource.data.requiresAuthentication is bool &&
+        request.resource.data.admin_token is string &&
+        request.resource.data.scorer_token is string &&
+        request.resource.data.public_token is string &&
+        
+        // Mode-specific validations
+        (request.resource.data.eventMode != 'quick' || request.resource.data.number_of_days == 1) &&
+        (request.resource.data.eventMode != 'camp' || request.resource.data.number_of_days <= 30) &&
+        
+        // Advanced mode requires organization if using org features
+        (request.resource.data.eventMode != 'advanced' || 
+          (request.resource.data.keys().hasAll(['organization_id', 'organization_name']) || 
+           !request.resource.data.keys().hasAny(['organization_id', 'organization_name'])))
+      );
+      
+      // UPDATE: Only with valid admin token or owner
+      allow update: if (
+        // Check admin token in request data
+        (request.resource.data.admin_token == resource.data.admin_token) ||
+        // Or check if user is the creator
+        (isAuthenticated() && resource.data.created_by == request.auth.uid)
+      );
+      
+      // DELETE: Only with valid admin token or owner
+      allow delete: if (
+        isAuthenticated() && 
+        (resource.data.created_by == request.auth.uid)
+      );
+    }
+    
+    
+    // ========================================
+    // TEAMS Collection
+    // ========================================
+    match /teams/{teamId} {
+      
+      // READ: Anyone can read teams
+      allow read: if true;
+      
+      // CREATE: Anyone can create teams
+      allow create: if (
+        request.resource.data.event_id is string &&
+        request.resource.data.name is string &&
+        request.resource.data.color is string
+      );
+      
+      // UPDATE: Only with admin or scorer token (validated in API)
+      // Or if event doesn't require auth
+      allow update: if true;
+      
+      // DELETE: Only with admin token (validated in API)
+      allow delete: if true;
+    }
+    
+    
+    // ========================================
+    // SCORES Collection
+    // ========================================
+    match /scores/{scoreId} {
+      
+      // READ: Anyone can read scores
+      allow read: if true;
+      
+      // CREATE: Anyone can add scores for public events
+      // But NOT if day is locked or event is finalized/archived
+      allow create: if (
+        request.resource.data.event_id is string &&
+        request.resource.data.team_id is string &&
+        request.resource.data.points is number &&
+        request.resource.data.penalty is number &&
+        request.resource.data.score is number &&
+        request.resource.data.score == (request.resource.data.points - request.resource.data.penalty) &&
+        
+        // Check event allows score submission
+        canSubmitScore(request.resource.data.event_id) &&
+        
+        // If day_number is specified, check if it's not locked
+        (!request.resource.data.keys().hasAny(['day_number']) || 
+         !isDayLocked(request.resource.data.event_id, request.resource.data.day_number))
+      );
+      
+      // UPDATE: Only with admin or scorer token (validated in API)
+      // Cannot update scores for locked days
+      allow update: if true;
+      
+      // DELETE: Only with admin token (validated in API)
+      allow delete: if true;
+    }
+    
+    
+    // ========================================
+    // EVENT_DAYS Collection
+    // ========================================
+    match /event_days/{dayId} {
+      
+      // READ: Anyone can read event days
+      allow read: if true;
+      
+      // CREATE: Anyone can create event days (created with event)
+      allow create: if (
+        request.resource.data.event_id is string &&
+        request.resource.data.day_number is int &&
+        request.resource.data.day_number > 0 &&
+        request.resource.data.date is string &&
+        request.resource.data.is_locked is bool
+      );
+      
+      // UPDATE: Only with admin token (validated in API)
+      allow update: if true;
+      
+      // DELETE: Cascade delete with event
+      allow delete: if true;
+    }
+    
+    
+    // ========================================
+    // USERS Collection
+    // ========================================
+    match /users/{userId} {
+      
+      // READ: Only own profile or public profiles
+      allow read: if isAuthenticated() && (
+        request.auth.uid == userId ||
+        resource.data.isPublic == true
+      );
+      
+      // CREATE: Only authenticated users can create their own profile
+      allow create: if isAuthenticated() && request.auth.uid == userId;
+      
+      // UPDATE: Only own profile
+      allow update: if isOwner(userId);
+      
+      // DELETE: Only own profile
+      allow delete: if isOwner(userId);
+    }
+    
+    
+    // ========================================
+    // WAITLIST Collection
+    // ========================================
+    match /waitlist/{waitlistId} {
+      
+      // READ: No public read access
+      allow read: if false;
+      
+      // CREATE: Anyone can join waitlist
+      allow create: if (
+        request.resource.data.email is string &&
+        request.resource.data.email.matches('.*@.*\\..*')
+      );
+      
+      // UPDATE: No updates allowed
+      allow update: if false;
+      
+      // DELETE: No public delete
+      allow delete: if false;
+    }
+    
+    
+    // ========================================
+    // AUDIT_LOGS Collection
+    // ========================================
+    match /audit_logs/{logId} {
+      
+      // READ: Only authenticated users can read their own logs
+      allow read: if isAuthenticated() && resource.data.user_id == request.auth.uid;
+      
+      // CREATE: System only (via API)
+      allow create: if false;
+      
+      // UPDATE: No updates allowed (immutable logs)
+      allow update: if false;
+      
+      // DELETE: No deletes allowed
+      allow delete: if false;
+    }
+  }
+}

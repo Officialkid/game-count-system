@@ -2,9 +2,50 @@ import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db-client';
 import { getEventByToken } from '@/lib/db-access';
 
+// ============================================================================
+// TYPE DEFINITIONS
+// ============================================================================
+
+interface QueryResult<T> {
+  rows: T[];
+}
+
+interface EventData {
+  id: string;
+  name: string;
+  mode: string;
+  status: string;
+  admin_token: string;
+}
+
+interface TeamData {
+  id: string;
+  name: string;
+  total_points: number;
+}
+
+interface ScoreData {
+  team_id: string;
+  day_number: number;
+  category: string;
+  points: number;
+  created_at: string;
+  team_name: string;
+}
+
 /**
  * GET /api/events/[event_id]/export-csv
  * Export archived event data as CSV
+ * 
+ * ⚠️ NOTE: This route still uses PostgreSQL queries and needs to be migrated to Firebase.
+ * The query() function currently throws an error since PostgreSQL has been removed.
+ * This route will not work until migrated to use Firebase Firestore.
+ * 
+ * TODO: Migrate to Firebase using:
+ * - getEvent() from @/lib/db-access
+ * - getTeamsByEvent() from @/lib/db-access  
+ * - getScoresByEvent() from @/lib/db-access
+ *
  * 
  * Headers:
  *   X-ADMIN-TOKEN: Admin token to verify access
@@ -56,7 +97,7 @@ export async function GET(
        FROM events 
        WHERE id = $1`,
       [event_id]
-    );
+    ) as unknown as QueryResult<EventData>;
 
     if (eventResult.rows.length === 0) {
       return NextResponse.json(
@@ -68,7 +109,7 @@ export async function GET(
       );
     }
 
-    const event = eventResult.rows[0];
+    const event = eventResult.rows[0] as EventData;
 
     // Verify admin owns this event
     if (event.admin_token !== admin_token) {
@@ -99,7 +140,7 @@ export async function GET(
        WHERE event_id = $1 
        ORDER BY total_points DESC`,
       [event_id]
-    );
+    ) as unknown as QueryResult<TeamData>;
 
     const teams = teamsResult.rows;
 
@@ -117,12 +158,14 @@ export async function GET(
        WHERE s.event_id = $1
        ORDER BY s.day_number, s.created_at`,
       [event_id]
-    );
+    ) as unknown as QueryResult<ScoreData>;
 
     const scores = scoresResult.rows;
 
-    // Get unique days
-    const days = [...new Set(scores.map((s: any) => s.day_number))].sort((a, b) => a - b);
+    // Get unique days - properly typed to avoid 'unknown' type errors
+    const dayNumbers = scores.map((s) => s.day_number);
+    const uniqueDays = [...new Set(dayNumbers)];
+    const days: number[] = uniqueDays.sort((a, b) => a - b);
 
     // Build CSV content
     let csv = '';
@@ -136,7 +179,7 @@ export async function GET(
     // Teams summary
     csv += `TEAMS SUMMARY\n`;
     csv += `Rank,Team Name,Total Points\n`;
-    teams.forEach((team: any, index: number) => {
+    teams.forEach((team, index) => {
       csv += `${index + 1},"${team.name}",${team.total_points || 0}\n`;
     });
     csv += `\n`;
@@ -145,12 +188,13 @@ export async function GET(
     if (event.mode === 'camp' && days.length > 1) {
       csv += `SCORES BY DAY\n`;
       
-      days.forEach((day: number) => {
+      // Properly type the day parameter in forEach
+      days.forEach((day) => {
         csv += `\nDay ${day}\n`;
         csv += `Team,Category,Points,Timestamp\n`;
         
-        const dayScores = scores.filter((s: any) => s.day_number === day);
-        dayScores.forEach((score: any) => {
+        const dayScores = scores.filter((s) => s.day_number === day);
+        dayScores.forEach((score) => {
           const timestamp = new Date(score.created_at).toLocaleString();
           csv += `"${score.team_name}","${score.category}",${score.points},"${timestamp}"\n`;
         });
@@ -159,7 +203,7 @@ export async function GET(
       // Single day or quick mode
       csv += `ALL SCORES\n`;
       csv += `Team,Category,Points,Timestamp\n`;
-      scores.forEach((score: any) => {
+      scores.forEach((score) => {
         const timestamp = new Date(score.created_at).toLocaleString();
         csv += `"${score.team_name}","${score.category}",${score.points},"${timestamp}"\n`;
       });

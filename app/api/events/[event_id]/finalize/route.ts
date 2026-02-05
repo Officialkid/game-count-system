@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query } from '@/lib/db-client';
-import { getEventByToken } from '@/lib/db-access';
-import { successResponse, errorResponse, ERROR_STATUS_MAP } from '@/lib/api-responses';
+import { db } from '@/lib/firebase-admin';
+import { FieldValue } from 'firebase-admin/firestore';
+import { validateAdminToken, prepareEventForResponse } from '@/lib/firebase-helpers';
 
 /**
  * POST /api/events/[event_id]/finalize
@@ -19,54 +19,152 @@ export async function POST(
     const admin_token = request.headers.get('x-admin-token');
     if (!admin_token) {
       return NextResponse.json(
-        errorResponse('UNAUTHORIZED', 'X-ADMIN-TOKEN header required'),
-        { status: ERROR_STATUS_MAP.UNAUTHORIZED }
+        {
+          success: false,
+          data: null,
+          error: {
+            code: 'UNAUTHORIZED',
+            message: 'X-ADMIN-TOKEN header required'
+          }
+        },
+        { status: 401 }
       );
     }
 
     // Verify admin token
-    const event = await getEventByToken(admin_token, 'admin');
-    if (!event || event.id !== event_id) {
+    const isValid = await validateAdminToken(event_id, admin_token);
+    if (!isValid) {
       return NextResponse.json(
-        errorResponse('FORBIDDEN', 'Invalid admin token or access denied'),
-        { status: ERROR_STATUS_MAP.FORBIDDEN }
+        {
+          success: false,
+          data: null,
+          error: {
+            code: 'FORBIDDEN',
+            message: 'Invalid admin token or access denied'
+          }
+        },
+        { status: 403 }
       );
     }
 
-    // Expired events cannot be finalized
-    if (event.status === 'expired') {
+    // Get event to check status
+    const eventDoc = await db.collection('events').doc(event_id).get();
+    
+    if (!eventDoc.exists) {
       return NextResponse.json(
-        errorResponse('NOT_FOUND', 'Event expired'),
+        {
+          success: false,
+          data: null,
+          error: {
+            code: 'NOT_FOUND',
+            message: 'Event not found'
+          }
+        },
+        { status: 404 }
+      );
+    }
+
+    const event = eventDoc.data();
+
+    // Expired events cannot be finalized
+    if (event?.status === 'expired' || event?.status === 'archived') {
+      return NextResponse.json(
+        {
+          success: false,
+          data: null,
+          error: {
+            code: 'GONE',
+            message: 'Event expired'
+          }
+        },
         { status: 410 }
       );
     }
 
     // Check if already finalized
-    if (event.is_finalized) {
+    if (event?.isFinalized) {
       return NextResponse.json(
-        errorResponse('CONFLICT', 'Event already finalized'),
-        { status: ERROR_STATUS_MAP.CONFLICT }
+        {
+          success: false,
+          data: null,
+          error: {
+            code: 'CONFLICT',
+            message: 'Event already finalized'
+          }
+        },
+        { status: 409 }
       );
     }
 
-    // Finalize the event
-    const result = await query(
-      `UPDATE events 
-       SET is_finalized = TRUE, finalized_at = NOW(), updated_at = NOW()
-       WHERE id = $1
-       RETURNING id, name, is_finalized, finalized_at`,
-      [event_id]
-    );
+    // Finalize the event using transaction
+    await db.runTransaction(async (transaction: any) => {
+      const eventRef = db.collection('events').doc(event_id);
+      const eventSnapshot = await transaction.get(eventRef);
+      
+      if (!eventSnapshot.exists) {
+        throw new Error('Event not found');
+      }
+      
+      // Update event as finalized
+      transaction.update(eventRef, {
+        isFinalized: true,
+        finalizedAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp()
+      });
+      
+      // Optional: Recalculate all team totals for accuracy
+      const teamsSnapshot = await eventRef.collection('teams').get();
+      
+      for (const teamDoc of teamsSnapshot.docs) {
+        const scoresSnapshot = await teamDoc.ref.collection('scores').get();
+        const totalPoints = scoresSnapshot.docs.reduce(
+          (sum: number, scoreDoc: any) => sum + (scoreDoc.data().points || 0),
+          0
+        );
+        
+        transaction.update(teamDoc.ref, {
+          totalPoints,
+          updatedAt: FieldValue.serverTimestamp()
+        });
+      }
+    });
+
+    // Get updated event
+    const updatedDoc = await db.collection('events').doc(event_id).get();
+    const updatedEvent = prepareEventForResponse({
+      id: updatedDoc.id,
+      ...updatedDoc.data()
+    });
 
     return NextResponse.json(
-      successResponse({ event: result.rows[0], message: 'Event finalized successfully' }),
+      {
+        success: true,
+        data: {
+          event: {
+            id: updatedEvent.id,
+            name: updatedEvent.name,
+            isFinalized: updatedEvent.isFinalized,
+            finalizedAt: updatedEvent.finalizedAt
+          },
+          message: 'Event finalized successfully'
+        },
+        error: null
+      },
       { status: 200 }
     );
 
   } catch (error: any) {
     console.error('[API] Finalize event error:', error);
     return NextResponse.json(
-      { success: false, error: 'Failed to finalize event' },
+      { 
+        success: false,
+        data: null,
+        error: {
+          code: 'INTERNAL_ERROR',
+          message: 'Failed to finalize event',
+          details: error.message
+        }
+      },
       { status: 500 }
     );
   }
@@ -87,45 +185,91 @@ export async function DELETE(
 
     if (!admin_token) {
       return NextResponse.json(
-        errorResponse('UNAUTHORIZED', 'Admin token required'),
-        { status: ERROR_STATUS_MAP.UNAUTHORIZED }
+        {
+          success: false,
+          data: null,
+          error: {
+            code: 'UNAUTHORIZED',
+            message: 'Admin token required'
+          }
+        },
+        { status: 401 }
       );
     }
 
     // Verify admin token
-    const event = await getEventByToken(admin_token, 'admin');
-    if (!event || event.id !== event_id) {
+    const isValid = await validateAdminToken(event_id, admin_token);
+    if (!isValid) {
       return NextResponse.json(
-        errorResponse('FORBIDDEN', 'Invalid admin token or access denied'),
-        { status: ERROR_STATUS_MAP.FORBIDDEN }
+        {
+          success: false,
+          data: null,
+          error: {
+            code: 'FORBIDDEN',
+            message: 'Invalid admin token or access denied'
+          }
+        },
+        { status: 403 }
       );
     }
 
     // Unfinalize the event
-    const result = await query(
-      `UPDATE events 
-       SET is_finalized = FALSE, finalized_at = NULL, updated_at = NOW()
-       WHERE id = $1
-       RETURNING id, name, is_finalized`,
-      [event_id]
-    );
+    await db.collection('events').doc(event_id).update({
+      isFinalized: false,
+      finalizedAt: null,
+      updatedAt: FieldValue.serverTimestamp()
+    });
 
-    if (result.rows.length === 0) {
+    // Get updated event
+    const updatedDoc = await db.collection('events').doc(event_id).get();
+    
+    if (!updatedDoc.exists) {
       return NextResponse.json(
-        errorResponse('NOT_FOUND', 'Event not found'),
-        { status: ERROR_STATUS_MAP.NOT_FOUND }
+        {
+          success: false,
+          data: null,
+          error: {
+            code: 'NOT_FOUND',
+            message: 'Event not found'
+          }
+        },
+        { status: 404 }
       );
     }
 
+    const updatedEvent = prepareEventForResponse({
+      id: updatedDoc.id,
+      ...updatedDoc.data()
+    });
+
     return NextResponse.json(
-      successResponse({ event: result.rows[0], message: 'Event unfinalized - you can now edit scores' }),
+      {
+        success: true,
+        data: {
+          event: {
+            id: updatedEvent.id,
+            name: updatedEvent.name,
+            isFinalized: updatedEvent.isFinalized
+          },
+          message: 'Event unfinalized successfully'
+        },
+        error: null
+      },
       { status: 200 }
     );
 
   } catch (error: any) {
     console.error('[API] Unfinalize event error:', error);
     return NextResponse.json(
-      { success: false, error: 'Failed to unfinalize event' },
+      { 
+        success: false,
+        data: null,
+        error: {
+          code: 'INTERNAL_ERROR',
+          message: 'Failed to unfinalize event',
+          details: error.message
+        }
+      },
       { status: 500 }
     );
   }

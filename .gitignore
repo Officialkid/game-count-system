@@ -12,6 +12,10 @@ out/
 .env.test.local
 .env.production.local
 
+# Ignore Firebase service account credentials
+firebase-service-account.json
+*-firebase-adminsdk-*.json
+
 # Ignore OS files
 .DS_Store
 Thumbs.db

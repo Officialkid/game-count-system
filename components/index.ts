@@ -48,6 +48,29 @@ export { ThemedEventPage } from './ThemedEventPage';
 export { ErrorBoundary } from './ErrorBoundary';
 export { ClientSetup } from './ClientSetup';
 export { RecapIntroModal } from './RecapIntroModal';
+
+// Mobile-First Responsive Components (CRITICAL FIX #8)
+export {
+  MobileNavigation,
+  MobileHeader,
+  MobileDrawer,
+  MobileFAB,
+  MobilePullToRefresh,
+} from './MobileNavigation';
+export type { MobileNavItem, MobileNavigationProps, MobileHeaderProps, MobileDrawerProps, MobileFABProps, MobilePullToRefreshProps } from './MobileNavigation';
+
+export {
+  TouchScoreInput,
+  CompactTouchScoreInput,
+  TouchNumberPad,
+} from './TouchScoreInput';
+export type { TouchScoreInputProps, CompactTouchScoreInputProps, TouchNumberPadProps } from './TouchScoreInput';
+
+export {
+  ResponsiveTeamDisplay,
+  ResponsiveTeamGrid,
+} from './ResponsiveTeamDisplay';
+export type { ResponsiveTeamDisplayProps, ResponsiveTeamGridProps, Team } from './ResponsiveTeamDisplay';
 export { RecapShareModal } from './RecapShareModal';
 export { RecapSlides } from './RecapSlides';
 export { IntroSlide, GamesPlayedSlide, TeamsParticipatedSlide, RankingsSlide, WinnerSlide, ClosingSlide } from './RecapSlideComponents';

@@ -2,7 +2,7 @@
 
 **Event-centric scoring platform for competitions, camps, and tournaments.**
 
-Token-based • No authentication • PostgreSQL • Next.js 14
+Token-based • No authentication • Firebase • Next.js 14 • Real-Time Updates
 
 ---
 
@@ -11,10 +11,26 @@ Token-based • No authentication • PostgreSQL • Next.js 14
 GameScore is a **production-ready scoring system** for managing multi-team events:
 
 - ✅ **No user accounts** - Anyone can create an event instantly
-- 🔐 **Token-based access** - Secure admin, scorer, and public tokens per event
-- 📊 **Live scoreboards** - Real-time public viewing with shareable links
+- 🔐 **Token-based access** - Secure admin, scorer, and viewer tokens per event
+- 📊 **Live scoreboards** - Real-time updates (<500ms) with Firebase
+- 📱 **Mobile-first** - Touch-optimized for phones (primary use case)
 - 📅 **Multi-day support** - Perfect for camps, tournaments, and competitions
-- ⏱️ **Auto-cleanup** - Events expire automatically based on retention policy
+- ⚡ **Quick Create** - One-click event creation with instant links
+- ⏱️ **Auto-cleanup** - Quick events expire automatically (7 days)
+
+---
+
+## 📚 Documentation
+
+**See [DOCS-INDEX.md](DOCS-INDEX.md) for complete documentation guide.**
+
+### Quick Links:
+- **🔥 Firebase Setup** → [DATABASE-MIGRATION-COMPLETE.md](DATABASE-MIGRATION-COMPLETE.md)
+- **⚡ Real-Time Updates** → [REALTIME-SYSTEM-COMPLETE.md](REALTIME-SYSTEM-COMPLETE.md)
+- **📱 Mobile Design** → [00-CRITICAL-FIX-8-MOBILE-COMPLETE.md](00-CRITICAL-FIX-8-MOBILE-COMPLETE.md)
+- **🔄 Event Lifecycle** → [00-CRITICAL-FIX-4-LIFECYCLE-COMPLETE.md](00-CRITICAL-FIX-4-LIFECYCLE-COMPLETE.md)
+- **🔒 Day Locking** → [00-CRITICAL-FIX-5-DAY-LOCKING-COMPLETE.md](00-CRITICAL-FIX-5-DAY-LOCKING-COMPLETE.md)
+- **⚡ Quick Create** → [00-CRITICAL-FIX-6-QUICK-CREATE-COMPLETE.md](00-CRITICAL-FIX-6-QUICK-CREATE-COMPLETE.md)
 
 ---
 
@@ -22,7 +38,7 @@ GameScore is a **production-ready scoring system** for managing multi-team event
 
 ### Prerequisites
 - Node.js 18+
-- PostgreSQL database (Render, Supabase, Neon, or local)
+- Firebase project (see [DATABASE-MIGRATION-COMPLETE.md](DATABASE-MIGRATION-COMPLETE.md))
 
 ### Installation
 
@@ -31,23 +47,73 @@ GameScore is a **production-ready scoring system** for managing multi-team event
 npm install
 
 # Set up environment variables
-cp .env.example .env.local
+cp .env.local.example .env.local
 
-# Configure your PostgreSQL connection in .env.local:
-# DATABASE_URL=postgresql://user:password@host:5432/database
-
-# Run database migrations
-npm run db:migrate
+# Configure Firebase in .env.local (see Firebase Setup docs)
+# NEXT_PUBLIC_FIREBASE_API_KEY=...
+# NEXT_PUBLIC_FIREBASE_PROJECT_ID=...
+# etc.
 
 # Start development server
 npm run dev
 ```
 
-### First Event
+### First Event - Quick Create
 
+Visit: `http://localhost:3000/quick-create`
+
+Or use API:
 ```bash
-# Create your first event
-curl -X POST https://game-count-system.onrender.com/api/events/create \
+curl -X POST http://localhost:3000/api/events/quick-create \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Summer Games 2026",
+    "numberOfDays": 1,
+    "teamNames": "Team Red, Team Blue, Team Green"
+  }'
+```
+
+Returns:
+```json
+{
+  "success": true,
+  "event": { "id": "...", "name": "..." },
+  "teams": [...],
+  "tokens": {
+    "admin_token": "...",
+    "scorer_token": "...",
+    "viewer_token": "..."
+  },
+  "links": {
+    "admin": "http://localhost:3000/event/admin_token",
+    "scorer": "http://localhost:3000/score/scorer_token",
+    "viewer": "http://localhost:3000/event/viewer_token",
+    "scoreboard": "http://localhost:3000/scoreboard/viewer_token"
+  }
+}
+```
+
+---
+
+## 🏗️ Architecture
+
+### Tech Stack
+- **Frontend**: Next.js 14 (App Router), React 18, TypeScript, Tailwind CSS
+- **Database**: Firebase Firestore (NoSQL, real-time)
+- **Validation**: Zod
+- **State**: React hooks + Firebase subscriptions
+- **Mobile**: Touch-optimized components, responsive breakpoints
+
+### Database Schema
+
+See [DATABASE-MIGRATION-COMPLETE.md](DATABASE-MIGRATION-COMPLETE.md) for full schema.
+
+**Collections**:
+- `events` - Event metadata, tokens, lifecycle status
+- `teams` - Team names, colors
+- `scores` - Individual score entries
+- `games` - Game/activity definitions
+- `event_days` - Multi-day event days, day locking
   -H "Content-Type: application/json" \
   -d '{
     "name": "Summer Camp 2026",

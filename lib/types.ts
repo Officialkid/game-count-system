@@ -17,8 +17,8 @@ export interface Event {
   allow_negative?: boolean;
   display_mode?: 'cumulative' | 'per_day';
   num_teams?: number;
-  start_date?: string | null;
-  end_date?: string | null;
+  start_at?: string | null;
+  end_at?: string | null;
   status?: 'active' | 'inactive';
 }
 
