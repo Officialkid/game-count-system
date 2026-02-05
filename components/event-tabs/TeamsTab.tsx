@@ -10,6 +10,7 @@ import { TeamCard } from '../ui/TeamCard';
 import { BulkTeamCreator } from '../BulkTeamCreator';
 import { getPaletteById } from '@/lib/color-palettes';
 import { safeCompare, safeNumber } from '@/lib/safe-ui-helpers';
+import { NoTeamsEmpty } from '@/components/EmptyStates';
 
 interface Team {
   id: string | number;
@@ -128,13 +129,8 @@ export function TeamsTab({ eventId, event, refreshTrigger }: TeamsTabProps) {
       <div className="space-y-6">
         {!showTeamCreator ? (
           <Card>
-            <CardContent className="py-16 text-center">
-              <div className="text-6xl mb-4">👥</div>
-              <h3 className="text-2xl font-bold text-gray-900 mb-2">No Teams Yet</h3>
-              <p className="text-gray-600 mb-6">Add teams to start tracking scores!</p>
-              <Button onClick={() => setShowTeamCreator(true)}>
-                + Add Teams
-              </Button>
+            <CardContent className="py-8">
+              <NoTeamsEmpty onAddTeams={() => setShowTeamCreator(true)} />
             </CardContent>
           </Card>
         ) : (
@@ -170,7 +166,7 @@ export function TeamsTab({ eventId, event, refreshTrigger }: TeamsTabProps) {
         <div className="flex justify-between items-start mb-2">
           <div>
             <h2 className="text-4xl font-black text-gray-900 tracking-tight">🏆 Team Rankings</h2>
-            <p className="text-gray-500 mt-2">Live competitive rankings • Click to view history</p>
+            <p className="text-gray-700 mt-2">Live competitive rankings • Click to view history</p>
           </div>
           <div className="flex items-center gap-3">
             <Badge variant="info" className="px-4 py-2 text-base font-semibold">{teams.length} {teams.length === 1 ? 'team' : 'teams'}</Badge>
@@ -224,7 +220,7 @@ export function TeamsTab({ eventId, event, refreshTrigger }: TeamsTabProps) {
                             <div className="font-bold text-gray-900 text-sm">
                               {entry.game_name ? `🎮 ${entry.game_name}` : `Game ${entry.game_number}`}
                             </div>
-                            <div className="text-xs text-gray-500 mt-1">
+                            <div className="text-xs text-gray-700 mt-1">
                               {new Date(entry.created_at).toLocaleDateString()}
                             </div>
                           </div>

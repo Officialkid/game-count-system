@@ -48,7 +48,7 @@ button:active,
 }
 
 /* Large touch targets for mobile accessibility */
-/* Ensure minimum 44px height/width for interactive elements */
+/* Ensure minimum 48px height/width for interactive elements (comfortable for 18-45) */
 button,
 a,
 input[type='button'],
@@ -57,11 +57,11 @@ input[type='reset'],
 [role='button'],
 [role='tab'],
 [role='menuitem'] {
-  min-height: 44px;
-  min-width: 44px;
+  min-height: 48px;
+  min-width: 48px;
 }
 
-/* Add extra padding on mobile for larger touch targets */
+/* Add extra padding on mobile for comfortable touch targets */
 @media (max-width: 640px) {
   button,
   input[type='text'],
@@ -71,11 +71,11 @@ input[type='reset'],
   textarea,
   select,
   [role='button'] {
-    padding-top: 0.75rem;
-    padding-bottom: 0.75rem;
-    padding-left: 1rem;
-    padding-right: 1rem;
-    font-size: 16px; /* Prevents zoom on iOS when input is focused */
+    padding-top: 0.75rem;    /* 12px */
+    padding-bottom: 0.75rem; /* 12px */
+    padding-left: 1rem;      /* 16px */
+    padding-right: 1rem;     /* 16px */
+    font-size: 17px; /* Comfortable reading, prevents iOS zoom */
     line-height: 1.5;
   }
 }
@@ -83,6 +83,13 @@ input[type='reset'],
 /* Prevent horizontal scroll on mobile */
 body {
   overflow-x: hidden;
+}
+
+/* Add bottom padding on mobile to prevent content being hidden by bottom tab bar */
+@media (max-width: 768px) {
+  body {
+    padding-bottom: 80px; /* 64px tab bar height + 16px buffer */
+  }
 }
 
 /* Improve scrolling performance */
@@ -162,6 +169,13 @@ select {
   body {
     padding-left: max(0px, env(safe-area-inset-left));
     padding-right: max(0px, env(safe-area-inset-right));
+  }
+  
+  /* Bottom padding accounts for both safe area and tab bar */
+  @media (max-width: 768px) {
+    body {
+      padding-bottom: max(80px, calc(64px + env(safe-area-inset-bottom)));
+    }
   }
 
   .pb-20 {

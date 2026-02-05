@@ -8,6 +8,7 @@ import { LoadingSkeleton, LoadingTableSkeleton } from '../ui/LoadingSkeleton';
 import { ScoreHistorySkeleton } from '@/components/skeletons';
 import { auth } from '@/lib/api-client';
 import { getPaletteById } from '@/lib/color-palettes';
+import { NoScoresEmpty } from '@/components/EmptyStates';
 
 interface GameScore {
   id: number;
@@ -121,11 +122,8 @@ export function HistoryTab({ eventId, event }: HistoryTabProps) {
   if (scores.length === 0) {
     return (
       <Card>
-        <CardContent className="text-center py-12">
-          <p className="text-gray-500 mb-2">No game history yet.</p>
-          <p className="text-sm text-gray-400">
-            Scores will appear here as you add them in the Scoring tab.
-          </p>
+        <CardContent className="py-8">
+          <NoScoresEmpty showShareButton={false} />
         </CardContent>
       </Card>
     );
@@ -234,33 +232,33 @@ export function HistoryTab({ eventId, event }: HistoryTabProps) {
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
                   <th
-                    className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
+                    className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
                     onClick={() => handleSort('game_number')}
                     title="Click to sort by game number"
                   >
                     Game {sortField === 'game_number' && (sortDirection === 'asc' ? '↑' : '↓')}
                   </th>
                   <th 
-                    className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
+                    className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
                     onClick={() => handleSort('team_name')}
                     title="Click to sort by team name"
                   >
                     Team {sortField === 'team_name' && (sortDirection === 'asc' ? '↑' : '↓')}
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
                     Points
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
                     Added By
                   </th>
                   <th
-                    className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
+                    className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
                     onClick={() => handleSort('created_at')}
                     title="Click to sort by time"
                   >
                     Timestamp {sortField === 'created_at' && (sortDirection === 'asc' ? '↑' : '↓')}
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
                     Status
                   </th>
                 </tr>
@@ -272,7 +270,7 @@ export function HistoryTab({ eventId, event }: HistoryTabProps) {
                       <div>
                         <span className="font-medium text-gray-900">Game {score.game_number}</span>
                         {score.game_name && (
-                          <div className="text-xs text-gray-500 italic">{score.game_name}</div>
+                          <div className="text-xs text-gray-700 italic">{score.game_name}</div>
                         )}
                       </div>
                     </td>
@@ -292,7 +290,7 @@ export function HistoryTab({ eventId, event }: HistoryTabProps) {
                       </span>
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-600">
-                      {score.added_by || <span className="text-gray-400 italic">Unknown</span>}
+                      {score.added_by || <span className="text-gray-600 italic">Unknown</span>}
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-600" title={new Date(score.created_at).toLocaleString()}>
                       {formatTimestamp(score.created_at)}

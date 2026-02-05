@@ -163,13 +163,13 @@ export function generateShareLink(
   baseUrl: string = typeof window !== 'undefined' ? window.location.origin : ''
 ): string {
   const paths: Record<TokenType, string> = {
-    admin: `/event/${eventId}/admin`,
-    scorer: `/score/${eventId}`,
-    viewer: `/display/${eventId}`,
+    admin: `/admin/${token}`,
+    scorer: `/score/${token}`,
+    viewer: `/public/${token}`,
   };
 
   const path = paths[tokenType];
-  return `${baseUrl}${path}?token=${token}`;
+  return `${baseUrl}${path}`;
 }
 
 /**

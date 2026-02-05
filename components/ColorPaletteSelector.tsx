@@ -43,13 +43,13 @@ export function ColorPaletteSelector({
             <div className="font-medium text-gray-900">
               {selectedPaletteObj.name}
             </div>
-            <div className="text-sm text-gray-500">
+            <div className="text-sm text-gray-700">
               {selectedPaletteObj.description}
             </div>
           </div>
         </div>
         <svg
-          className={`w-5 h-5 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+          className={`w-5 h-5 text-gray-600 transition-transform ${isOpen ? 'rotate-180' : ''}`}
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
@@ -87,7 +87,7 @@ export function ColorPaletteSelector({
               </div>
               
               {/* Description */}
-              <div className="text-xs text-gray-500 text-center mt-1">
+              <div className="text-xs text-gray-700 text-center mt-1">
                 {palette.description}
               </div>
               

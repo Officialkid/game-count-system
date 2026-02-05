@@ -30,6 +30,8 @@ interface Event {
   mode: string;
   status: string;
   public_token: string;
+  start_time?: string;
+  number_of_days?: number;
 }
 
 export default function ScorerPage({ params }: { params: { token: string } }) {
@@ -42,9 +44,9 @@ export default function ScorerPage({ params }: { params: { token: string } }) {
   const [errorType, setErrorType] = useState<'expired' | 'not-found' | null>(null);
   const [selectedTeamId, setSelectedTeamId] = useState('');
   const [points, setPoints] = useState('');
-  const [category, setCategory] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
+  const [justAdded, setJustAdded] = useState(false);
 
   // Offline state
   const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
@@ -225,12 +227,23 @@ export default function ScorerPage({ params }: { params: { token: string } }) {
     }
   };
 
+  // Auto-detect current day based on event start time
+  const getCurrentDay = (): number => {
+    if (!event?.start_time) return 1;
+    const now = new Date();
+    const startTime = new Date(event.start_time);
+    const daysPassed = Math.floor(
+      (now.getTime() - startTime.getTime()) / (1000 * 60 * 60 * 24)
+    );
+    return Math.min(daysPassed + 1, event.number_of_days || 1);
+  };
+
   const handleSubmitScore = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!event || !selectedTeamId || !points) return;
 
     const pointsValue = parseInt(points);
-    const categoryValue = category.trim() || 'Score';
+    const currentDay = getCurrentDay();
     
     // If offline, queue the score
     if (!isOnline) {
@@ -238,8 +251,8 @@ export default function ScorerPage({ params }: { params: { token: string } }) {
         eventId: event.id,
         teamId: selectedTeamId,
         points: pointsValue,
-        category: categoryValue,
-        dayNumber: 1,
+        category: 'Score',
+        dayNumber: currentDay,
         type: 'single'
       });
       
@@ -255,11 +268,15 @@ export default function ScorerPage({ params }: { params: { token: string } }) {
       
       const teamName = teams.find(t => t.id === selectedTeamId)?.name || 'Team';
       setSuccessMessage(`✓ Queued: ${pointsValue} points for ${teamName} (will sync when online)`);
-      setTimeout(() => setSuccessMessage(''), 5000);
+      setJustAdded(true);
+      setTimeout(() => {
+        setSuccessMessage('');
+        setJustAdded(false);
+      }, 3000);
       
       // Reset form
       setPoints('');
-      setCategory('');
+      setSelectedTeamId('');
       return;
     }
 
@@ -275,8 +292,8 @@ export default function ScorerPage({ params }: { params: { token: string } }) {
         },
         body: JSON.stringify({
           team_id: selectedTeamId,
-          day_number: 1,
-          category: categoryValue,
+          day_number: currentDay,
+          category: 'Score',
           points: pointsValue
         })
       });
@@ -288,14 +305,16 @@ export default function ScorerPage({ params }: { params: { token: string } }) {
 
       const teamName = teams.find(t => t.id === selectedTeamId)?.name || 'Team';
       setSuccessMessage(`✅ ${points} points added to ${teamName}`);
+      setJustAdded(true);
       setPoints('');
-      setCategory('');
+      setSelectedTeamId('');
       
       // Reload teams to show updated totals
       setTimeout(() => {
         loadData();
         setSuccessMessage('');
-      }, 2000);
+        setJustAdded(false);
+      }, 3000);
     } catch (err: any) {
       alert(err.message || 'Failed to add score');
     } finally {
@@ -305,6 +324,7 @@ export default function ScorerPage({ params }: { params: { token: string } }) {
 
   const quickAddPoints = async (teamId: string, amount: number) => {
     if (!event) return;
+    const currentDay = getCurrentDay();
 
     // If offline, queue the score
     if (!isOnline) {
@@ -313,7 +333,7 @@ export default function ScorerPage({ params }: { params: { token: string } }) {
         teamId: teamId,
         points: amount,
         category: 'Quick Add',
-        dayNumber: 1,
+        dayNumber: currentDay,
         type: 'quick'
       });
       
@@ -329,7 +349,11 @@ export default function ScorerPage({ params }: { params: { token: string } }) {
       
       const teamName = teams.find(t => t.id === teamId)?.name || 'Team';
       setSuccessMessage(`✓ Queued: ${amount > 0 ? '+' : ''}${amount} points for ${teamName}`);
-      setTimeout(() => setSuccessMessage(''), 3000);
+      setJustAdded(true);
+      setTimeout(() => {
+        setSuccessMessage('');
+        setJustAdded(false);
+      }, 3000);
       return;
     }
 
@@ -342,7 +366,7 @@ export default function ScorerPage({ params }: { params: { token: string } }) {
         },
         body: JSON.stringify({
           team_id: teamId,
-          day_number: 1,
+          day_number: currentDay,
           category: 'Quick Add',
           points: amount
         })
@@ -354,12 +378,14 @@ export default function ScorerPage({ params }: { params: { token: string } }) {
       }
 
       const teamName = teams.find(t => t.id === teamId)?.name || 'Team';
-      setSuccessMessage(`✅ ${amount} points added to ${teamName}`);
+      setSuccessMessage(`✅ ${amount > 0 ? '+' : ''}${amount} points added to ${teamName}`);
+      setJustAdded(true);
       
       setTimeout(() => {
         loadData();
         setSuccessMessage('');
-      }, 2000);
+        setJustAdded(false);
+      }, 3000);
     } catch (err: any) {
       alert(err.message || 'Failed to add score');
     }
@@ -546,69 +572,119 @@ export default function ScorerPage({ params }: { params: { token: string } }) {
           </div>
         )}
 
-        {/* Score Entry Form */}
-        <div className="bg-white rounded-2xl shadow p-6 hover:shadow-lg transition-shadow">
-          <h2 className="text-xl font-bold mb-2">Add Score</h2>
-          <p className="text-sm text-gray-600 mb-4">Enter positive points for gains or negative values for penalties/deductions.</p>
-          <form onSubmit={handleSubmitScore} className="space-y-4">
+        {/* Score Entry Form - Simplified */}
+        <div className="bg-white rounded-2xl shadow-lg p-6 hover:shadow-xl transition-shadow">
+          <h2 className="text-3xl font-bold mb-6 text-gray-900">Add Score</h2>
+          
+          <form onSubmit={handleSubmitScore} className="space-y-6">
+            {/* STEP 1: Select Team (Large Buttons) */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Select Team
+              <label className="text-lg font-semibold mb-3 block text-gray-900">
+                Step 1: Select Team
               </label>
-              <select
-                value={selectedTeamId}
-                onChange={(e) => setSelectedTeamId(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-                required
-                disabled={submitting}
-              >
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {teams.map((team) => (
-                  <option key={team.id} value={team.id}>
-                    {team.name} — {team.total_points || 0} pts
-                  </option>
+                  <button
+                    key={team.id}
+                    type="button"
+                    onClick={() => setSelectedTeamId(team.id)}
+                    className={`
+                      p-4 text-left rounded-xl border-2 transition-all
+                      ${selectedTeamId === team.id
+                        ? 'border-purple-600 bg-purple-50 shadow-md scale-[1.02]'
+                        : 'border-gray-200 hover:border-purple-300 hover:bg-gray-50'
+                      }
+                    `}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div 
+                        className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold shadow-md"
+                        style={{ backgroundColor: team.color }}
+                      >
+                        {safeInitial(team.name)}
+                      </div>
+                      <div className="flex-1">
+                        <span className="text-lg font-semibold block text-gray-900">
+                          {team.name}
+                        </span>
+                        <span className="text-sm text-gray-600">
+                          {team.total_points || 0} points
+                        </span>
+                      </div>
+                      {selectedTeamId === team.id && (
+                        <div className="text-purple-600 font-bold text-2xl">
+                          ✓
+                        </div>
+                      )}
+                    </div>
+                  </button>
                 ))}
-              </select>
+              </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* STEP 2: Enter Points (Large Input with Presets) */}
+            {selectedTeamId && (
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Points
+                <label htmlFor="points" className="text-lg font-semibold mb-3 block text-gray-900">
+                  Step 2: Enter Points
                 </label>
-                <input
+                
+                {/* Quick Preset Buttons */}
+                <div className="grid grid-cols-3 gap-2 mb-4">
+                  {[10, 20, 50].map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => setPoints(preset.toString())}
+                      className="px-4 py-3 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 font-semibold transition"
+                    >
+                      +{preset}
+                    </button>
+                  ))}
+                </div>
+                
+                <input 
+                  id="points"
                   type="number"
                   value={points}
                   onChange={(e) => setPoints(e.target.value)}
-                  placeholder="50"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                  placeholder="0"
+                  className="w-full px-6 py-6 text-3xl text-center font-bold border-2 border-purple-300 rounded-xl focus:outline-none focus:ring-4 focus:ring-purple-300 focus:border-purple-500 bg-white"
+                  autoFocus
                   required
                   disabled={submitting}
                 />
+                <p className="text-sm text-gray-600 mt-2 text-center">
+                  Enter positive number for points, negative for penalties
+                </p>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Reason / Game Name <span className="text-gray-400">(optional)</span>
-                </label>
-                <input
-                  type="text"
-                  value={category}
-                  onChange={(e) => setCategory(e.target.value)}
-                  placeholder="e.g., Round 1, Penalty, Bonus Game"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-                  disabled={submitting}
-                />
-              </div>
-            </div>
+            )}
 
-            <button
-              type="submit"
-              disabled={submitting || !selectedTeamId || !points}
-              className="w-full px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl hover:shadow-lg hover:scale-[1.02] transition disabled:opacity-50 disabled:cursor-not-allowed font-semibold text-lg"
-            >
-              {submitting ? 'Adding...' : 'Add Score'}
-            </button>
+            {/* STEP 3: Submit (Big Button) */}
+            {selectedTeamId && points && (
+              <button
+                type="submit"
+                disabled={submitting}
+                className="w-full px-8 py-6 text-xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl hover:shadow-lg hover:scale-[1.02] transition disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {submitting ? 'Adding...' : `Add ${points} Points to ${teams.find(t => t.id === selectedTeamId)?.name} →`}
+              </button>
+            )}
           </form>
         </div>
+
+        {/* Success Feedback - Animated */}
+        {justAdded && (
+          <div className="fixed bottom-6 right-6 p-6 bg-green-500 text-white rounded-xl shadow-2xl animate-bounce z-50 max-w-sm">
+            <div className="flex items-center gap-4">
+              <div className="text-4xl">✅</div>
+              <div>
+                <p className="font-bold text-lg">Score Added!</p>
+                <p className="text-sm opacity-90">Updated successfully</p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Quick Add Section */}
         <div className="bg-white rounded-2xl shadow p-6">

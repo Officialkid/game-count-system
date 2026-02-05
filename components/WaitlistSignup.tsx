@@ -153,7 +153,7 @@ export function WaitlistSignup({
             Email Address *
           </label>
           <div className="relative">
-            <Mail className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
+            <Mail className="absolute left-3 top-3 w-5 h-5 text-gray-600" />
             <input
               id="email"
               name="email"
@@ -174,7 +174,7 @@ export function WaitlistSignup({
             Phone Number (Optional)
           </label>
           <div className="relative">
-            <Phone className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
+            <Phone className="absolute left-3 top-3 w-5 h-5 text-gray-600" />
             <input
               id="phone"
               name="phone"
@@ -237,7 +237,7 @@ export function WaitlistSignup({
           )}
         </Button>
 
-        <p className="text-xs text-gray-500 text-center">
+        <p className="text-xs text-gray-700 text-center">
           We respect your privacy. No spam, ever.
         </p>
       </form>

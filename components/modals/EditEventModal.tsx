@@ -94,7 +94,7 @@ export function EditEventModal({ eventId, isOpen, onClose, onSave, initial }: Ed
         <div className="p-8">
           <div className="flex justify-between items-center mb-6">
             <h3 className="text-3xl font-black text-gray-900">⚙️ Edit Event</h3>
-            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl font-bold transition">✕</button>
+            <button onClick={onClose} className="text-gray-600 hover:text-gray-600 text-2xl font-bold transition">✕</button>
           </div>
 
           <div className="space-y-6">
@@ -176,7 +176,7 @@ export function EditEventModal({ eventId, isOpen, onClose, onSave, initial }: Ed
                   );
                 })}
               </div>
-              <p className="text-xs text-gray-500 mt-2">{palette.name} - {palette.description}</p>
+              <p className="text-xs text-gray-700 mt-2">{palette.name} - {palette.description}</p>
             </div>
 
             {/* Logo removed for MVP */}

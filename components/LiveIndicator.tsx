@@ -145,7 +145,7 @@ export function LiveIndicator({
         
         {/* Last update time */}
         {connected && lastUpdate && (
-          <span className="text-xs text-gray-500">
+          <span className="text-xs text-gray-700">
             Updated {formatLastUpdate(lastUpdate)}
           </span>
         )}

@@ -187,7 +187,7 @@ export default function EventLifecycleCard({
           <div className="bg-gray-50 border-l-4 border-gray-400 p-4 rounded">
             <div className="flex items-start">
               <svg
-                className="w-5 h-5 text-gray-500 mt-0.5"
+                className="w-5 h-5 text-gray-700 mt-0.5"
                 fill="currentColor"
                 viewBox="0 0 20 20"
               >
@@ -214,13 +214,13 @@ export default function EventLifecycleCard({
         <div className="grid grid-cols-2 gap-4 text-sm">
           <div>
             <span className="text-gray-600">Can Edit:</span>
-            <span className={`ml-2 font-semibold ${lifecycle.canEdit ? 'text-green-600' : 'text-gray-400'}`}>
+            <span className={`ml-2 font-semibold ${lifecycle.canEdit ? 'text-green-600' : 'text-gray-600'}`}>
               {lifecycle.canEdit ? '✓ Yes' : '✗ No'}
             </span>
           </div>
           <div>
             <span className="text-gray-600">Can Finalize:</span>
-            <span className={`ml-2 font-semibold ${lifecycle.canFinalize ? 'text-green-600' : 'text-gray-400'}`}>
+            <span className={`ml-2 font-semibold ${lifecycle.canFinalize ? 'text-green-600' : 'text-gray-600'}`}>
               {lifecycle.canFinalize ? '✓ Yes' : '✗ No'}
             </span>
           </div>
@@ -245,7 +245,7 @@ export default function EventLifecycleCard({
                   className={`
                     px-4 py-2 rounded-md text-sm font-medium transition-colors
                     ${isTransitioning
-                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                      ? 'bg-gray-100 text-gray-600 cursor-not-allowed'
                       : 'bg-blue-500 text-white hover:bg-blue-600'
                     }
                   `}

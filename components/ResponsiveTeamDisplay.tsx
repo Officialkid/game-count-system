@@ -62,7 +62,7 @@ export function ResponsiveTeamDisplay({
     return (
       <div className="text-center py-12">
         <div className="text-6xl mb-4">👥</div>
-        <p className="text-gray-500 text-lg">No teams yet</p>
+        <p className="text-gray-700 text-lg">No teams yet</p>
       </div>
     );
   }
@@ -248,7 +248,7 @@ function TeamCard({
               {team.total_points || 0}
             </div>
             {team.score_count !== undefined && !isMinimal && (
-              <div className="text-xs text-gray-500">
+              <div className="text-xs text-gray-700">
                 {team.score_count} {team.score_count === 1 ? 'score' : 'scores'}
               </div>
             )}

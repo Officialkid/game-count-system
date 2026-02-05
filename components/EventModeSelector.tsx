@@ -28,7 +28,7 @@ export default function EventModeSelector({
         <label className="text-sm font-medium text-gray-700">
           Event Mode
         </label>
-        <p className="text-sm text-gray-500">
+        <p className="text-sm text-gray-700">
           Choose the type of event you want to create
         </p>
       </div>
@@ -159,7 +159,7 @@ function FeatureItem({
   return (
     <div
       className={`flex items-center space-x-2 text-xs ${
-        enabled ? 'text-gray-700' : 'text-gray-400 line-through'
+        enabled ? 'text-gray-700' : 'text-gray-600 line-through'
       }`}
     >
       <span>{icon}</span>

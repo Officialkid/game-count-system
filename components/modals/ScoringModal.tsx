@@ -166,7 +166,7 @@ export function ScoringModal({ eventId, isOpen, onClose, event, onScoreAdded }: 
         <div className="p-8">
           <div className="flex justify-between items-center mb-6">
             <h3 className="text-3xl font-black text-gray-900">⚡ Add Points</h3>
-            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl font-bold transition">✕</button>
+            <button onClick={onClose} className="text-gray-600 hover:text-gray-600 text-2xl font-bold transition">✕</button>
           </div>
 
           <form onSubmit={submit} className="space-y-6">
@@ -190,7 +190,7 @@ export function ScoringModal({ eventId, isOpen, onClose, event, onScoreAdded }: 
                     }}
                   >
                     <div className="font-bold text-gray-900 truncate">{team.team_name}</div>
-                    <div className="text-xs text-gray-500 mt-1">{team.total_score} pts</div>
+                    <div className="text-xs text-gray-700 mt-1">{team.total_score} pts</div>
                   </button>
                 ))}
               </div>
@@ -245,7 +245,7 @@ export function ScoringModal({ eventId, isOpen, onClose, event, onScoreAdded }: 
                       placeholder="0"
                       required 
                     />
-                    <div className="text-center text-xs text-gray-500 mt-2 font-medium">POINTS</div>
+                    <div className="text-center text-xs text-gray-700 mt-2 font-medium">POINTS</div>
                   </div>
                 </div>
 

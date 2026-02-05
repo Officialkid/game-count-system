@@ -70,7 +70,7 @@ export default function HomePage() {
           </div>
 
           {/* Trust badges */}
-          <div className="flex flex-wrap items-center justify-center gap-6 mt-8 text-sm text-gray-500">
+          <div className="flex flex-wrap items-center justify-center gap-6 mt-8 text-sm text-gray-700">
             <div className="flex items-center gap-2">
               <span className="text-green-500">✓</span>
               <span>No signup required</span>

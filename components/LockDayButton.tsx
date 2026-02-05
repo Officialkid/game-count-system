@@ -92,7 +92,7 @@ export default function LockDayButton({
         className={`
           px-3 py-1 rounded text-sm font-medium transition-colors
           ${isLoading || !validation.allowed
-            ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+            ? 'bg-gray-100 text-gray-600 cursor-not-allowed'
             : isLocked
             ? 'bg-green-500 text-white hover:bg-green-600'
             : 'bg-red-500 text-white hover:bg-red-600'
@@ -129,7 +129,7 @@ export default function LockDayButton({
 
       {/* Reason tooltip if disabled */}
       {!validation.allowed && (
-        <div className="text-xs text-gray-500 italic max-w-xs">
+        <div className="text-xs text-gray-700 italic max-w-xs">
           {validation.reason}
         </div>
       )}

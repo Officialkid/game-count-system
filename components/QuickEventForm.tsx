@@ -91,7 +91,7 @@ export default function QuickEventForm({ onSuccess, onError }: QuickEventFormPro
             disabled={isLoading}
             maxLength={100}
           />
-          <p className="mt-1 text-sm text-gray-500">
+          <p className="mt-1 text-sm text-gray-700">
             Give your event a memorable name
           </p>
         </div>
@@ -112,7 +112,7 @@ export default function QuickEventForm({ onSuccess, onError }: QuickEventFormPro
             <option value={2}>2-Day Event (Today + Tomorrow)</option>
             <option value={3}>3-Day Event (3 Days)</option>
           </select>
-          <p className="mt-1 text-sm text-gray-500">
+          <p className="mt-1 text-sm text-gray-700">
             Quick events start today and auto-cleanup 24 hours after they end
           </p>
         </div>
@@ -120,7 +120,7 @@ export default function QuickEventForm({ onSuccess, onError }: QuickEventFormPro
         {/* Team Names */}
         <div>
           <label htmlFor="teamNames" className="block text-sm font-medium text-gray-700 mb-2">
-            Team Names <span className="text-gray-400">(Optional)</span>
+            Team Names <span className="text-gray-600">(Optional)</span>
           </label>
           <textarea
             id="teamNames"
@@ -132,7 +132,7 @@ export default function QuickEventForm({ onSuccess, onError }: QuickEventFormPro
             disabled={isLoading}
           />
           <div className="mt-2 flex items-center justify-between">
-            <p className="text-sm text-gray-500">
+            <p className="text-sm text-gray-700">
               Separate team names with commas
             </p>
             {teamCount > 0 && (
@@ -210,7 +210,7 @@ export default function QuickEventForm({ onSuccess, onError }: QuickEventFormPro
 
         {/* Skip Teams Note */}
         {teamCount === 0 && (
-          <p className="text-center text-sm text-gray-500">
+          <p className="text-center text-sm text-gray-700">
             Skip teams now? You can add them later from the dashboard.
           </p>
         )}

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { ExpiredEvent, EventNotFoundError } from '@/components/ExpiredEvent';
 import { safeName, safeNumber, safeColor, safeInitial } from '@/lib/safe-ui-helpers';
+import { NoScoresEmpty } from '@/components/EmptyStates';
 
 interface ScoreEntry {
   id: string;
@@ -22,6 +23,7 @@ interface ScoreEntry {
 interface Event {
   id: string;
   name: string;
+  scorer_token?: string;
 }
 
 export default function HistoryPage({ params }: { params: { token: string } }) {
@@ -247,10 +249,10 @@ function HistoryPageContent({ params }: { params: { token: string } }) {
         <div className="bg-white rounded-2xl shadow p-6">
           <h2 className="text-xl font-bold mb-4">📜 Chronological History</h2>
           {scores.length === 0 ? (
-            <div className="text-center py-12 text-gray-500">
-              <div className="text-5xl mb-3">📊</div>
-              <p>No score entries yet. Start adding scores!</p>
-            </div>
+            <NoScoresEmpty 
+              scorerLink={event?.scorer_token ? `${window.location.origin}/score/${event.scorer_token}` : undefined}
+              showShareButton={!!event?.scorer_token}
+            />
           ) : (
             <div className="space-y-3">
               {scores.map((score) => (

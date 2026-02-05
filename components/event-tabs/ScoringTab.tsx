@@ -383,7 +383,7 @@ export function ScoringTab({ eventId, event }: ScoringTabProps) {
     return (
       <Card>
         <CardContent className="text-center py-12">
-          <p className="text-gray-500 mb-4">
+          <p className="text-gray-700 mb-4">
             No teams yet. Add teams first to start scoring.
           </p>
           <Button variant="primary" onClick={() => window.location.reload()}>
@@ -481,7 +481,7 @@ export function ScoringTab({ eventId, event }: ScoringTabProps) {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Game Name <span className="text-gray-400">(Optional)</span>
+                    Game Name <span className="text-gray-600">(Optional)</span>
                   </label>
                   <input
                     type="text"
@@ -637,7 +637,7 @@ export function ScoringTab({ eventId, event }: ScoringTabProps) {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Game Name <span className="text-gray-400">(Optional)</span>
+                    Game Name <span className="text-gray-600">(Optional)</span>
                   </label>
                   <input
                     type="text"
@@ -768,7 +768,7 @@ export function ScoringTab({ eventId, event }: ScoringTabProps) {
                           {entry.status}
                         </span>
                         {entry.message ? (
-                          <div className="text-xs text-gray-500 mt-1">{String(entry.message)}</div>
+                          <div className="text-xs text-gray-700 mt-1">{String(entry.message)}</div>
                         ) : null}
                       </td>
                     </tr>
@@ -802,7 +802,7 @@ export function ScoringTab({ eventId, event }: ScoringTabProps) {
                   className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
                 >
                   <div className="flex items-center space-x-3">
-                    <span className="text-lg font-bold text-gray-400 w-6">
+                    <span className="text-lg font-bold text-gray-600 w-6">
                       {index + 1}
                     </span>
                     <span className="font-medium">{team.team_name}</span>

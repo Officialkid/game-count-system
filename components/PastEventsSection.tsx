@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { NoEventsEmpty } from '@/components/EmptyStates';
 
 interface PastEvent {
   event_id: string;
@@ -145,11 +146,7 @@ export default function PastEventsSection({ adminToken }: PastEventsSectionProps
 
       {/* Empty State */}
       {!loading && !error && events.length === 0 && (
-        <div className="text-center py-12 text-gray-500">
-          <div className="text-5xl mb-3">📭</div>
-          <p className="font-medium text-gray-700">No past events yet</p>
-          <p className="text-sm mt-1">Finalized events will appear here</p>
-        </div>
+        <NoEventsEmpty onCreateEvent={() => router.push('/events/create')} />
       )}
 
       {/* Events Grid */}

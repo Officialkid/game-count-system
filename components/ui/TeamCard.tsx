@@ -72,7 +72,7 @@ export function TeamCard({ rank, name, score, avatarUrl, highlight, paletteColor
         {/* Team Name */}
         <div className="flex-1">
           <div className="text-lg font-bold text-gray-900 truncate">{name}</div>
-          <div className="text-xs text-gray-500 mt-0.5">Rank #{rank}</div>
+          <div className="text-xs text-gray-700 mt-0.5">Rank #{rank}</div>
         </div>
       </div>
       
@@ -84,7 +84,7 @@ export function TeamCard({ rank, name, score, avatarUrl, highlight, paletteColor
         >
           {score}
         </div>
-        <div className="text-xs font-semibold text-gray-500 mt-1">POINTS</div>
+        <div className="text-xs font-semibold text-gray-700 mt-1">POINTS</div>
       </div>
     </div>
   );

@@ -263,7 +263,7 @@ export function AutosaveScoreInput({
         </Button>
       </div>
 
-      <p className="mt-4 text-xs text-gray-500 text-center">
+      <p className="mt-4 text-xs text-gray-700 text-center">
         💡 Changes auto-save after 2 seconds of inactivity
       </p>
     </Card>

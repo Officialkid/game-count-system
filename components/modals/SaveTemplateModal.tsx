@@ -40,7 +40,7 @@ export function SaveTemplateModal({ isOpen, onClose, onSave, currentEventName }:
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white text-gray-900"
             required
           />
-          <p className="mt-1 text-xs text-gray-500">
+          <p className="mt-1 text-xs text-gray-700">
             A descriptive name for this template
           </p>
         </div>
@@ -58,7 +58,7 @@ export function SaveTemplateModal({ isOpen, onClose, onSave, currentEventName }:
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white text-gray-900"
             required
           />
-          <p className="mt-1 text-xs text-gray-500">
+          <p className="mt-1 text-xs text-gray-700">
             The default name for events created from this template
           </p>
         </div>

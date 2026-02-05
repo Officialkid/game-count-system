@@ -148,7 +148,7 @@ export function PublicScoreboard({
             {safeName(event?.event_name, 'Game Event')}
           </h1>
           
-          <div className="flex items-center justify-center gap-3 text-sm sm:text-base text-gray-500">
+          <div className="flex items-center justify-center gap-3 text-sm sm:text-base text-gray-700">
             <p>Last updated: {lastUpdate.toLocaleTimeString()}</p>
             {refreshing && (
               <span className="inline-flex items-center gap-1 text-primary-600">
@@ -258,7 +258,7 @@ export function PublicScoreboard({
         )}
 
         {/* Footer */}
-        <div className="text-center mt-8 sm:mt-12 text-gray-500 text-xs sm:text-sm">
+        <div className="text-center mt-8 sm:mt-12 text-gray-700 text-xs sm:text-sm">
           <p>Powered by Game Count System</p>
           <p className="mt-2">
             Total Games Played: {getLatestGameNumber()}

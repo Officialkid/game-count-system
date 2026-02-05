@@ -9,19 +9,13 @@ interface LinkCardProps {
   description: string;
   url: string;
   icon: string;
-  color: 'amber' | 'purple' | 'blue';
+  color: 'purple' | 'blue' | 'green';
   dataTutorial?: string;
   canOpen?: boolean;
+  onCopySuccess?: () => void;
 }
 
 const colorClasses = {
-  amber: {
-    border: 'border-amber-200',
-    bg: 'bg-amber-50',
-    text: 'text-amber-700',
-    hover: 'hover:border-amber-300',
-    button: 'bg-amber-600 hover:bg-amber-700',
-  },
   purple: {
     border: 'border-purple-200',
     bg: 'bg-purple-50',
@@ -36,9 +30,16 @@ const colorClasses = {
     hover: 'hover:border-blue-300',
     button: 'bg-blue-600 hover:bg-blue-700',
   },
+  green: {
+    border: 'border-green-200',
+    bg: 'bg-green-50',
+    text: 'text-green-700',
+    hover: 'hover:border-green-300',
+    button: 'bg-green-600 hover:bg-green-700',
+  },
 };
 
-export function LinkCard({ title, description, url, icon, color, dataTutorial, canOpen = false }: LinkCardProps) {
+export function LinkCard({ title, description, url, icon, color, dataTutorial, canOpen = false, onCopySuccess }: LinkCardProps) {
   const [copied, setCopied] = useState(false);
   const [canShare, setCanShare] = useState(false);
   const colors = colorClasses[color];
@@ -52,6 +53,9 @@ export function LinkCard({ title, description, url, icon, color, dataTutorial, c
     try {
       await navigator.clipboard.writeText(url);
       setCopied(true);
+      if (onCopySuccess) {
+        onCopySuccess();
+      }
       setTimeout(() => setCopied(false), 2000);
     } catch (error) {
       console.error('Failed to copy:', error);
@@ -75,62 +79,71 @@ export function LinkCard({ title, description, url, icon, color, dataTutorial, c
 
   return (
     <div
-      className={`group rounded-xl border-2 ${colors.border} ${colors.bg} p-4 hover:shadow-md transition-all flex flex-col gap-3`}
+      className={`group rounded-xl border-2 ${colors.border} ${colors.bg} p-6 hover:shadow-lg transition-all`}
       data-tutorial={dataTutorial}
     >
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
-            <span className="text-xl">{icon}</span>
-            <span className="font-semibold text-gray-900 text-sm">{title}</span>
-          </div>
-          <p className="text-xs text-gray-600 mb-2">{description}</p>
-          <div className={`text-xs font-mono ${colors.text} break-all`}>
-            {url}
+      <div className="flex items-start gap-4">
+        {/* Large Emoji Icon */}
+        <div className="text-4xl" role="img" aria-label={title}>
+          {icon}
+        </div>
+        
+        <div className="flex-1">
+          {/* Title */}
+          <h3 className="text-xl font-bold text-gray-900 mb-1">
+            {title}
+          </h3>
+          
+          {/* Description */}
+          <p className="text-sm text-gray-700 mb-3">
+            {description}
+          </p>
+          
+          {/* URL Input and Copy Button */}
+          <div className="flex gap-2">
+            <input 
+              type="text"
+              value={url}
+              readOnly
+              className="flex-1 px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm font-mono text-gray-700 cursor-default"
+              onClick={(e) => e.currentTarget.select()}
+            />
+            
+            <button
+              onClick={handleCopy}
+              className={`px-4 py-2 font-semibold rounded-lg transition-all ${
+                copied
+                  ? 'bg-green-500 text-white'
+                  : 'bg-gray-800 hover:bg-gray-700 text-white'
+              }`}
+              title="Copy link to clipboard"
+            >
+              {copied ? '✅ Copied!' : 'Copy'}
+            </button>
+            
+            {canShare && (
+              <button
+                onClick={handleShare}
+                className="px-3 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors"
+                title="Share link"
+              >
+                <Share2 className="w-4 h-4" />
+              </button>
+            )}
+
+            {canOpen && (
+              <a
+                href={url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-3 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors"
+                title="Open in new tab"
+              >
+                <ExternalLink className="w-4 h-4" />
+              </a>
+            )}
           </div>
         </div>
-      </div>
-
-      <div className="flex items-center gap-2">
-        <button
-          onClick={handleCopy}
-          className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 ${colors.button} text-white rounded-lg transition-colors text-sm font-medium`}
-          title="Copy link to clipboard"
-        >
-          {copied ? (
-            <>
-              <Check className="w-4 h-4" />
-              Copied!
-            </>
-          ) : (
-            <>
-              <Copy className="w-4 h-4" />
-              Copy
-            </>
-          )}
-        </button>
-
-        {canShare && (
-          <button
-            onClick={handleShare}
-            className="px-3 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors"
-            title="Share link"
-          >
-            <Share2 className="w-4 h-4" />
-          </button>
-        )}
-
-        {canOpen && (
-          <a
-            href={url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="px-3 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors"
-            title="Open in new tab"
-          >
-            <ExternalLink className="w-4 h-4" />
-          </a>
-        )}
       </div>
     </div>
   );
@@ -162,6 +175,13 @@ export function EventLinksManager({
   scorerToken,
   publicToken,
 }: EventLinksManagerProps) {
+  const [showCopyToast, setShowCopyToast] = useState(false);
+  
+  const handleCopySuccess = () => {
+    setShowCopyToast(true);
+    setTimeout(() => setShowCopyToast(false), 3000);
+  };
+
   useEffect(() => {
     // Persist event links to localStorage
     try {
@@ -196,37 +216,73 @@ export function EventLinksManager({
   const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
 
   return (
-    <div className="space-y-3" data-tutorial="share-section">
-      <LinkCard
-        title="Admin Link"
-        description="Full control - Manage teams, scores, and settings"
-        url={`${baseUrl}/admin/${adminToken}`}
-        icon="👑"
-        color="amber"
-        dataTutorial="admin-link"
-        canOpen={false}
-      />
+    <>
+      {/* Floating Success Toast */}
+      {showCopyToast && (
+        <div className="fixed top-6 right-6 p-4 bg-green-500 text-white rounded-xl shadow-2xl animate-bounce z-50">
+          <div className="flex items-center gap-3">
+            <div className="text-2xl">✅</div>
+            <div>
+              <p className="font-bold">Link Copied!</p>
+              <p className="text-sm opacity-90">Ready to share</p>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      <div className="space-y-6" data-tutorial="share-section">
+        <div className="mb-4">
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Share Your Event</h2>
+          <p className="text-gray-600">Choose the right link based on what people need to do</p>
+        </div>
+        
+        <LinkCard
+          title="Admin Link"
+          description="Full control - edit event, add teams, manage everything. Keep this private!"
+          url={`${baseUrl}/admin/${adminToken}`}
+          icon="👑"
+          color="purple"
+          dataTutorial="admin-link"
+          canOpen={false}
+          onCopySuccess={handleCopySuccess}
+        />
 
-      <LinkCard
-        title="Scorer Link"
-        description="Link to add scores - Perfect for score keepers"
-        url={`${baseUrl}/score/${scorerToken}`}
-        icon="📝"
-        color="purple"
-        dataTutorial="scorer-link"
-        canOpen={true}
-      />
+        <LinkCard
+          title="Scorer Link"
+          description="Can add scores only - share with scorekeepers and officials"
+          url={`${baseUrl}/score/${scorerToken}`}
+          icon="🏀"
+          color="blue"
+          dataTutorial="scorer-link"
+          canOpen={true}
+          onCopySuccess={handleCopySuccess}
+        />
 
-      <LinkCard
-        title="Live Scoreboard"
-        description="Link for viewers - Share with participants and spectators"
-        url={`${baseUrl}/scoreboard/${publicToken}`}
-        icon="📺"
-        color="blue"
-        dataTutorial="public-link"
-        canOpen={true}
-      />
-    </div>
+        <LinkCard
+          title="Public Scoreboard"
+          description="View-only - share with audience, display on projector, safe to post publicly"
+          url={`${baseUrl}/scoreboard/${publicToken}`}
+          icon="📺"
+          color="green"
+          dataTutorial="public-link"
+          canOpen={true}
+          onCopySuccess={handleCopySuccess}
+        />
+        
+        {/* Info Box */}
+        <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+          <div className="flex items-start gap-3">
+            <div className="text-2xl">💡</div>
+            <div className="text-sm text-blue-900">
+              <p className="font-semibold mb-1">Quick Tip:</p>
+              <p className="text-blue-700">
+                Click the input field to select the full URL, or use the Copy button for quick sharing.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </>
   );
 }
 

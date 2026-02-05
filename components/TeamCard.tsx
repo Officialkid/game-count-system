@@ -44,7 +44,7 @@ export const TeamCard = memo(function TeamCard({
       case 3:
         return 'text-orange-600';
       default:
-        return 'text-gray-400';
+        return 'text-gray-600';
     }
   };
 
@@ -100,7 +100,7 @@ export const TeamCard = memo(function TeamCard({
           <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-primary-600">
             {totalPoints}
           </div>
-          <div className="text-xs sm:text-sm text-gray-500">points</div>
+          <div className="text-xs sm:text-sm text-gray-700">points</div>
         </div>
       </div>
     </Card>

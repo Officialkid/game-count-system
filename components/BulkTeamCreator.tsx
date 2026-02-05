@@ -228,7 +228,7 @@ export function BulkTeamCreator({ eventId, onSuccess, onCancel }: BulkTeamCreato
         </div>
 
         {teams.length > 1 && (
-          <p className="text-xs text-gray-500 text-center mt-4">
+          <p className="text-xs text-gray-700 text-center mt-4">
             💡 Tip: Team names must be unique
           </p>
         )}

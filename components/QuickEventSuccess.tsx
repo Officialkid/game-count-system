@@ -48,15 +48,15 @@ export default function QuickEventSuccess({ data }: QuickEventSuccessProps) {
         <h3 className="text-lg font-semibold text-gray-800 mb-4">Event Details</h3>
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <p className="text-sm text-gray-500">Duration</p>
+            <p className="text-sm text-gray-700">Duration</p>
             <p className="text-base font-medium text-gray-900">{summary.days} day{summary.days !== 1 ? 's' : ''}</p>
           </div>
           <div>
-            <p className="text-sm text-gray-500">Teams</p>
+            <p className="text-sm text-gray-700">Teams</p>
             <p className="text-base font-medium text-gray-900">{summary.teams} team{summary.teams !== 1 ? 's' : ''}</p>
           </div>
           <div className="col-span-2">
-            <p className="text-sm text-gray-500">Auto-cleanup</p>
+            <p className="text-sm text-gray-700">Auto-cleanup</p>
             <p className="text-base font-medium text-gray-900">{summary.cleanup}</p>
           </div>
         </div>
@@ -198,7 +198,7 @@ export default function QuickEventSuccess({ data }: QuickEventSuccessProps) {
             <p className="text-sm font-medium text-green-600">👀 Viewer</p>
           </div>
         </div>
-        <p className="text-sm text-gray-500 text-center mt-4">
+        <p className="text-sm text-gray-700 text-center mt-4">
           Print or display these QR codes for easy mobile access
         </p>
       </div>

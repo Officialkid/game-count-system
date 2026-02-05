@@ -113,7 +113,7 @@ export function TouchScoreInput({
                 touch-manipulation active:scale-95
                 ${
                   disabled || value - preset < min
-                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                    ? 'bg-gray-100 text-gray-600 cursor-not-allowed'
                     : 'bg-red-500 text-white shadow-md active:bg-red-600 active:shadow-lg'
                 }
               `}
@@ -133,7 +133,7 @@ export function TouchScoreInput({
                 col-span-2
                 ${
                   disabled || value + preset > max
-                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                    ? 'bg-gray-100 text-gray-600 cursor-not-allowed'
                     : 'bg-green-500 text-white shadow-md active:bg-green-600 active:shadow-lg'
                 }
               `}
@@ -157,7 +157,7 @@ export function TouchScoreInput({
             touch-manipulation active:scale-95
             ${
               disabled || value === 0
-                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                ? 'bg-gray-100 text-gray-600 cursor-not-allowed'
                 : 'bg-gray-200 text-gray-700 active:bg-gray-300'
             }
           `}
@@ -177,7 +177,7 @@ export function TouchScoreInput({
               touch-manipulation active:scale-95
               ${
                 disabled || history.length === 0 || !showUndo
-                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                  ? 'bg-gray-100 text-gray-600 cursor-not-allowed'
                   : 'bg-purple-500 text-white active:bg-purple-600'
               }
             `}
@@ -249,7 +249,7 @@ export function CompactTouchScoreInput({
           touch-manipulation active:scale-95
           ${
             disabled || value <= min
-              ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+              ? 'bg-gray-100 text-gray-600 cursor-not-allowed'
               : 'bg-red-500 text-white active:bg-red-600'
           }
         `}
@@ -282,7 +282,7 @@ export function CompactTouchScoreInput({
           touch-manipulation active:scale-95
           ${
             disabled || value >= max
-              ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+              ? 'bg-gray-100 text-gray-600 cursor-not-allowed'
               : 'bg-green-500 text-white active:bg-green-600'
           }
         `}
@@ -367,7 +367,7 @@ export function TouchNumberPad({
               touch-manipulation active:scale-95
               ${
                 disabled
-                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                  ? 'bg-gray-100 text-gray-600 cursor-not-allowed'
                   : 'bg-white border-2 border-gray-300 text-gray-900 active:bg-gray-100 active:border-purple-500'
               }
             `}
@@ -388,7 +388,7 @@ export function TouchNumberPad({
               touch-manipulation active:scale-95
               ${
                 disabled || value.includes('.')
-                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                  ? 'bg-gray-100 text-gray-600 cursor-not-allowed'
                   : 'bg-white border-2 border-gray-300 text-gray-900 active:bg-gray-100'
               }
             `}
@@ -406,7 +406,7 @@ export function TouchNumberPad({
               touch-manipulation active:scale-95
               ${
                 disabled
-                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                  ? 'bg-gray-100 text-gray-600 cursor-not-allowed'
                   : 'bg-red-100 text-red-700 border-2 border-red-300 active:bg-red-200'
               }
             `}
@@ -425,7 +425,7 @@ export function TouchNumberPad({
             touch-manipulation active:scale-95
             ${
               disabled
-                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                ? 'bg-gray-100 text-gray-600 cursor-not-allowed'
                 : 'bg-white border-2 border-gray-300 text-gray-900 active:bg-gray-100 active:border-purple-500'
             }
           `}
@@ -443,7 +443,7 @@ export function TouchNumberPad({
             touch-manipulation active:scale-95
             ${
               disabled
-                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                ? 'bg-gray-100 text-gray-600 cursor-not-allowed'
                 : 'bg-gray-200 text-gray-700 active:bg-gray-300'
             }
           `}
@@ -463,7 +463,7 @@ export function TouchNumberPad({
           touch-manipulation active:scale-95
           ${
             disabled || value === ''
-              ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+              ? 'bg-gray-100 text-gray-600 cursor-not-allowed'
               : 'bg-purple-600 text-white active:bg-purple-700 shadow-lg'
           }
         `}

@@ -227,7 +227,7 @@ export function AdminTutorial() {
             </div>
             <button
               onClick={handleSkip}
-              className="ml-4 text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0"
+              className="ml-4 text-gray-600 hover:text-gray-600 transition-colors flex-shrink-0"
               aria-label="Close tutorial"
             >
               <X className="w-5 h-5" />
@@ -296,7 +296,7 @@ export function AdminTutorial() {
           </div>
 
           {/* Step counter */}
-          <p className="text-center text-sm text-gray-500 mt-2">
+          <p className="text-center text-sm text-gray-700 mt-2">
             Step {currentStep + 1} of {TUTORIAL_STEPS.length}
           </p>
         </div>

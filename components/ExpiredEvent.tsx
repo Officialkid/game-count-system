@@ -59,7 +59,7 @@ export function ExpiredEvent({
                     </Button>
                   </div>
 
-                  <p className="text-xs text-gray-500 text-center">
+                  <p className="text-xs text-gray-700 text-center">
                     Or <a href="/" className="text-purple-600 hover:text-purple-700 font-medium">create a new event</a> to get started
                   </p>
                 </>
@@ -141,7 +141,7 @@ export function EventNotFoundError({
           </div>
 
           {/* Help text */}
-          <p className="text-xs text-gray-500 mt-6">
+          <p className="text-xs text-gray-700 mt-6">
             Double-check your link or contact the event organizer for the correct URL
           </p>
         </CardContent>

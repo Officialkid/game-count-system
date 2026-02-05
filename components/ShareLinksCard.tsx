@@ -97,13 +97,13 @@ export default function ShareLinksCard({ eventId, eventName, tokens, shareLinks 
                     {getTokenTypeName(link.type)}
                   </span>
                   {link.type === 'admin' && (
-                    <span className="text-xs text-gray-500">Full Control</span>
+                    <span className="text-xs text-gray-700">Full Control</span>
                   )}
                   {link.type === 'scorer' && (
-                    <span className="text-xs text-gray-500">Score Entry</span>
+                    <span className="text-xs text-gray-700">Score Entry</span>
                   )}
                   {link.type === 'viewer' && (
-                    <span className="text-xs text-gray-500">View Only</span>
+                    <span className="text-xs text-gray-700">View Only</span>
                   )}
                 </div>
                 <button
@@ -153,7 +153,7 @@ export default function ShareLinksCard({ eventId, eventName, tokens, shareLinks 
 
               {/* Token Display (Collapsible) */}
               <details className="mt-3">
-                <summary className="text-xs text-gray-500 cursor-pointer hover:text-gray-700">
+                <summary className="text-xs text-gray-700 cursor-pointer hover:text-gray-700">
                   Show raw token
                 </summary>
                 <div className="mt-2 bg-yellow-50 border border-yellow-200 rounded p-2 font-mono text-xs text-gray-700 break-all">

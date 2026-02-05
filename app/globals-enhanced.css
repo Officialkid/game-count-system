@@ -37,6 +37,8 @@
     background: var(--background);
     color: var(--foreground);
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    font-size: 17px; /* Base size for better readability (18-45 age group) */
+    line-height: 1.6;
   }
 
   * {
@@ -47,9 +49,11 @@
 @layer components {
   /* Enhanced Button Styles */
   .btn-primary {
-    @apply px-4 py-2 rounded-lg font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply px-6 py-3 rounded-lg font-semibold transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed;
     background-color: var(--primary-500);
     color: white;
+    font-size: 17px; /* Comfortable button text */
+    min-height: 48px; /* Easy to tap on mobile */
   }
   
   .btn-primary:hover:not(:disabled) {
@@ -59,13 +63,17 @@
   }
   
   .btn-secondary {
-    @apply px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-all duration-200;
+    @apply px-6 py-3 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-all duration-200;
+    font-size: 17px;
+    min-height: 48px;
   }
   
   .btn-accent {
-    @apply px-4 py-2 rounded-lg font-medium transition-all duration-200;
+    @apply px-6 py-3 rounded-lg font-semibold transition-all duration-200;
     background-color: var(--accent-500);
     color: white;
+    font-size: 17px;
+    min-height: 48px;
   }
   
   .btn-accent:hover:not(:disabled) {
@@ -74,8 +82,10 @@
   
   /* Enhanced Input Styles */
   .input-field {
-    @apply w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 transition-all duration-200;
+    @apply w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 transition-all duration-200;
     focus-ring-color: var(--primary-500);
+    font-size: 17px; /* Comfortable input text */
+    min-height: 48px;
   }
   
   .input-field:focus {

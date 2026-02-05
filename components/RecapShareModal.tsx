@@ -118,7 +118,7 @@ export function RecapShareModal({
             className="p-1 hover:bg-gray-100 rounded-lg transition-colors"
             aria-label="Close modal"
           >
-            <X className="w-6 h-6 text-gray-500" />
+            <X className="w-6 h-6 text-gray-700" />
           </button>
         </div>
 

@@ -179,7 +179,7 @@ export function EmptyState({
     <Card className="text-center py-12">
       {icon || (
         <svg
-          className="w-16 h-16 mx-auto text-gray-400 mb-4"
+          className="w-16 h-16 mx-auto text-gray-600 mb-4"
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"

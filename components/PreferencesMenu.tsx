@@ -104,7 +104,7 @@ export function PreferencesMenu() {
                   <div className="text-sm font-medium text-gray-900">
                     Sound Effects
                   </div>
-                  <div className="text-xs text-gray-500">
+                  <div className="text-xs text-gray-700">
                     Play sounds on actions
                   </div>
                 </div>
@@ -135,7 +135,7 @@ export function PreferencesMenu() {
                   <div className="text-sm font-medium text-gray-900">
                     Confetti
                   </div>
-                  <div className="text-xs text-gray-500">
+                  <div className="text-xs text-gray-700">
                     Celebrate big scores
                   </div>
                 </div>

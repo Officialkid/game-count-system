@@ -8,6 +8,8 @@ import { AdminTutorial, resetAdminTutorial } from '@/components/AdminTutorial';
 import { EventLinksManager } from '@/components/EventLinksManager';
 import { ExpiredEvent, EventNotFoundError } from '@/components/ExpiredEvent';
 import { safeInitial } from '@/lib/safe-ui-helpers';
+import { Upload, Edit, Trash2, Zap, FileText, Clipboard } from 'lucide-react';
+import { NoTeamsEmpty } from '@/components/EmptyStates';
 
 interface Team {
   id: string;
@@ -45,6 +47,12 @@ export default function AdminPage({ params }: { params: { token: string } }) {
   ]);
   const [bulkAdding, setBulkAdding] = useState(false);
   const [adding, setAdding] = useState(false);
+  
+  // Bulk import methods state
+  const [importMethod, setImportMethod] = useState<'quick' | 'paste' | 'file'>('paste');
+  const [quickAddInput, setQuickAddInput] = useState('');
+  const [bulkPasteText, setBulkPasteText] = useState('');
+  const [teamsAdded, setTeamsAdded] = useState<number | null>(null);
   
   // Finalization state
   const [finalizing, setFinalizing] = useState(false);
@@ -135,6 +143,117 @@ export default function AdminPage({ params }: { params: { token: string } }) {
     } finally {
       setAdding(false);
     }
+  };
+
+  // Color palette for auto-assignment
+  const teamColors = [
+    '#9333ea', // purple
+    '#db2777', // pink
+    '#f59e0b', // amber
+    '#10b981', // green
+    '#3b82f6', // blue
+    '#ef4444', // red
+    '#8b5cf6', // violet
+    '#ec4899', // rose
+    '#f97316', // orange
+    '#14b8a6', // teal
+    '#06b6d4', // cyan
+    '#84cc16', // lime
+  ];
+
+  // Helper to show success toast
+  const showSuccessToast = (count: number) => {
+    setTeamsAdded(count);
+    setTimeout(() => setTeamsAdded(null), 4000);
+  };
+
+  // Add multiple teams with auto-assigned colors
+  const addMultipleTeams = async (teamNames: string[]) => {
+    if (!event || teamNames.length === 0) return;
+
+    try {
+      setBulkAdding(true);
+      
+      // Assign colors automatically
+      const teamsData = teamNames.map((name, index) => ({
+        name: name.trim(),
+        color: teamColors[teams.length + index % teamColors.length],
+      }));
+
+      const res = await fetch('/api/teams/bulk', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json', 
+          'X-ADMIN-TOKEN': token 
+        },
+        body: JSON.stringify({ 
+          event_id: event.id, 
+          teams: teamsData 
+        })
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Failed to add teams');
+      }
+
+      showSuccessToast(teamNames.length);
+      await loadData();
+    } catch (err: any) {
+      alert(err?.message || 'Failed to add teams');
+    } finally {
+      setBulkAdding(false);
+    }
+  };
+
+  // Quick add single team (press Enter)
+  const handleQuickAdd = async () => {
+    if (!quickAddInput.trim()) return;
+    
+    await addMultipleTeams([quickAddInput.trim()]);
+    setQuickAddInput('');
+  };
+
+  // Bulk paste handler
+  const handleBulkPaste = async () => {
+    const teamNames = bulkPasteText
+      .split('\n')
+      .map(name => name.trim())
+      .filter(name => name.length > 0);
+    
+    if (teamNames.length === 0) {
+      alert('Please enter at least one team name');
+      return;
+    }
+
+    await addMultipleTeams(teamNames);
+    setBulkPasteText('');
+  };
+
+  // File import handler
+  const handleFileImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      const text = event.target?.result as string;
+      const teamNames = text
+        .split(/[\n,]/)
+        .map(name => name.trim())
+        .filter(name => name.length > 0);
+      
+      if (teamNames.length === 0) {
+        alert('No valid team names found in file');
+        return;
+      }
+
+      await addMultipleTeams(teamNames);
+    };
+    reader.readAsText(file);
+    
+    // Reset input
+    e.target.value = '';
   };
 
   // Finalize event
@@ -437,147 +556,297 @@ export default function AdminPage({ params }: { params: { token: string } }) {
           </div>
         )}
 
-        {/* SECTION 1: Bulk Team Creation (Primary Action) */}
-        <div className="bg-white rounded-2xl shadow-lg p-6 border-2 border-purple-200">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-10 h-10 rounded-lg bg-purple-600 flex items-center justify-center text-white font-bold text-xl">＋</div>
+        {/* Success Toast (floating) */}
+        {teamsAdded !== null && (
+          <div className="fixed bottom-6 right-6 p-6 bg-green-500 text-white rounded-xl shadow-2xl animate-slide-up z-50 max-w-sm">
+            <div className="flex items-center gap-4">
+              <div className="text-4xl animate-bounce">✅</div>
+              <div>
+                <p className="font-bold text-lg">Teams Added!</p>
+                <p className="text-sm opacity-90">
+                  {teamsAdded} {teamsAdded === 1 ? 'team' : 'teams'} created successfully
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* SECTION 1: Bulk Team Import (Enhanced with 3 Methods) */}
+        <div className="bg-white rounded-2xl shadow-lg p-8 border-2 border-purple-200">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-600 to-pink-600 flex items-center justify-center text-white font-bold text-2xl shadow-lg">
+              ＋
+            </div>
             <div>
-              <h2 className="text-xl font-bold text-gray-900">Bulk Team Creation</h2>
-              <p className="text-sm text-gray-600">Paste one team name per line, then submit to add multiple teams at once.</p>
+              <h2 className="text-2xl font-bold text-gray-900">Add Teams</h2>
+              <p className="text-base text-gray-600">Choose your preferred method to add teams quickly</p>
             </div>
           </div>
 
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-3">Teams</label>
-              <div className="space-y-2">
-                {bulkRows.map((row, idx) => (
-                  <div key={idx} className="flex gap-2 items-center">
-                    <input
-                      type="text"
-                      value={row.name}
-                      onChange={(e) => {
-                        const copy = [...bulkRows];
-                        copy[idx] = { ...copy[idx], name: e.target.value };
-                        setBulkRows(copy);
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          // add new row
-                          setBulkRows(prev => [...prev, { name: '', color: '#3B82F6' }]);
-                        }
-                      }}
-                      placeholder="Team name"
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-                    />
-                    <input
-                      type="color"
-                      value={row.color}
-                      onChange={(e) => {
-                        const copy = [...bulkRows];
-                        copy[idx] = { ...copy[idx], color: e.target.value };
-                        setBulkRows(copy);
-                      }}
-                      className="w-12 h-10 p-0 border border-gray-300 rounded-lg"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setBulkRows(prev => prev.filter((_, i) => i !== idx))}
-                      className="px-3 py-2 bg-red-50 text-red-700 rounded-lg hover:bg-red-100"
-                      aria-label="Remove row"
-                    >
-                      ✕
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
+          {/* Method Selector Tabs */}
+          <div className="flex gap-3 mb-6 border-b border-gray-200 pb-4">
+            <button
+              type="button"
+              onClick={() => setImportMethod('paste')}
+              className={`flex items-center gap-2 px-6 py-3 rounded-lg font-semibold transition ${
+                importMethod === 'paste'
+                  ? 'bg-purple-600 text-white shadow-md'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              <Clipboard className="w-5 h-5" />
+              Bulk Paste
+            </button>
+            <button
+              type="button"
+              onClick={() => setImportMethod('quick')}
+              className={`flex items-center gap-2 px-6 py-3 rounded-lg font-semibold transition ${
+                importMethod === 'quick'
+                  ? 'bg-purple-600 text-white shadow-md'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              <Zap className="w-5 h-5" />
+              Quick Add
+            </button>
+            <button
+              type="button"
+              onClick={() => setImportMethod('file')}
+              className={`flex items-center gap-2 px-6 py-3 rounded-lg font-semibold transition ${
+                importMethod === 'file'
+                  ? 'bg-purple-600 text-white shadow-md'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              <Upload className="w-5 h-5" />
+              Import File
+            </button>
+          </div>
 
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => setBulkRows(prev => [...prev, { name: '', color: '#3B82F6' }])}
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-800 rounded-lg hover:bg-gray-200"
-                >
-                  + Add Row
-                </button>
-                <p className="text-sm text-gray-500">Tip: Press Enter in a name field to add another row.</p>
-              </div>
-
+          {/* METHOD 1: Bulk Paste (Primary) */}
+          {importMethod === 'paste' && (
+            <div className="space-y-4">
               <div>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    if (!event) return;
-                    const payload = bulkRows.map(r => ({ name: r.name.trim(), color: r.color })).filter(r => r.name.length > 0);
-                    if (payload.length === 0) return;
-                    try {
-                      setBulkAdding(true);
-                      // Use existing bulk teams API if available
-                      const res = await fetch('/api/teams/bulk', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json', 'X-ADMIN-TOKEN': token },
-                        body: JSON.stringify({ event_id: event.id, teams: payload })
-                      });
-                      if (!res.ok) {
-                        const data = await res.json().catch(() => ({}));
-                        throw new Error(data.error || 'Bulk create failed');
-                      }
-                      setBulkRows([{ name: '', color: '#3B82F6' }]);
-                      await loadData();
-                    } catch (err: any) {
-                      alert(err?.message || 'Failed to add teams');
-                    } finally {
-                      setBulkAdding(false);
+                <label className="block text-lg font-semibold text-gray-900 mb-3">
+                  📋 Paste Team Names
+                </label>
+                <textarea
+                  rows={10}
+                  placeholder="Paste team names, one per line:&#10;Team Alpha&#10;Team Bravo&#10;Team Charlie&#10;Team Delta&#10;Team Echo"
+                  className="w-full px-6 py-4 text-lg font-mono border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-4 focus:ring-purple-300 focus:border-purple-500 bg-gray-50"
+                  value={bulkPasteText}
+                  onChange={(e) => setBulkPasteText(e.target.value)}
+                />
+                <div className="flex items-center justify-between mt-3">
+                  <p className="text-sm text-gray-600">
+                    💡 Copy from Excel, Google Sheets, or any list
+                  </p>
+                  {bulkPasteText.trim() && (
+                    <p className="text-sm font-semibold text-purple-600">
+                      {bulkPasteText.split('\n').filter(line => line.trim()).length} teams ready
+                    </p>
+                  )}
+                </div>
+              </div>
+              
+              <button
+                type="button"
+                onClick={handleBulkPaste}
+                disabled={bulkAdding || !bulkPasteText.trim()}
+                className="w-full py-5 px-8 bg-gradient-to-r from-purple-600 via-pink-600 to-amber-500 text-white font-bold text-xl rounded-xl hover:shadow-2xl transition disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-[1.02] active:scale-100"
+              >
+                {bulkAdding ? (
+                  <span className="flex items-center justify-center gap-3">
+                    <svg className="animate-spin h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Adding Teams...
+                  </span>
+                ) : (
+                  `Add All ${bulkPasteText.split('\n').filter(line => line.trim()).length} Teams →`
+                )}
+              </button>
+            </div>
+          )}
+
+          {/* METHOD 2: Quick Add (Press Enter) */}
+          {importMethod === 'quick' && (
+            <div className="space-y-4">
+              <div>
+                <label className="block text-lg font-semibold text-gray-900 mb-3">
+                  ⚡ Quick Add Teams
+                </label>
+                <input
+                  type="text"
+                  placeholder="Team name (press Enter to add)"
+                  className="w-full px-6 py-5 text-xl border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-4 focus:ring-purple-300 focus:border-purple-500 bg-gray-50"
+                  value={quickAddInput}
+                  onChange={(e) => setQuickAddInput(e.target.value)}
+                  onKeyPress={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleQuickAdd();
                     }
                   }}
                   disabled={bulkAdding}
-                  className="px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl hover:shadow-lg transition disabled:opacity-50 font-semibold"
-                >
-                  {bulkAdding ? 'Adding...' : 'Add Teams'}
-                </button>
+                  autoFocus
+                />
+                <div className="mt-3 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                  <p className="text-base text-blue-800 flex items-start gap-2">
+                    <span className="text-2xl">💡</span>
+                    <span>
+                      <strong>Tip:</strong> Type team name → Press <kbd className="px-2 py-1 bg-white border border-blue-300 rounded text-sm font-mono">Enter</kbd> → Repeat
+                      <br />
+                      <span className="text-sm">Perfect for quickly adding teams one at a time!</span>
+                    </span>
+                  </p>
+                </div>
               </div>
             </div>
-          </div>
+          )}
+
+          {/* METHOD 3: File Import */}
+          {importMethod === 'file' && (
+            <div className="space-y-4">
+              <div>
+                <label className="block text-lg font-semibold text-gray-900 mb-3">
+                  📁 Import from File
+                </label>
+                <div className="border-2 border-dashed border-gray-300 rounded-xl p-12 text-center hover:border-purple-400 transition bg-gray-50">
+                  <div className="flex flex-col items-center gap-4">
+                    <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center">
+                      <FileText className="w-8 h-8 text-purple-600" />
+                    </div>
+                    <div>
+                      <label htmlFor="file-upload" className="cursor-pointer">
+                        <span className="px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-semibold inline-block">
+                          Choose File
+                        </span>
+                        <input
+                          id="file-upload"
+                          type="file"
+                          accept=".csv,.txt"
+                          onChange={handleFileImport}
+                          className="hidden"
+                        />
+                      </label>
+                      <p className="text-base text-gray-600 mt-3">
+                        Upload a <strong>.txt</strong> or <strong>.csv</strong> file with team names
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                  <p className="text-sm font-semibold text-amber-900 mb-2">Supported formats:</p>
+                  <ul className="text-sm text-amber-800 space-y-1">
+                    <li>• <strong>Text file (.txt):</strong> One team per line</li>
+                    <li>• <strong>CSV file (.csv):</strong> Teams separated by commas or newlines</li>
+                    <li>• <strong>Example:</strong> Team A, Team B, Team C</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* SECTION 2: Teams List (Read-only) */}
-        <div className="bg-white rounded-2xl shadow p-6">
-          <h2 className="text-xl font-bold mb-4">
-            Teams {teams.length > 0 && <span className="text-gray-500 font-normal">({teams.length})</span>}
-          </h2>
+        {/* SECTION 2: Teams List (with Edit/Delete) */}
+        <div className="bg-white rounded-2xl shadow-lg p-8 border-2 border-gray-200">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-2xl font-bold text-gray-900">
+              Your Teams {teams.length > 0 && <span className="text-purple-600">({teams.length})</span>}
+            </h2>
+            {teams.length > 0 && (
+              <div className="text-sm text-gray-600">
+                Colors auto-assigned • Tap to edit
+              </div>
+            )}
+          </div>
+          
           {teams.length === 0 ? (
-            <div className="text-center py-12 text-gray-500">
-              <div className="text-5xl mb-3">👥</div>
-              <p>No teams yet. Add your first team above.</p>
-            </div>
+            <NoTeamsEmpty onAddTeams={() => window.scrollTo({ top: 0, behavior: 'smooth' })} />
           ) : (
             <div className="space-y-3">
               {teams.map((team, index) => (
                 <div
                   key={team.id}
-                  className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-transform hover:scale-[1.01]"
+                  className="flex items-center justify-between p-5 bg-gradient-to-r from-gray-50 to-white rounded-xl hover:shadow-md transition-all border border-gray-200 hover:border-purple-300"
                 >
-                  <div className="flex items-center gap-3">
-                    <div
-                      className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold shadow"
-                      style={{ backgroundColor: team.color }}
-                    >
-                      {safeInitial(team.name)}
+                  <div className="flex items-center gap-4 flex-1">
+                    <div className="relative">
+                      <div
+                        className="w-14 h-14 rounded-full flex items-center justify-center text-white font-bold text-xl shadow-md"
+                        style={{ backgroundColor: team.color }}
+                      >
+                        {safeInitial(team.name)}
+                      </div>
+                      <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-white rounded-full flex items-center justify-center text-xs font-bold text-gray-600 border-2 border-gray-200">
+                        #{index + 1}
+                      </div>
                     </div>
-                    <div>
-                      <h3 className="font-semibold text-gray-900">{team.name}</h3>
-                      <p className="text-sm text-gray-600">{team.total_points || 0} points</p>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-bold text-lg text-gray-900 truncate">{team.name}</h3>
+                      <p className="text-sm text-gray-600">
+                        <span className="font-semibold">{team.total_points || 0}</span> points total
+                      </p>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <div className="text-2xl font-bold text-purple-600">{team.total_points || 0}</div>
-                    <div className="text-xs text-gray-500">total points</div>
+                  
+                  <div className="flex items-center gap-3">
+                    <div className="text-right mr-4">
+                      <div className="text-3xl font-bold text-purple-600">{team.total_points || 0}</div>
+                    </div>
+                    
+                    {/* Edit Button */}
+                    <button
+                      onClick={() => {
+                        const newName = prompt('Edit team name:', team.name);
+                        if (newName && newName.trim() && newName !== team.name) {
+                          // Update team name
+                          fetch(`/api/teams/${team.id}`, {
+                            method: 'PATCH',
+                            headers: {
+                              'Content-Type': 'application/json',
+                              'X-ADMIN-TOKEN': token
+                            },
+                            body: JSON.stringify({ name: newName.trim() })
+                          }).then(() => loadData()).catch(err => alert('Failed to update team'));
+                        }
+                      }}
+                      className="p-3 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition"
+                      title="Edit team name"
+                    >
+                      <Edit className="w-5 h-5" />
+                    </button>
+                    
+                    {/* Delete Button */}
+                    <button
+                      onClick={() => {
+                        if (confirm(`Delete "${team.name}"? This will also delete all their scores.`)) {
+                          fetch(`/api/teams/${team.id}`, {
+                            method: 'DELETE',
+                            headers: { 'X-ADMIN-TOKEN': token }
+                          }).then(() => loadData()).catch(err => alert('Failed to delete team'));
+                        }
+                      }}
+                      className="p-3 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition"
+                      title="Delete team"
+                    >
+                      <Trash2 className="w-5 h-5" />
+                    </button>
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+          
+          {teams.length > 0 && (
+            <div className="mt-6 p-4 bg-purple-50 border border-purple-200 rounded-lg">
+              <p className="text-sm text-purple-800">
+                <strong>💡 Tip:</strong> Colors are automatically assigned from a palette. 
+                You can edit team names or delete teams anytime.
+              </p>
             </div>
           )}
         </div>

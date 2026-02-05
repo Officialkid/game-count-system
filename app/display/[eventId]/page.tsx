@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Badge, LoadingSkeleton } from '@/components/ui';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { safeName, safeNumber, safeInitial } from '@/lib/safe-ui-helpers';
+import { NoScoresEmpty } from '@/components/EmptyStates';
 
 interface Team {
   id: number;
@@ -286,7 +287,7 @@ function DisplayPageContent({ params }: { params: { eventId: string } }) {
         <div className="bg-white rounded-xl shadow-md p-6">
           <h2 className="text-xl font-semibold mb-4">Recent Game History</h2>
           {scores.length === 0 ? (
-            <p className="text-gray-500">No games yet.</p>
+            <NoScoresEmpty showShareButton={false} />
           ) : (
             <div className="space-y-2">
               {scores.slice(0, 50).map((h) => (
