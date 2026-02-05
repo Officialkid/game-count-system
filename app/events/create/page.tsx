@@ -40,29 +40,36 @@ export default function CreateEventPage() {
     setError(null);
     setResult(null);
     try {
-      const endTime = calculateEndTime();
       const response = await fetch('/api/events/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: name.trim(),
-          mode,
-          start_at: new Date(startAt).toISOString(),
-          end_at: endTime,
-          retention_policy: retention,
-          number_of_days: mode === 'camp' ? numberOfDays : undefined,
+          number_of_days: mode === 'camp' ? numberOfDays : 1,
+          scoringMode: 'continuous',
+          eventMode: mode,
         }),
       });
 
       const data = await response.json();
       if (!response.ok || !data.success) {
-        throw new Error(data.error || 'Failed to create event');
+        throw new Error(data.error || data.details || 'Failed to create event');
       }
 
       // Drop any stale scorer caches or queued scores so the new event opens fresh
       clearCache();
       clearQueue();
-      setResult(data.data);
+      
+      // Map the new response format to the old format expected by the UI
+      const mappedResult = {
+        id: data.data.event.id,
+        name: data.data.event.name,
+        admin_url: data.data.shareLinks.admin,
+        scorer_url: data.data.shareLinks.scorer,
+        public_url: data.data.shareLinks.viewer,
+      };
+      
+      setResult(mappedResult);
     } catch (err: any) {
       setError(err?.message || 'Failed to create event');
     } finally {
