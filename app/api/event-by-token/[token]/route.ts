@@ -7,6 +7,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/firebase-admin';
 import { prepareEventForResponse } from '@/lib/firebase-helpers';
+import { hashToken } from '@/lib/token-utils';
 
 export async function GET(
   request: Request,
@@ -15,14 +16,17 @@ export async function GET(
   try {
     const { token } = params;
     
+    // Hash the incoming token for comparison with stored hashed tokens
+    const tokenHash = hashToken(token);
+    
     // Determine token type by checking Firestore
     const headerAdmin = request.headers.get('x-admin-token');
     const headerScorer = request.headers.get('x-scorer-token');
 
-    // Helper function to get event by token field
-    const getEventByTokenField = async (tokenField: string, tokenValue: string) => {
+    // Helper function to get event by hashed token field
+    const getEventByTokenField = async (tokenField: string, tokenHash: string) => {
       const eventsSnapshot = await db.collection('events')
-        .where(tokenField, '==', tokenValue)
+        .where(tokenField, '==', tokenHash)
         .limit(1)
         .get();
       
@@ -37,8 +41,8 @@ export async function GET(
       };
     };
 
-    // Check if token is an admin token
-    const adminEvent = await getEventByTokenField('adminToken', token);
+    // Check if token is an admin token (using correct field name: admin_token_hash)
+    const adminEvent = await getEventByTokenField('admin_token_hash', tokenHash);
     let event: any = null;
     
     if (adminEvent) {
@@ -58,8 +62,8 @@ export async function GET(
       }
       event = adminEvent;
     } else {
-      // Check if token is a scorer token
-      const scorerEvent = await getEventByTokenField('scorerToken', token);
+      // Check if token is a scorer token (using correct field name: scorer_token_hash)
+      const scorerEvent = await getEventByTokenField('scorer_token_hash', tokenHash);
       if (scorerEvent) {
         // Require scorer header to match
         if (!headerScorer || headerScorer !== token) {
@@ -77,8 +81,8 @@ export async function GET(
         }
         event = scorerEvent;
       } else {
-        // Treat as public token
-        event = await getEventByTokenField('token', token);
+        // Treat as public token (using correct field name: public_token_hash)
+        event = await getEventByTokenField('public_token_hash', tokenHash);
       }
     }
     
@@ -126,11 +130,11 @@ export async function GET(
       createdAt: preparedEvent.createdAt,
     };
     
-    // Include tokens only for admin access
+    // Include plain tokens only for admin access (so admins can share scorer/public links)
     if (adminEvent) {
-      response.adminToken = event.adminToken;
-      response.scorerToken = event.scorerToken;
-      response.token = event.token;
+      response.admin_token = event.admin_token;
+      response.scorer_token = event.scorer_token;
+      response.public_token = event.public_token;
     }
     
     return NextResponse.json(

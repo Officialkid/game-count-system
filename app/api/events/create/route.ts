@@ -117,7 +117,10 @@ export async function POST(request: Request) {
       start_at: start_at.toISOString(),
       end_at: end_at.toISOString(),
       
-      // Security tokens (HASHED - never store plain tokens)
+      // Security tokens - store BOTH plain (for display/sharing) and hashed (for validation)
+      // Plain tokens (for generating share links and displaying to admins)
+      ...tokens.plain,
+      // Hashed tokens (for secure validation during authentication)
       ...tokens.hashed,
       
       // Finalization
