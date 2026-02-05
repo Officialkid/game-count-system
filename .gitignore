@@ -15,6 +15,7 @@ out/
 # Ignore Firebase service account credentials
 firebase-service-account.json
 *-firebase-adminsdk-*.json
+firebase-env-variable.txt
 
 # Ignore OS files
 .DS_Store

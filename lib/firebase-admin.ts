@@ -24,10 +24,21 @@ export function initializeFirebaseAdmin(): { app: App; db: Firestore } {
     }
     // Option 2: Use service account key as environment variable (for production)
     else if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
-      const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
-      adminApp = initializeApp({
-        credential: cert(serviceAccount),
-      });
+      try {
+        const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
+        
+        // Fix private key formatting - replace literal \n with actual newlines
+        if (serviceAccount.private_key) {
+          serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
+        }
+        
+        adminApp = initializeApp({
+          credential: cert(serviceAccount),
+        });
+      } catch (error) {
+        console.error('Failed to initialize Firebase Admin:', error);
+        throw new Error('Invalid Firebase service account configuration');
+      }
     }
     // Option 3: Use Application Default Credentials (for Google Cloud environments)
     else {
