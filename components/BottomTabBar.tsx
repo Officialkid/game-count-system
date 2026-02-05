@@ -44,9 +44,9 @@ export function BottomTabBar({ tabs, showOnDesktop = false }: BottomTabBarProps)
       matchPaths: ['/dashboard', '/events'],
     },
     { 
-      label: 'Settings', 
-      href: '/settings', 
-      icon: <Settings size={24} />,
+      label: 'About', 
+      href: '/#features', 
+      icon: <Info size={24} />,
     },
   ];
 

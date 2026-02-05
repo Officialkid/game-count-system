@@ -117,16 +117,18 @@ export default function CreateEventPage() {
       clearCache();
       clearQueue();
       
-      // Map response for UI
-      const mappedResult = {
-        id: data.data.event.id,
-        name: data.data.event.name,
-        admin_url: data.data.shareLinks.admin,
-        scorer_url: data.data.shareLinks.scorer,
-        public_url: data.data.shareLinks.viewer,
-      };
+      // Redirect to success page with event data
+      const successUrl = new URL('/events/success', window.location.origin);
+      successUrl.searchParams.set('eventId', data.data.event.id);
+      successUrl.searchParams.set('eventName', data.data.event.name);
+      successUrl.searchParams.set('adminToken', data.data.tokens.admin_token);
+      successUrl.searchParams.set('scorerToken', data.data.tokens.scorer_token);
+      successUrl.searchParams.set('publicToken', data.data.tokens.public_token);
+      successUrl.searchParams.set('adminLink', data.data.shareLinks.admin);
+      successUrl.searchParams.set('scorerLink', data.data.shareLinks.scorer);
+      successUrl.searchParams.set('publicLink', data.data.shareLinks.viewer);
       
-      setResult(mappedResult);
+      window.location.href = successUrl.toString();
     } catch (err: any) {
       setError(err?.message || 'Failed to create event');
     } finally {
