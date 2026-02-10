@@ -13,13 +13,18 @@ export async function GET(
 ) {
   try {
     const { event_id } = params;
-    const scorerToken = request.headers.get('x-scorer-token');
+    const authHeader = request.headers.get('authorization');
+    const bearerToken = authHeader?.toLowerCase().startsWith('bearer ') ? authHeader.slice(7) : null;
+    const accessToken =
+      request.headers.get('x-scorer-token') ||
+      request.headers.get('x-admin-token') ||
+      bearerToken;
     
-    if (!scorerToken) {
+    if (!accessToken) {
       return NextResponse.json(
         {
           success: false,
-          error: 'Missing scorer token'
+          error: 'Missing access token'
         },
         { status: 401 }
       );

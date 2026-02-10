@@ -30,7 +30,6 @@ export async function GET(request: Request) {
     // Get all events where this admin token matches
     const eventsSnapshot = await db.collection('events')
       .where('admin_token_hash', '==', tokenHash)
-      .orderBy('created_at', 'desc')
       .get();
 
     const events = [];
@@ -59,6 +58,12 @@ export async function GET(request: Request) {
         });
       }
     }
+
+    events.sort((a, b) => {
+      const aValue = a.created_at?.toMillis ? a.created_at.toMillis() : new Date(a.created_at || 0).getTime();
+      const bValue = b.created_at?.toMillis ? b.created_at.toMillis() : new Date(b.created_at || 0).getTime();
+      return bValue - aValue;
+    });
 
     return NextResponse.json({
       success: true,
