@@ -5,7 +5,10 @@
  */
 
 import { NextResponse } from 'next/server';
-import { db } from '@/lib/firebase-admin';import { hashToken } from '@/lib/token-utils';
+import { db } from '@/lib/firebase-admin';
+import { hashToken } from '@/lib/token-utils';
+
+export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
   try {

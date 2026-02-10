@@ -1,10 +1,39 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ChevronDown, ChevronUp, Copy, Share2, ExternalLink } from 'lucide-react';
 
 export default function EventSuccessPage() {
+  return (
+    <Suspense fallback={<SuccessPageFallback />}>
+      <EventSuccessContent />
+    </Suspense>
+  );
+}
+
+function SuccessPageFallback() {
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50 flex items-center justify-center p-4">
+      <div className="max-w-2xl w-full">
+        <div className="bg-white rounded-2xl shadow-xl border-2 border-green-200 overflow-hidden">
+          <div className="bg-gradient-to-r from-green-500 to-emerald-600 p-8 text-center">
+            <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg animate-pulse" />
+            <h1 className="text-3xl font-bold text-white mb-2">Preparing your event...</h1>
+            <p className="text-green-100 text-lg">Loading details</p>
+          </div>
+          <div className="p-8">
+            <div className="bg-amber-50 border-2 border-amber-200 rounded-xl p-6 mb-6 animate-pulse" />
+            <div className="h-14 bg-gray-100 rounded-xl mb-6 animate-pulse" />
+            <div className="h-48 bg-gray-100 rounded-xl animate-pulse" />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EventSuccessContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isLinksExpanded, setIsLinksExpanded] = useState(true);
