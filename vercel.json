@@ -5,7 +5,9 @@
   "framework": "nextjs",
   "regions": ["iad1"],
   "env": {
+    "APP_URL": "@app-url",
     "NEXT_PUBLIC_APP_URL": "@app-url",
+    "NEXT_PUBLIC_BASE_URL": "@app-url",
     "NEXT_PUBLIC_API_BASE_URL": "@api-base-url"
   },
   "headers": [

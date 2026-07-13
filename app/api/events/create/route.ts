@@ -1,26 +1,18 @@
 /**
  * Events API - Create New Event
- * Converted from PostgreSQL to Firestore
  * POST /api/events/create
+ * Phase 1 Neon/Prisma migration slice
  */
 
 import { NextResponse } from 'next/server';
-import { adminCreateDocument, adminQueryCollection } from '@/lib/firestore-admin-helpers';
-import { COLLECTIONS, EventMode, EventStatus, ScoringMode } from '@/lib/firebase-collections';
-import { 
-  calculateAutoCleanupDate, 
-  calculateEndDate, 
-  validateModeConstraints,
-  getEventModeConfig 
-} from '@/lib/event-mode-helpers';
-import { generateEventTokens, generateShareLink } from '@/lib/token-utils';
+import { buildEventShareLinks, createAuditLog, createEventWithTokens } from '@/lib/server/event-service';
+import { badRequest, created, internalError } from '@/lib/api-responses';
+import type { EventMode, ScoringMode } from '@/lib/event-domain';
 
 interface CreateEventRequest {
   name: string;
   number_of_days: number;
   scoringMode?: ScoringMode;
-  
-  // New mode fields
   eventMode?: EventMode;
   requiresAuthentication?: boolean;
   organizationId?: string;
@@ -31,178 +23,85 @@ interface CreateEventRequest {
 export async function POST(request: Request) {
   try {
     const body: CreateEventRequest = await request.json();
-    const { 
-      name, 
-      number_of_days, 
+    const {
+      name,
+      number_of_days,
       scoringMode = 'continuous',
       eventMode = 'quick',
       requiresAuthentication,
       organizationId,
-      organizationName,
       createdBy,
     } = body;
 
-    // Validation
     if (!name || !name.trim()) {
-      return NextResponse.json(
-        { success: false, error: 'Event name is required' },
-        { status: 400 }
-      );
+      return badRequest('Event name is required');
     }
 
     if (!number_of_days || number_of_days < 1) {
-      return NextResponse.json(
-        { success: false, error: 'Number of days must be at least 1' },
-        { status: 400 }
-      );
+      return badRequest('Number of days must be at least 1');
     }
 
-    // Get mode configuration
-    const modeConfig = getEventModeConfig(eventMode);
-
-    // Determine authentication requirement
-    const authRequired = requiresAuthentication !== undefined 
-      ? requiresAuthentication 
-      : modeConfig.requiresAuth;
-
-    // Validate mode constraints
-    const validation = validateModeConstraints(eventMode, number_of_days, authRequired);
-    if (!validation.valid) {
-      return NextResponse.json(
-        { 
-          success: false, 
-          error: 'Mode validation failed',
-          details: validation.errors 
-        },
-        { status: 400 }
-      );
-    }
-
-    // Advanced mode requires organization for some features
-    if (eventMode === 'advanced' && modeConfig.features.organizations) {
-      if (!organizationId || !organizationName) {
-        return NextResponse.json(
-          { success: false, error: 'Organization information required for Advanced mode' },
-          { status: 400 }
-        );
-      }
-    }
-
-    // Generate secure tokens with hashing
-    const tokens = generateEventTokens();
-
-    // Calculate dates
-    const start_at = new Date();
-    const end_at = calculateEndDate(eventMode, start_at, number_of_days);
-    const autoCleanupDate = calculateAutoCleanupDate(eventMode, start_at);
-
-    // Create event in Firestore (store ONLY hashed tokens)
-    const eventData = {
-      name: name.trim(),
-      
-      // Mode configuration
-      eventMode,
-      eventStatus: 'draft' as EventStatus,
-      requiresAuthentication: authRequired,
-      ...(autoCleanupDate && { autoCleanupDate }),
-      
-      // Scoring configuration
+    const createdEvent = await createEventWithTokens({
+      name,
+      numberOfDays: number_of_days,
       scoringMode,
-      number_of_days,
-      
-      // Legacy status (for backward compatibility)
-      status: 'active' as const,
-      
-      // Dates
-      start_at: start_at.toISOString(),
-      end_at: end_at.toISOString(),
-      
-      // Security tokens - store BOTH plain (for display/sharing) and hashed (for validation)
-      // Plain tokens (for generating share links and displaying to admins)
-      ...tokens.plain,
-      // Hashed tokens (for secure validation during authentication)
-      ...tokens.hashed,
-      
-      // Finalization
-      is_finalized: false,
-      
-      // Organization (if provided)
-      ...(organizationId && { organization_id: organizationId }),
-      ...(organizationName && { organization_name: organizationName }),
-      
-      // Creator
-      ...(createdBy && { created_by: createdBy }),
-    };
+      eventMode,
+      requiresAuthentication,
+      organizationId,
+      createdBy,
+    });
 
-    const eventId = await adminCreateDocument(COLLECTIONS.EVENTS, eventData);
+    const baseUrl =
+      process.env.NEXT_PUBLIC_BASE_URL ||
+      process.env.NEXT_PUBLIC_APP_URL ||
+      process.env.APP_URL ||
+      'https://game-count-system.vercel.app';
+    const shareLinks = buildEventShareLinks(
+      createdEvent.event.id,
+      createdEvent.tokens,
+      baseUrl
+    );
 
-    // If daily scoring mode, create event days
-    if (scoringMode === 'daily' && modeConfig.features.multiDay) {
-      const dayPromises = [];
-      for (let day = 1; day <= number_of_days; day++) {
-        const dayDate = new Date(start_at);
-        dayDate.setDate(dayDate.getDate() + (day - 1));
-        
-        dayPromises.push(
-          adminCreateDocument(COLLECTIONS.EVENT_DAYS, {
-            event_id: eventId,
-            day_number: day,
-            date: dayDate.toISOString(),
-            is_locked: false,
-          })
-        );
-      }
-      await Promise.all(dayPromises);
-    }
-
-    // Generate shareable links with plain tokens
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
-    const shareLinks = {
-      admin: generateShareLink(eventId, tokens.plain.admin_token, 'admin', baseUrl),
-      scorer: generateShareLink(eventId, tokens.plain.scorer_token, 'scorer', baseUrl),
-      viewer: generateShareLink(eventId, tokens.plain.public_token, 'viewer', baseUrl),
-    };
-
-    return NextResponse.json({
-      success: true,
-      data: {
-        event: {
-          id: eventId,
-          name: eventData.name,
-          eventMode: eventData.eventMode,
-          eventStatus: eventData.eventStatus,
-          start_at: eventData.start_at,
-          end_at: eventData.end_at,
-        },
-        // Return plain tokens ONCE (user must save these)
-        tokens: tokens.plain,
-        // Return shareable links
-        shareLinks,
-        modeInfo: {
-          mode: eventMode,
-          config: modeConfig,
-          autoCleanup: autoCleanupDate ? true : false,
-          maxDuration: modeConfig.maxDuration,
-        },
+    await createAuditLog({
+      eventId: createdEvent.event.id,
+      action: 'create',
+      entityType: 'event',
+      entityId: createdEvent.event.id,
+      actorTokenType: 'admin',
+      payload: {
+        name: createdEvent.event.name,
+        eventMode: createdEvent.event.eventMode,
+        scoringMode: createdEvent.event.scoringMode,
+        numberOfDays: createdEvent.event.numberOfDays,
       },
-      message: '⚠️ IMPORTANT: Save these tokens! They will not be shown again.',
-    }, { status: 201 });
+    });
 
+    return created(
+      {
+        event: {
+          id: createdEvent.event.id,
+          name: createdEvent.event.name,
+          eventMode: createdEvent.event.eventMode,
+          eventStatus: createdEvent.event.eventStatus,
+          start_at: createdEvent.event.startAt.toISOString(),
+          end_at: createdEvent.event.endAt.toISOString(),
+        },
+        tokens: createdEvent.tokens,
+        shareLinks,
+        modeInfo: createdEvent.modeInfo,
+      },
+      'IMPORTANT: Save these tokens! They will not be shown again.'
+    );
   } catch (error) {
     console.error('Create event error:', error);
-    return NextResponse.json(
-      {
-        success: false,
-        error: 'Failed to create event',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      },
-      { status: 500 }
+    return internalError(
+      'Failed to create event',
+      error instanceof Error ? error.message : 'Unknown error'
     );
   }
 }
 
-// OPTIONS handler for CORS
-export async function OPTIONS(request: Request) {
+export async function OPTIONS() {
   return new NextResponse(null, {
     status: 204,
     headers: {

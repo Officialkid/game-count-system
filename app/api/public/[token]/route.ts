@@ -13,8 +13,7 @@
  */
 
 import { NextResponse } from 'next/server';
-import { db } from '@/lib/firebase-admin';
-import { prepareEventForResponse, prepareTeamForResponse, prepareScoreForResponse } from '@/lib/firebase-helpers';
+import { calculateTeamTotal, getPublicEventByToken } from '@/lib/server/event-lifecycle-service';
 
 export async function GET(
   request: Request,
@@ -23,14 +22,9 @@ export async function GET(
   try {
     const { token } = params;
     
-    // Find event by public token
-    const eventsSnapshot = await db.collection('events')
-      .where('token', '==', token)
-      .limit(1)
-      .get();
-    
-    // Token not found - friendly 404
-    if (eventsSnapshot.empty) {
+    const access = await getPublicEventByToken(token);
+
+    if (!access) {
       return NextResponse.json(
         { 
           success: false, 
@@ -41,82 +35,68 @@ export async function GET(
       );
     }
     
-    const eventDoc = eventsSnapshot.docs[0];
-    const event: any = {
-      id: eventDoc.id,
-      ...eventDoc.data()
-    };
+    const event = access.event;
     
     // Event expired - 410 Gone with expiry information
-    if (event.status === 'expired' || event.status === 'archived') {
-      const expiryDate = event.expiresAt ? new Date(event.expiresAt).toLocaleDateString() : 'recently';
+    if (event.eventStatus === 'archived') {
+      const expiryDate = event.endAt ? new Date(event.endAt).toLocaleDateString() : 'recently';
       return NextResponse.json(
         {
           success: false,
           error: 'Event expired',
           message: `This event ended ${expiryDate !== 'recently' ? `on ${expiryDate}` : expiryDate} and is no longer available.`,
-          expired_at: event.expiresAt,
+          expired_at: event.endAt,
         },
         { status: 410 }
       );
     }
-    
-    // Get teams with scores
-    const teamsSnapshot = await db.collection('events')
-      .doc(event.id)
-      .collection('teams')
-      .orderBy('totalPoints', 'desc')
-      .get();
-    
-    const teams = teamsSnapshot.docs.map((doc: any) => ({
-      id: doc.id,
-      ...doc.data(),
-      total_points: doc.data().totalPoints || 0
+
+    const teams = event.teams.map((team) => ({
+      id: team.id,
+      name: team.name,
+      color: team.color,
+      avatar_url: team.avatarUrl,
+      total_points: calculateTeamTotal(team.scores),
     }));
-    
-    // Get all scores if needed (for score history)
-    let scores: any[] = [];
-    let scoresByDay: any[] = [];
-    let days: any[] = [];
-    
-    if (event.mode === 'camp') {
-      // Get all scores from all teams
-      const scoresPromises = teamsSnapshot.docs.map(async (teamDoc: any) => {
-        const scoresSnapshot = await teamDoc.ref
-          .collection('scores')
-          .orderBy('dayNumber', 'asc')
-          .orderBy('createdAt', 'asc')
-          .get();
-        
-        return scoresSnapshot.docs.map((scoreDoc: any) => ({
-          id: scoreDoc.id,
-          team_id: teamDoc.id,
-          team_name: teamDoc.data().name,
-          ...scoreDoc.data(),
-          day_number: scoreDoc.data().dayNumber
-        }));
-      });
-      
-      const scoresArrays = await Promise.all(scoresPromises);
-      scores = scoresArrays.flat();
-      
-      // Extract unique days from scores
-      const dayNumbers = [...new Set(scores.map((s: any) => s.day_number))].sort((a, b) => a - b);
-      days = dayNumbers.map((dayNum: number) => ({
-        day_number: dayNum,
-        label: event.dayLabels?.[dayNum] || `Day ${dayNum}`
-      }));
-      
-      // Group scores by day with team breakdown
-      scoresByDay = dayNumbers.map((dayNum: number) => {
-        const dayScores = scores.filter((s: any) => s.day_number === dayNum);
-        return {
-          day_number: dayNum,
-          day_label: event.dayLabels?.[dayNum] || `Day ${dayNum}`,
-          scores: dayScores
-        };
-      });
+
+    const scores = event.teams
+      .flatMap((team) =>
+        team.scores.map((score) => ({
+          id: score.id,
+          team_id: team.id,
+          team_name: team.name,
+          points: score.points,
+          penalty: score.penalty,
+          bonus: score.bonus,
+          notes: score.notes,
+          day_number: score.eventDay?.dayNumber ?? null,
+          created_at: score.createdAt.toISOString(),
+        }))
+      )
+      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+
+    const days = event.eventDays.map((day) => ({
+      day_number: day.dayNumber,
+      label: day.label || `Day ${day.dayNumber}`,
+      is_locked: day.isLocked,
+    }));
+
+    const groupedByDay = new Map<number, typeof scores>();
+    for (const score of scores) {
+      if (!score.day_number) continue;
+      if (!groupedByDay.has(score.day_number)) {
+        groupedByDay.set(score.day_number, []);
+      }
+      groupedByDay.get(score.day_number)!.push(score);
     }
+
+    const scoresByDay = Array.from(groupedByDay.entries())
+      .sort((a, b) => a[0] - b[0])
+      .map(([dayNumber, dayScores]) => ({
+        day_number: dayNumber,
+        day_label: days.find((day) => day.day_number === dayNumber)?.label || `Day ${dayNumber}`,
+        scores: dayScores,
+      }));
     
     // Calculate totals
     const totalPoints = teams.reduce(
@@ -125,24 +105,21 @@ export async function GET(
     );
     const totalScores = scores.length;
 
-    const waiting = event.status === 'active' && teams.length === 0 && totalScores === 0;
-    
-    // Prepare event data for response
-    const preparedEvent = prepareEventForResponse(event);
+    const waiting = event.eventStatus === 'active' && teams.length === 0 && totalScores === 0;
     
     // Return complete event data
     return NextResponse.json({
       success: true,
       data: {
         event: {
-          id: preparedEvent.id,
-          name: preparedEvent.name,
-          mode: preparedEvent.mode,
-          status: preparedEvent.status,
-          startDate: preparedEvent.startDate,
-          endDate: preparedEvent.endDate,
-          isFinalized: preparedEvent.isFinalized,
-          finalizedAt: preparedEvent.finalizedAt,
+          id: event.id,
+          name: event.name,
+          mode: event.eventMode,
+          status: event.eventStatus,
+          startDate: event.startAt.toISOString(),
+          endDate: event.endAt.toISOString(),
+          isFinalized: event.isFinalized,
+          finalizedAt: event.finalizedAt?.toISOString() ?? null,
         },
         teams,
         scores,

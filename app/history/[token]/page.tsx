@@ -128,7 +128,7 @@ function HistoryPageContent({ params }: { params: { token: string } }) {
 
   const handleEdit = async (scoreId: string, points: number, category: string) => {
     try {
-      const res = await fetch('/api/scores/update', {
+      const res = await fetch('/api/scores/submit', {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -155,7 +155,7 @@ function HistoryPageContent({ params }: { params: { token: string } }) {
 
   const handleDelete = async (scoreId: string) => {
     try {
-      const res = await fetch(`/api/scores/update?score_id=${scoreId}`, {
+      const res = await fetch(`/api/scores/submit?score_id=${scoreId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`,

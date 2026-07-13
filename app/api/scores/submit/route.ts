@@ -3,10 +3,12 @@
  * Example of protected route using token middleware
  */
 
-import { NextResponse } from 'next/server';
-import { adminCreateDocument, adminGetDocument, adminQueryCollection } from '@/lib/firestore-admin-helpers';
-import { COLLECTIONS } from '@/lib/firebase-collections';
-import { requireScorerToken } from '@/lib/token-middleware';import { canSubmitScoreForDay } from '@/lib/day-locking';import { extractToken } from '@/lib/token-utils';
+import { NextRequest, NextResponse } from 'next/server';
+import prisma from '@/lib/server/prisma';
+import { addScoreForEvent, deleteScoreForEvent, updateScoreForEvent } from '@/lib/server/score-service';
+import { createAuditLog } from '@/lib/server/event-service';
+import { requireScorerToken } from '@/lib/token-middleware';
+import { hashToken } from '@/lib/token-utils';
 
 interface SubmitScoreRequest {
   event_id: string;
@@ -30,7 +32,7 @@ export async function POST(request: Request) {
       return validation;
     }
 
-    const { event, permissions } = validation;
+    const { event, tokenType } = validation;
 
     // Validate required fields
     if (!team_id || points === undefined) {
@@ -41,89 +43,41 @@ export async function POST(request: Request) {
     }
 
     // Check if event is finalized
-    if ((event as any).is_finalized) {
+    if ((event as any).isFinalized) {
       return NextResponse.json(
         { success: false, error: 'Cannot add scores to finalized event' },
         { status: 400 }
       );
     }
-    // Check if day is locked (for daily events)
-    if (day_number !== undefined) {
-      const dayCheck = canSubmitScoreForDay(event as any, day_number);
-      if (!dayCheck.allowed) {
-        return NextResponse.json(
-          { success: false, error: dayCheck.reason },
-          { status: 403 }
-        );
-      }
-    }
-    // Verify team exists
-    const team = await adminGetDocument(COLLECTIONS.TEAMS, team_id);
-    if (!team) {
-      return NextResponse.json(
-        { success: false, error: 'Team not found' },
-        { status: 404 }
-      );
-    }
-
-    // Verify team belongs to event
-    if ((team as any).event_id !== event_id) {
-      return NextResponse.json(
-        { success: false, error: 'Team does not belong to this event' },
-        { status: 400 }
-      );
-    }
-
-    // For daily mode, check if day is locked
-    if ((event as any).scoringMode === 'daily' && day_number) {
-      const daySnapshot = await adminQueryCollection(
-        COLLECTIONS.EVENT_DAYS,
-        [
-          { field: 'event_id', operator: '==', value: event_id },
-          { field: 'day_number', operator: '==', value: day_number },
-        ]
-      );
-
-      if (daySnapshot.length === 0) {
-        return NextResponse.json(
-          { success: false, error: 'Invalid day number' },
-          { status: 400 }
-        );
-      }
-
-      const day = daySnapshot[0];
-      if (day.is_locked) {
-        return NextResponse.json(
-          { success: false, error: 'This day is locked and cannot accept new scores' },
-          { status: 400 }
-        );
-      }
-    }
-
-    // Calculate final score
-    const finalScore = points - penalty;
-
-    // Create score document
-    const scoreData = {
-      event_id,
-      team_id,
+    const score = await addScoreForEvent({
+      eventId: event_id,
+      teamId: team_id,
+      day: day_number ?? 1,
       points,
       penalty,
-      score: finalScore,
-      ...(day_number && { day_number }),
-      submitted_by: validation.tokenType, // Track who submitted (admin/scorer)
-    };
+      category: 'Score',
+      tokenType: tokenType === 'viewer' ? undefined : (tokenType as 'admin' | 'scorer'),
+    });
 
-    const scoreId = await adminCreateDocument(COLLECTIONS.SCORES, scoreData);
+    await createAuditLog({
+      eventId: event_id,
+      action: 'submit_score',
+      entityType: 'score',
+      entityId: score.id,
+      actorTokenType: tokenType === 'viewer' ? undefined : (tokenType as 'admin' | 'scorer'),
+      payload: {
+        teamId: team_id,
+        points,
+        penalty,
+        day_number: day_number ?? 1,
+      },
+    });
 
     return NextResponse.json({
       success: true,
       data: {
-        score: {
-          id: scoreId,
-          ...scoreData,
-        },
-        submittedBy: validation.tokenType,
+        score,
+        submittedBy: tokenType,
       },
     }, { status: 201 });
 
@@ -134,6 +88,134 @@ export async function POST(request: Request) {
         success: false,
         error: 'Failed to submit score',
         details: error instanceof Error ? error.message : 'Unknown error',
+      },
+      { status: 500 }
+    );
+  }
+}
+
+async function getAdminEventFromBearer(request: NextRequest) {
+  const authorization = request.headers.get('authorization');
+  const token = authorization?.startsWith('Bearer ') ? authorization.slice(7) : null;
+
+  if (!token) {
+    return null;
+  }
+
+  const tokenHash = hashToken(token);
+  const access = await prisma.eventToken.findFirst({
+    where: {
+      tokenHash,
+      tokenType: 'admin',
+      isActive: true,
+      revokedAt: null,
+    },
+    include: {
+      event: true,
+    },
+  });
+
+  return access?.event ?? null;
+}
+
+export async function PATCH(request: NextRequest) {
+  try {
+    const event = await getAdminEventFromBearer(request);
+
+    if (!event) {
+      return NextResponse.json(
+        { success: false, error: 'Admin access required' },
+        { status: 403 }
+      );
+    }
+
+    const body = await request.json();
+    const scoreId = body?.score_id as string | undefined;
+    const points = body?.points as number | undefined;
+    const category = body?.category as string | undefined;
+
+    if (!scoreId || typeof points !== 'number' || Number.isNaN(points)) {
+      return NextResponse.json(
+        { success: false, error: 'score_id and valid points are required' },
+        { status: 400 }
+      );
+    }
+
+    const score = await updateScoreForEvent({
+      scoreId,
+      eventId: event.id,
+      points,
+      category,
+      tokenType: 'admin',
+    });
+
+    await createAuditLog({
+      eventId: event.id,
+      action: 'update',
+      entityType: 'score',
+      entityId: scoreId,
+      actorTokenType: 'admin',
+      payload: { points, category: category ?? null },
+    });
+
+    return NextResponse.json({
+      success: true,
+      data: { score },
+    });
+  } catch (error) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to update score',
+      },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const event = await getAdminEventFromBearer(request);
+
+    if (!event) {
+      return NextResponse.json(
+        { success: false, error: 'Admin access required' },
+        { status: 403 }
+      );
+    }
+
+    const scoreId = new URL(request.url).searchParams.get('score_id');
+
+    if (!scoreId) {
+      return NextResponse.json(
+        { success: false, error: 'score_id is required' },
+        { status: 400 }
+      );
+    }
+
+    const deleted = await deleteScoreForEvent({
+      scoreId,
+      eventId: event.id,
+    });
+
+    await createAuditLog({
+      eventId: event.id,
+      action: 'delete',
+      entityType: 'score',
+      entityId: scoreId,
+      actorTokenType: 'admin',
+      payload: deleted,
+    });
+
+    return NextResponse.json({
+      success: true,
+      data: { deleted },
+    });
+  } catch (error) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to delete score',
       },
       { status: 500 }
     );

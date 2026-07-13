@@ -1,12 +1,6 @@
-/**
- * Scores API - Add Score
- * Converted from PostgreSQL to Firestore
- * POST /api/scores/add
- */
-
 import { NextResponse } from 'next/server';
-import { adminCreateDocument, adminGetDocument, adminQueryCollection } from '@/lib/firestore-admin-helpers';
-import { COLLECTIONS } from '@/lib/firebase-collections';
+import { addScoreForEvent, getEventDayInfo } from '@/lib/server/score-service';
+import prisma from '@/lib/server/prisma';
 
 interface AddScoreRequest {
   event_id: string;
@@ -37,8 +31,10 @@ export async function POST(request: Request) {
       );
     }
 
-    // Verify event exists
-    const event = await adminGetDocument(COLLECTIONS.EVENTS, event_id);
+    const event = await prisma.event.findUnique({
+      where: { id: event_id },
+    });
+
     if (!event) {
       return NextResponse.json(
         { success: false, error: 'Event not found' },
@@ -46,46 +42,37 @@ export async function POST(request: Request) {
       );
     }
 
-    // Verify team exists and belongs to this event
-    const team = await adminGetDocument(COLLECTIONS.TEAMS, team_id);
+    const team = await prisma.team.findFirst({
+      where: {
+        id: team_id,
+        eventId: event_id,
+      },
+    });
+
     if (!team) {
       return NextResponse.json(
-        { success: false, error: 'Team not found' },
-        { status: 404 }
-      );
-    }
-
-    if ((team as any).event_id !== event_id) {
-      return NextResponse.json(
-        { success: false, error: 'Team does not belong to this event' },
+        { success: false, error: 'Team not found for this event' },
         { status: 400 }
       );
     }
 
-    // Check if event is finalized
-    if ((event as any).is_finalized) {
+    if (event.isFinalized) {
       return NextResponse.json(
         { success: false, error: 'Cannot add scores to a finalized event' },
         { status: 403 }
       );
     }
 
-    // For daily mode, verify day number
-    if ((event as any).mode === 'daily' && day) {
-      if (day < 1 || day > (event as any).number_of_days) {
+    if (event.scoringMode === 'daily' && day) {
+      if (day < 1 || day > event.numberOfDays) {
         return NextResponse.json(
           { success: false, error: 'Invalid day number' },
           { status: 400 }
         );
       }
 
-      // Check if day is locked
-      const eventDays = await adminQueryCollection(COLLECTIONS.EVENT_DAYS, [
-        { field: 'event_id', operator: '==', value: event_id },
-        { field: 'day_number', operator: '==', value: day },
-      ]);
-
-      if (eventDays.length > 0 && (eventDays[0] as any).is_locked) {
+      const eventDay = await getEventDayInfo(event_id, day);
+      if (eventDay?.isLocked) {
         return NextResponse.json(
           { success: false, error: 'This day is locked and cannot accept new scores' },
           { status: 403 }
@@ -93,29 +80,20 @@ export async function POST(request: Request) {
       }
     }
 
-    // Calculate final score
-    const final_score = points - penalty;
-
-    // Create score
-    const scoreData = {
-      event_id,
-      team_id,
+    const score = await addScoreForEvent({
+      eventId: event_id,
+      teamId: team_id,
+      day: day ?? 1,
       points,
       penalty,
-      score: final_score,
-      day_number: day || null,
-      notes: notes || null,
-    };
-
-    const scoreId = await adminCreateDocument(COLLECTIONS.SCORES, scoreData);
+      notes,
+      category: 'Score',
+    });
 
     return NextResponse.json({
       success: true,
       data: {
-        score: {
-          id: scoreId,
-          ...scoreData,
-        },
+        score,
       },
     }, { status: 201 });
 

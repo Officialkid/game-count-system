@@ -3,7 +3,7 @@
  * Token-based only (admin/scorer/public). No Appwrite dependencies.
  *
  * Supports separate frontend/backend deployment by setting NEXT_PUBLIC_API_BASE_URL
- * to the backend URL (e.g., Render). Defaults to same origin when unset.
+ * to the backend URL. Defaults to same origin when unset.
  */
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || '';

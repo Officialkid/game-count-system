@@ -9,6 +9,15 @@ interface EmailOptions {
   text?: string;
 }
 
+function getAppUrl() {
+  return (
+    process.env.APP_URL ||
+    process.env.NEXT_PUBLIC_APP_URL ||
+    process.env.NEXT_PUBLIC_BASE_URL ||
+    'https://game-count-system.vercel.app'
+  );
+}
+
 class EmailService {
   private enabled: boolean = false;
 
@@ -19,12 +28,12 @@ class EmailService {
   private initialize() {
     // Email service disabled (nodemailer dependency removed). Leave disabled.
     this.enabled = false;
-    console.warn('⚠️  Email service disabled. Skipping email initialization.');
+    console.warn('âš ï¸  Email service disabled. Skipping email initialization.');
   }
 
   async sendEmail(options: EmailOptions): Promise<boolean> {
     if (!this.enabled) {
-      console.log('📧 Email would be sent to:', options.to);
+      console.log('ðŸ“§ Email would be sent to:', options.to);
       console.log('   Subject:', options.subject);
       console.log('   (Email service not configured - check console for content)');
       return false;
@@ -34,7 +43,7 @@ class EmailService {
   }
 
   async sendVerificationEmail(email: string, token: string): Promise<boolean> {
-    const appUrl = process.env.APP_URL || 'https://game-count-system.onrender.com';
+    const appUrl = getAppUrl();
     const verificationLink = `${appUrl}/verify-email?token=${token}`;
 
     const html = `
@@ -68,7 +77,7 @@ class EmailService {
             </p>
           </div>
           <div class="footer">
-            <p>© 2025 Game Count System. All rights reserved.</p>
+            <p>Â© 2025 Game Count System. All rights reserved.</p>
           </div>
         </div>
       </body>
@@ -83,7 +92,7 @@ class EmailService {
   }
 
   async sendPasswordResetEmail(email: string, token: string): Promise<boolean> {
-    const appUrl = process.env.APP_URL || 'https://game-count-system.onrender.com';
+    const appUrl = getAppUrl();
     const resetLink = `${appUrl}/reset-password?token=${token}`;
 
     const html = `
@@ -113,12 +122,12 @@ class EmailService {
             <p>Or copy and paste this link into your browser:</p>
             <p style="word-break: break-all; color: #6b46c1;">${resetLink}</p>
             <div class="warning">
-              <strong>⚠️ Security Notice:</strong><br>
+              <strong>âš ï¸ Security Notice:</strong><br>
               This link will expire in 1 hour. If you didn't request a password reset, please ignore this email and your password will remain unchanged.
             </div>
           </div>
           <div class="footer">
-            <p>© 2025 Game Count System. All rights reserved.</p>
+            <p>Â© 2025 Game Count System. All rights reserved.</p>
           </div>
         </div>
       </body>
@@ -172,7 +181,7 @@ class EmailService {
       </head>
       <body>
         <div class="header">
-          <h1>🎮 Event Administrator Invitation</h1>
+          <h1>ðŸŽ® Event Administrator Invitation</h1>
         </div>
         <div class="content">
           <p>Hi there!</p>
@@ -185,7 +194,7 @@ class EmailService {
           <p>As a <strong>${role}</strong>, you'll be able to ${roleDescriptions[role] || 'manage event activities'}.</p>
 
           <div class="expiry">
-            ⏰ This invitation expires on <strong>${new Date(expiresAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</strong>
+            â° This invitation expires on <strong>${new Date(expiresAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</strong>
           </div>
 
           <div style="text-align: center;">
@@ -236,7 +245,7 @@ class EmailService {
       </head>
       <body>
         <div class="header">
-          <h1>✅ Invitation Accepted</h1>
+          <h1>âœ… Invitation Accepted</h1>
         </div>
         <div class="content">
           <p>Good news!</p>

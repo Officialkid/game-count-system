@@ -5,7 +5,8 @@
  */
 
 import { NextResponse } from 'next/server';
-import { db } from '@/lib/firebase-admin';
+import { getTeamsForEvent } from '@/lib/server/team-service';
+import { requireAnyToken } from '@/lib/token-middleware';
 
 export async function GET(
   request: Request,
@@ -20,26 +21,12 @@ export async function GET(
       request.headers.get('x-admin-token') ||
       bearerToken;
     
-    if (!accessToken) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'Missing access token'
-        },
-        { status: 401 }
-      );
+    const validation = await requireAnyToken(event_id, accessToken);
+    if (validation instanceof NextResponse) {
+      return validation;
     }
 
-    // Get all teams for this event
-    const teamsSnapshot = await db.collection('teams')
-      .where('event_id', '==', event_id)
-      .orderBy('name', 'asc')
-      .get();
-
-    const teams = teamsSnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    }));
+    const teams = await getTeamsForEvent(event_id);
 
     return NextResponse.json({
       success: true,

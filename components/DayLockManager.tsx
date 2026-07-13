@@ -1,13 +1,13 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { FirebaseEvent } from '@/lib/firebase-collections';
+import { EventRecord } from '@/lib/event-domain';
 import { getLockedDays, getUnlockedDays } from '@/lib/day-locking';
 import LockDayButton from './LockDayButton';
 import LockedDayIndicator from './LockedDayIndicator';
 
 interface DayLockManagerProps {
-  event: FirebaseEvent;
+  event: EventRecord;
   adminToken: string;
   onUpdate?: () => void;
 }

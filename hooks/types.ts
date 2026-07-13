@@ -109,11 +109,11 @@ export interface UseRealtimeScoresResult {
 }
 
 // ============================================================================
-// FIRESTORE DOCUMENT TYPES (Raw from Firebase)
+// LEGACY DOCUMENT SHAPES
 // ============================================================================
 
 /**
- * Raw event document from Firestore (before transformation)
+ * Legacy event document shape (before transformation)
  */
 export interface EventDocument {
   name: string;
@@ -134,7 +134,7 @@ export interface EventDocument {
 }
 
 /**
- * Raw team document from Firestore (before transformation)
+ * Legacy team document shape (before transformation)
  */
 export interface TeamDocument {
   name: string;
@@ -145,7 +145,7 @@ export interface TeamDocument {
 }
 
 /**
- * Raw score document from Firestore (before transformation)
+ * Legacy score document shape (before transformation)
  */
 export interface ScoreDocument {
   eventId: string;
@@ -164,7 +164,7 @@ export interface ScoreDocument {
 }
 
 /**
- * Firebase Timestamp type
+ * Legacy timestamp shape
  */
 export interface FirebaseTimestamp {
   toDate(): Date;

@@ -14,7 +14,7 @@ $quickEvent = @{
 } | ConvertTo-Json
 
 try {
-    $response1 = Invoke-RestMethod -Uri 'http://localhost:3000/api/events/create' `
+    $response1 = Invoke-RestMethod -Uri 'http://localhost:3002/api/events/create' `
         -Method POST `
         -Body $quickEvent `
         -ContentType 'application/json'
@@ -40,7 +40,7 @@ $campEvent = @{
 } | ConvertTo-Json
 
 try {
-    $response2 = Invoke-RestMethod -Uri 'http://localhost:3000/api/events/create' `
+    $response2 = Invoke-RestMethod -Uri 'http://localhost:3002/api/events/create' `
         -Method POST `
         -Body $campEvent `
         -ContentType 'application/json'
@@ -69,7 +69,7 @@ $advancedEvent = @{
 } | ConvertTo-Json
 
 try {
-    $response3 = Invoke-RestMethod -Uri 'http://localhost:3000/api/events/create' `
+    $response3 = Invoke-RestMethod -Uri 'http://localhost:3002/api/events/create' `
         -Method POST `
         -Body $advancedEvent `
         -ContentType 'application/json'
@@ -85,6 +85,5 @@ Write-Host "`n" -NoNewline
 Write-Host ("=" * 60) -ForegroundColor Gray
 Write-Host "Testing Complete!" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "Check your Firestore Console to see the created events:" -ForegroundColor White
-Write-Host "https://console.firebase.google.com/project/combinedactivities-7da43/firestore" -ForegroundColor Gray
+Write-Host "Check the local app and Prisma-backed API responses to verify the created events:" -ForegroundColor White
 Write-Host ""

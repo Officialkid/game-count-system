@@ -3,7 +3,7 @@
  * Utilities for instant Quick Event creation
  */
 
-import { FirebaseEvent } from './firebase-collections';
+import { EventRecord } from './event-domain';
 
 /**
  * Parse comma-separated team names into array
@@ -128,7 +128,7 @@ export interface QuickEventSummary {
 }
 
 export function formatQuickEventSummary(
-  event: FirebaseEvent,
+  event: EventRecord,
   teamCount: number
 ): QuickEventSummary {
   const startDate = new Date(event.start_at);
@@ -235,7 +235,7 @@ export interface QuickEventPayload {
  */
 export interface QuickEventResponse {
   success: boolean;
-  event: FirebaseEvent;
+  event: EventRecord;
   tokens: {
     admin_token: string;
     scorer_token: string;

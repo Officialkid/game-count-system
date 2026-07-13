@@ -17,18 +17,17 @@
     "test:e2e:headed": "playwright test --headed",
     "test:ci": "npm run test && npm run test:e2e",
     "check-env": "node scripts/check-env.js",
-    "db:backup": "node scripts/backup-firestore.js",
-    "db:cleanup": "node scripts/cleanup-firestore.js",
-    "db:cleanup:confirm": "node scripts/cleanup-firestore.js --confirm",
-    "db:restore": "node scripts/restore-firestore.js"
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:push": "prisma db push",
+    "db:studio": "prisma studio"
   },
   "dependencies": {
+    "@prisma/client": "^6.19.2",
     "@types/node": "^20.10.0",
     "@types/papaparse": "^5.5.1",
     "@vercel/analytics": "^1.6.1",
     "autoprefixer": "^10.4.16",
-    "firebase": "^12.8.0",
-    "firebase-admin": "^13.6.0",
     "isomorphic-dompurify": "^2.33.0",
     "jspdf": "^3.0.4",
     "jspdf-autotable": "^5.0.7",

@@ -3,7 +3,7 @@
  * Utilities for handling different event modes
  */
 
-import { EventMode, EventStatus, EVENT_MODE_CONFIGS, EventModeConfig } from './firebase-collections';
+import { EventMode, EventStatus, EVENT_MODE_CONFIGS, EventModeConfig } from './event-domain';
 
 /**
  * Get configuration for a specific event mode

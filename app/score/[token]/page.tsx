@@ -457,11 +457,11 @@ export default function ScorerPage({ params }: { params: { token: string } }) {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-purple-50 to-amber-50 py-10 px-4">
-      <div className="max-w-4xl mx-auto space-y-8">
+    <div className="site-shell min-h-screen py-10 px-4">
+      <div className="max-w-4xl mx-auto space-y-8 relative z-10">
         {/* Offline/Sync Status Banner */}
         {!isOnline && (
-          <div className="rounded-xl bg-yellow-50 border-2 border-yellow-400 p-4">
+          <div className="surface-panel rounded-[24px] border-yellow-300/70 p-4">
             <div className="flex items-center gap-3">
               <WifiOff className="w-6 h-6 text-yellow-600" />
               <div className="flex-1">
@@ -475,7 +475,7 @@ export default function ScorerPage({ params }: { params: { token: string } }) {
         )}
         
         {syncing && (
-          <div className="rounded-xl bg-blue-50 border-2 border-blue-400 p-4">
+          <div className="surface-panel rounded-[24px] border-sky-300/70 p-4">
             <div className="flex items-center gap-3">
               <RefreshCw className="w-6 h-6 text-blue-600 animate-spin" />
               <div className="flex-1">
@@ -489,7 +489,7 @@ export default function ScorerPage({ params }: { params: { token: string } }) {
         )}
         
         {queuedScores.length > 0 && !syncing && (
-          <div className="rounded-xl bg-orange-50 border-2 border-orange-400 p-4">
+          <div className="surface-panel rounded-[24px] border-orange-300/70 p-4">
             <div className="flex items-center gap-3">
               <RefreshCw className="w-6 h-6 text-orange-600" />
               <div className="flex-1">
@@ -505,7 +505,7 @@ export default function ScorerPage({ params }: { params: { token: string } }) {
               {isOnline && (
                 <button
                   onClick={syncQueue}
-                  className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition"
+                  className="px-4 py-2 rounded-full bg-[linear-gradient(135deg,#c96a3d_0%,#dd8d52_100%)] text-white transition"
                 >
                   Sync Now
                 </button>
@@ -515,7 +515,7 @@ export default function ScorerPage({ params }: { params: { token: string } }) {
         )}
 
         {usingCache && (
-          <div className="rounded-xl bg-gray-50 border-2 border-gray-400 p-4">
+          <div className="surface-panel rounded-[24px] p-4">
             <div className="flex items-center gap-3">
               <WifiOff className="w-5 h-5 text-gray-600" />
               <p className="text-sm text-gray-700">
@@ -526,13 +526,16 @@ export default function ScorerPage({ params }: { params: { token: string } }) {
         )}
 
         {/* Header */}
-        <div className="relative overflow-hidden rounded-2xl bg-white shadow-lg">
-          <div className="absolute inset-0 bg-gradient-to-r from-blue-600/10 via-purple-600/10 to-pink-500/10" />
+        <div className="surface-panel relative overflow-hidden rounded-[34px]">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(15,118,110,0.18),transparent_28%),radial-gradient(circle_at_bottom_left,rgba(36,76,103,0.12),transparent_30%)]" />
           <div className="relative p-8">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-gradient-to-r from-blue-600 to-purple-600 flex items-center justify-center text-white font-bold">S</div>
-                <h1 className="text-3xl md:text-4xl font-extrabold text-gray-900 tracking-tight">{event?.name}</h1>
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,#14213d_0%,#244c67_55%,#0f766e_100%)] text-sm font-black text-white shadow-lg">S</div>
+                <div>
+                  <div className="section-label">Scorer console</div>
+                  <h1 className="mt-3 text-3xl md:text-4xl font-extrabold text-gray-900 tracking-tight">{event?.name}</h1>
+                </div>
               </div>
               {/* Online/Offline Indicator */}
               <div className={`flex items-center gap-2 px-3 py-1 rounded-full ${
@@ -545,19 +548,19 @@ export default function ScorerPage({ params }: { params: { token: string } }) {
                 )}
               </div>
             </div>
-            <p className="text-gray-600">Score Entry Interface</p>
+            <p className="text-gray-600">Fast score capture with offline protection and cleaner broadcast links.</p>
             <div className="mt-6 flex flex-wrap gap-3">
               <a
                 href={`/scoreboard/${event?.public_token}`}
                 target="_blank"
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 text-white hover:bg-blue-700 transition"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-slate-900 text-white hover:bg-slate-800 transition"
               >
                 <span>View Live Scoreboard</span>
                 <span>→</span>
               </a>
               <a
                 href={`/history/${token}`}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 transition"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[linear-gradient(135deg,#0f766e_0%,#1f9d8f_100%)] text-white transition"
               >
                 <span>📜 Score History</span>
               </a>
@@ -567,19 +570,19 @@ export default function ScorerPage({ params }: { params: { token: string } }) {
 
         {/* Success Message */}
         {successMessage && (
-          <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-green-800 font-medium">
+          <div className="surface-panel rounded-[22px] border-green-200 p-4 text-green-800 font-medium">
             {successMessage}
           </div>
         )}
 
         {/* Score Entry Form - Simplified */}
-        <div className="bg-white rounded-2xl shadow-lg p-6 hover:shadow-xl transition-shadow">
-          <h2 className="text-3xl font-bold mb-6 text-gray-900">Add Score</h2>
+        <div className="surface-dark rounded-[32px] p-6 hover:shadow-xl transition-shadow">
+          <h2 className="text-3xl font-bold mb-6 text-white">Add Score</h2>
           
           <form onSubmit={handleSubmitScore} className="space-y-6">
             {/* STEP 1: Select Team (Large Buttons) */}
             <div>
-              <label className="text-lg font-semibold mb-3 block text-gray-900">
+              <label className="text-lg font-semibold mb-3 block text-white">
                 Step 1: Select Team
               </label>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -591,8 +594,8 @@ export default function ScorerPage({ params }: { params: { token: string } }) {
                     className={`
                       p-4 text-left rounded-xl border-2 transition-all
                       ${selectedTeamId === team.id
-                        ? 'border-purple-600 bg-purple-50 shadow-md scale-[1.02]'
-                        : 'border-gray-200 hover:border-purple-300 hover:bg-gray-50'
+                        ? 'border-amber-300/60 bg-white/12 shadow-md scale-[1.02]'
+                        : 'border-white/10 bg-white/5 hover:border-white/25 hover:bg-white/10'
                       }
                     `}
                   >
@@ -604,15 +607,15 @@ export default function ScorerPage({ params }: { params: { token: string } }) {
                         {safeInitial(team.name)}
                       </div>
                       <div className="flex-1">
-                        <span className="text-lg font-semibold block text-gray-900">
+                        <span className="text-lg font-semibold block text-white">
                           {team.name}
                         </span>
-                        <span className="text-sm text-gray-600">
+                        <span className="text-sm text-white/60">
                           {team.total_points || 0} points
                         </span>
                       </div>
                       {selectedTeamId === team.id && (
-                        <div className="text-purple-600 font-bold text-2xl">
+                        <div className="text-amber-300 font-bold text-2xl">
                           ✓
                         </div>
                       )}
@@ -625,7 +628,7 @@ export default function ScorerPage({ params }: { params: { token: string } }) {
             {/* STEP 2: Enter Points (Large Input with Presets) */}
             {selectedTeamId && (
               <div>
-                <label htmlFor="points" className="text-lg font-semibold mb-3 block text-gray-900">
+                <label htmlFor="points" className="text-lg font-semibold mb-3 block text-white">
                   Step 2: Enter Points
                 </label>
                 
@@ -636,7 +639,7 @@ export default function ScorerPage({ params }: { params: { token: string } }) {
                       key={preset}
                       type="button"
                       onClick={() => setPoints(preset.toString())}
-                      className="px-4 py-3 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 font-semibold transition"
+                      className="px-4 py-3 rounded-full bg-white/10 text-white hover:bg-white/20 font-semibold transition"
                     >
                       +{preset}
                     </button>
@@ -649,12 +652,12 @@ export default function ScorerPage({ params }: { params: { token: string } }) {
                   value={points}
                   onChange={(e) => setPoints(e.target.value)}
                   placeholder="0"
-                  className="w-full px-6 py-6 text-3xl text-center font-bold border-2 border-purple-300 rounded-xl focus:outline-none focus:ring-4 focus:ring-purple-300 focus:border-purple-500 bg-white"
+                  className="w-full px-6 py-6 text-3xl text-center font-bold border border-white/20 rounded-[24px] focus:outline-none focus:ring-4 focus:ring-teal-200 bg-white text-slate-950"
                   autoFocus
                   required
                   disabled={submitting}
                 />
-                <p className="text-sm text-gray-600 mt-2 text-center">
+                <p className="text-sm text-white/65 mt-2 text-center">
                   Enter positive number for points, negative for penalties
                 </p>
               </div>
@@ -665,7 +668,7 @@ export default function ScorerPage({ params }: { params: { token: string } }) {
               <button
                 type="submit"
                 disabled={submitting}
-                className="w-full px-8 py-6 text-xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl hover:shadow-lg hover:scale-[1.02] transition disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full px-8 py-6 text-xl font-bold bg-[linear-gradient(135deg,#c96a3d_0%,#dd8d52_100%)] text-white rounded-[24px] hover:shadow-lg hover:scale-[1.02] transition disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {submitting ? 'Adding...' : `Add ${points} Points to ${teams.find(t => t.id === selectedTeamId)?.name} →`}
               </button>
@@ -728,7 +731,7 @@ export default function ScorerPage({ params }: { params: { token: string } }) {
         </div>
 
         {/* Bulk Add for All Teams */}
-        <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl shadow p-6 border border-purple-200">
+        <div className="surface-panel rounded-[30px] shadow p-6 border border-white/50">
           <h2 className="text-xl font-bold mb-2">🎯 Bulk Score Entry</h2>
           <p className="text-sm text-gray-700 mb-4">Enter points for multiple teams at once. Use negative values for penalties or deductions. Perfect for recording all teams' scores from a single game!</p>
           <BulkAddForm 

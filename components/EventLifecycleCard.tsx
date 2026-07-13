@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { EventMode, EventStatus } from '@/lib/firebase-collections';
+import { EventMode, EventStatus } from '@/lib/event-domain';
 import { getLifecycleInfo, getStatusBadge } from '@/lib/event-lifecycle';
 
 interface EventLifecycleCardProps {

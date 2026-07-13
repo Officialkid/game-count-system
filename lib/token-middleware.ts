@@ -4,9 +4,8 @@
  */
 
 import { NextResponse } from 'next/server';
-import { adminGetDocument } from './firestore-admin-helpers';
-import { COLLECTIONS } from './firebase-collections';
-import { validateTokenAccess, extractToken, TokenType, TokenPermissions } from './token-utils';
+import prisma from '@/lib/server/prisma';
+import { hashToken, validateTokenAccess, TokenType, TokenPermissions } from './token-utils';
 
 export interface TokenValidationResult {
   valid: boolean;
@@ -35,8 +34,10 @@ export async function validateEventToken(
     };
   }
 
-  // Get event from Firestore
-  const event = await adminGetDocument(COLLECTIONS.EVENTS, eventId);
+  const event = await prisma.event.findUnique({
+    where: { id: eventId },
+    include: { tokens: true },
+  });
 
   if (!event) {
     return {
@@ -48,8 +49,16 @@ export async function validateEventToken(
     };
   }
 
-  // Validate token
-  const validation = validateTokenAccess(token, event as any);
+  const tokenHash = hashToken(token);
+  const adminTokenHash = event.tokens.find((item) => item.tokenType === 'admin')?.tokenHash ?? '';
+  const scorerTokenHash = event.tokens.find((item) => item.tokenType === 'scorer')?.tokenHash ?? '';
+  const publicTokenHash = event.tokens.find((item) => item.tokenType === 'viewer')?.tokenHash ?? '';
+
+  const validation = validateTokenAccess(token, {
+    admin_token_hash: adminTokenHash,
+    scorer_token_hash: scorerTokenHash,
+    public_token_hash: publicTokenHash,
+  });
 
   if (!validation.valid) {
     return {
@@ -65,7 +74,13 @@ export async function validateEventToken(
     valid: true,
     tokenType: validation.tokenType,
     permissions: validation.permissions,
-    event,
+    event: {
+      ...event,
+      admin_token_hash: adminTokenHash,
+      scorer_token_hash: scorerTokenHash,
+      public_token_hash: publicTokenHash,
+      _matched_token_hash: tokenHash,
+    },
   };
 }
 

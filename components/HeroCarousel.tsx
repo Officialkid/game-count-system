@@ -1,28 +1,44 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { Activity, RadioTower, Trophy, Users } from 'lucide-react';
 
 const slides = [
   {
-    title: 'GameScore',
-    subtitle: 'Live Scoring Made Simple',
-    description: 'Track competitions in real-time with zero hassle',
-    gradient: 'from-purple-600 via-pink-600 to-purple-600',
-    bgPattern: 'bg-gradient-to-br from-purple-50 to-pink-50',
+    eyebrow: 'Scoreboard Experience',
+    title: 'A sharper live-scoring interface for real events.',
+    description:
+      'Keep operators focused, audiences engaged, and score history visible without burying people under clutter.',
+    stats: [
+      { label: 'Control', value: 'Admin-ready', icon: Users },
+      { label: 'Rhythm', value: 'Live updates', icon: Activity },
+      { label: 'Display', value: 'Broadcast feel', icon: RadioTower },
+    ],
+    accent: 'from-[#0f766e] to-[#1f9d8f]',
   },
   {
-    title: 'GameScore',
-    subtitle: 'Perfect for Any Event',
-    description: 'Sports days, tournaments, quiz nights, and more',
-    gradient: 'from-blue-600 via-cyan-600 to-blue-600',
-    bgPattern: 'bg-gradient-to-br from-blue-50 to-cyan-50',
+    eyebrow: 'Operator Workflow',
+    title: 'Create, seed, score, and publish from one clear system.',
+    description:
+      'The redesign turns the product into a modern command center instead of a stack of utility pages.',
+    stats: [
+      { label: 'Setup', value: '60 sec', icon: Activity },
+      { label: 'Team ops', value: 'Bulk-ready', icon: Users },
+      { label: 'Results', value: 'Shareable', icon: Trophy },
+    ],
+    accent: 'from-[#c96a3d] to-[#dd8d52]',
   },
   {
-    title: 'GameScore',
-    subtitle: 'No Signup Required',
-    description: 'Create events instantly and share with anyone',
-    gradient: 'from-amber-600 via-orange-600 to-amber-600',
-    bgPattern: 'bg-gradient-to-br from-amber-50 to-orange-50',
+    eyebrow: 'Audience Layer',
+    title: 'Public scoreboards that feel event-worthy, not improvised.',
+    description:
+      'Standings, recaps, and score history should feel premium on phones, projectors, and shared links.',
+    stats: [
+      { label: 'Layout', value: 'Responsive', icon: RadioTower },
+      { label: 'Mood', value: 'Premium', icon: Trophy },
+      { label: 'Trust', value: 'Clear status', icon: Activity },
+    ],
+    accent: 'from-[#14213d] to-[#244c67]',
   },
 ];
 
@@ -30,89 +46,133 @@ export default function HeroCarousel() {
   const [currentSlide, setCurrentSlide] = useState(0);
 
   useEffect(() => {
-    const timer = setInterval(() => {
+    const timer = window.setInterval(() => {
       setCurrentSlide((prev) => (prev + 1) % slides.length);
-    }, 3000);
+    }, 4200);
 
-    return () => clearInterval(timer);
+    return () => window.clearInterval(timer);
   }, []);
 
   return (
-    <div className="relative h-[500px] md:h-[600px] overflow-hidden">
-      {slides.map((slide, index) => (
-        <div
-          key={index}
-          className={`absolute inset-0 transition-all duration-1000 ${
-            index === currentSlide
-              ? 'opacity-100 translate-x-0'
-              : index < currentSlide
-              ? 'opacity-0 -translate-x-full'
-              : 'opacity-0 translate-x-full'
-          }`}
-        >
-          <div className={`h-full flex items-center justify-center ${slide.bgPattern}`}>
-            <div className="text-center px-4 max-w-4xl">
-              <h1
-                className={`text-5xl md:text-7xl font-bold mb-4 bg-gradient-to-r ${slide.gradient} bg-clip-text text-transparent animate-fade-in`}
-              >
-                {slide.title}
-              </h1>
-              <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
-                {slide.subtitle}
-              </h2>
-              <p className="text-xl md:text-2xl text-gray-600">
-                {slide.description}
-              </p>
+    <div className="relative overflow-hidden rounded-[40px] border border-white/50 bg-[rgba(255,250,241,0.72)] px-6 py-8 shadow-[0_30px_100px_rgba(20,33,61,0.12)] backdrop-blur-xl md:px-10 md:py-10">
+      <div className="hero-orb left-[-6rem] top-[-4rem] h-40 w-40 bg-[rgba(201,106,61,0.3)]" />
+      <div className="hero-orb bottom-[-5rem] right-[-4rem] h-44 w-44 bg-[rgba(15,118,110,0.26)]" />
 
-              {/* Decorative elements */}
-              <div className="absolute top-20 left-10 w-20 h-20 bg-purple-200 rounded-full opacity-20 animate-pulse"></div>
-              <div className="absolute bottom-20 right-10 w-32 h-32 bg-pink-200 rounded-full opacity-20 animate-pulse delay-1000"></div>
-              <div className="absolute top-1/2 right-20 w-16 h-16 bg-amber-200 rounded-full opacity-20 animate-pulse delay-500"></div>
+      <div className="grid gap-8 lg:grid-cols-[1.25fr_0.95fr] lg:items-center">
+        <div className="relative min-h-[24rem]">
+          {slides.map((slide, index) => (
+            <div
+              key={slide.title}
+              className={`absolute inset-0 transition-all duration-700 ${
+                currentSlide === index
+                  ? 'translate-y-0 opacity-100'
+                  : 'pointer-events-none translate-y-6 opacity-0'
+              }`}
+            >
+              <div className="max-w-3xl pt-3">
+                <div className="section-label">{slide.eyebrow}</div>
+                <h1 className="display-title mt-6 max-w-4xl text-balance text-slate-950">
+                  {slide.title}
+                </h1>
+                <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-600 md:text-xl">
+                  {slide.description}
+                </p>
+
+                <div className="mt-8 grid gap-3 sm:grid-cols-3">
+                  {slide.stats.map((item) => {
+                    const Icon = item.icon;
+                    return (
+                      <div key={item.label} className="metric-card">
+                        <div className={`inline-flex rounded-full bg-gradient-to-r ${slide.accent} p-2 text-white`}>
+                          <Icon className="h-4 w-4" />
+                        </div>
+                        <div className="mt-4 text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">
+                          {item.label}
+                        </div>
+                        <div className="mt-2 text-xl font-bold text-slate-900">{item.value}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="surface-dark rounded-[36px] p-6 md:p-8">
+          <div className="flex items-center justify-between rounded-full border border-white/10 bg-white/5 px-4 py-3">
+            <div>
+              <div className="text-xs uppercase tracking-[0.24em] text-white/60">Live production preview</div>
+              <div className="mt-1 text-lg font-semibold text-white">Command Center</div>
+            </div>
+            <div className="badge bg-emerald-400/15 text-emerald-200">Live</div>
+          </div>
+
+          <div className="mt-6 rounded-[28px] bg-white/6 p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-sm uppercase tracking-[0.22em] text-white/55">Featured event</div>
+                <div className="mt-2 text-2xl font-bold text-white">Bootcamp Finals</div>
+              </div>
+              <div className="rounded-full border border-white/10 px-3 py-1 text-sm text-white/80">Day 4</div>
+            </div>
+
+            <div className="mt-5 space-y-3">
+              {[
+                { name: 'Falcons', score: 142, color: '#F4B63D' },
+                { name: 'Comets', score: 136, color: '#39A0ED' },
+                { name: 'Raiders', score: 119, color: '#F97316' },
+              ].map((team, index) => (
+                <div
+                  key={team.name}
+                  className="flex items-center justify-between rounded-[22px] border border-white/10 bg-white/6 px-4 py-4"
+                >
+                  <div className="flex items-center gap-4">
+                    <div
+                      className="flex h-11 w-11 items-center justify-center rounded-2xl text-sm font-black text-slate-950"
+                      style={{ backgroundColor: team.color }}
+                    >
+                      {index + 1}
+                    </div>
+                    <div>
+                      <div className="text-base font-semibold text-white">{team.name}</div>
+                      <div className="text-sm text-white/55">Momentum on</div>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-3xl font-black text-white">{team.score}</div>
+                    <div className="text-xs uppercase tracking-[0.2em] text-white/45">points</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-5 grid grid-cols-2 gap-3">
+              <div className="rounded-[22px] border border-white/10 bg-white/6 p-4">
+                <div className="text-xs uppercase tracking-[0.22em] text-white/50">Entries</div>
+                <div className="mt-2 text-2xl font-bold text-white">58</div>
+              </div>
+              <div className="rounded-[22px] border border-white/10 bg-white/6 p-4">
+                <div className="text-xs uppercase tracking-[0.22em] text-white/50">Updated</div>
+                <div className="mt-2 text-2xl font-bold text-white">Now</div>
+              </div>
             </div>
           </div>
+
+          <div className="mt-6 flex items-center justify-center gap-3">
+            {slides.map((slide, index) => (
+              <button
+                key={slide.title}
+                onClick={() => setCurrentSlide(index)}
+                className={`rounded-full transition-all ${
+                  index === currentSlide ? 'h-3 w-12 bg-white' : 'h-3 w-3 bg-white/35 hover:bg-white/55'
+                }`}
+                aria-label={`Show slide ${index + 1}`}
+              />
+            ))}
+          </div>
         </div>
-      ))}
-
-      {/* Slide Indicators */}
-      <div className="absolute bottom-8 left-0 right-0 flex justify-center gap-3">
-        {slides.map((_, index) => (
-          <button
-            key={index}
-            onClick={() => setCurrentSlide(index)}
-            className={`transition-all ${
-              index === currentSlide
-                ? 'w-12 h-3 bg-purple-600'
-                : 'w-3 h-3 bg-gray-300 hover:bg-gray-400'
-            } rounded-full`}
-            aria-label={`Go to slide ${index + 1}`}
-          ></button>
-        ))}
       </div>
-
-      <style jsx>{`
-        @keyframes fade-in {
-          from {
-            opacity: 0;
-            transform: translateY(20px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-
-        .animate-fade-in {
-          animation: fade-in 0.8s ease-out;
-        }
-
-        .delay-500 {
-          animation-delay: 500ms;
-        }
-
-        .delay-1000 {
-          animation-delay: 1000ms;
-        }
-      `}</style>
     </div>
   );
 }

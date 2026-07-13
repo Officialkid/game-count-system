@@ -360,10 +360,10 @@ export default function AdminPage({ params }: { params: { token: string } }) {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="site-shell min-h-screen flex items-center justify-center">
         <div className="text-center">
-          <div className="w-12 h-12 border-4 border-purple-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading...</p>
+          <div className="w-12 h-12 border-4 border-teal-700 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-slate-600">Loading command center...</p>
         </div>
       </div>
     );
@@ -371,7 +371,7 @@ export default function AdminPage({ params }: { params: { token: string } }) {
 
   if (errorType === 'expired') {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
+      <div className="site-shell min-h-screen flex items-center justify-center px-4">
         <ExpiredEvent showWaitlist={true} />
       </div>
     );
@@ -379,7 +379,7 @@ export default function AdminPage({ params }: { params: { token: string } }) {
 
   if (errorType === 'not-found') {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
+      <div className="site-shell min-h-screen flex items-center justify-center px-4">
         <EventNotFoundError />
       </div>
     );
@@ -387,14 +387,14 @@ export default function AdminPage({ params }: { params: { token: string } }) {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="max-w-md bg-white rounded-lg shadow p-6 text-center">
+      <div className="site-shell min-h-screen flex items-center justify-center">
+        <div className="surface-strong max-w-md rounded-[28px] p-6 text-center">
           <div className="text-5xl mb-4">🔒</div>
           <h1 className="text-2xl font-bold mb-2">Access Denied</h1>
           <p className="text-gray-600 mb-4">{error}</p>
           <button
             onClick={() => router.push('/events/create')}
-            className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700"
+            className="btn-primary"
           >
             Create New Event
           </button>
@@ -404,30 +404,33 @@ export default function AdminPage({ params }: { params: { token: string } }) {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-purple-50 to-amber-50 py-10 px-4">
+    <div className="site-shell min-h-screen py-10 px-4">
       {/* Interactive Tutorial */}
       <AdminTutorial />
 
-      <div className="max-w-4xl mx-auto space-y-8">
+      <div className="max-w-4xl mx-auto space-y-8 relative z-10">
         {/* Header */}
-        <div className="relative overflow-hidden rounded-2xl bg-white shadow-lg">
-          <div className="absolute inset-0 bg-gradient-to-r from-purple-600/10 via-pink-600/10 to-amber-500/10" />
+        <div className="surface-panel relative overflow-hidden rounded-[34px]">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(15,118,110,0.18),transparent_28%),radial-gradient(circle_at_bottom_left,rgba(201,106,61,0.16),transparent_30%)]" />
           <div className="relative p-8">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-gradient-to-r from-purple-600 to-pink-600 flex items-center justify-center text-white font-bold">A</div>
-                <h1 className="text-3xl md:text-4xl font-extrabold text-gray-900 tracking-tight">{event?.name}</h1>
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,#14213d_0%,#0f766e_100%)] text-sm font-black text-white shadow-lg">A</div>
+                <div>
+                  <div className="section-label">Admin command center</div>
+                  <h1 className="mt-3 text-3xl md:text-4xl font-extrabold text-gray-900 tracking-tight">{event?.name}</h1>
+                </div>
               </div>
               <button
                 onClick={resetAdminTutorial}
-                className="px-3 py-2 text-sm font-medium text-purple-600 hover:text-purple-700 hover:bg-purple-50 rounded-lg transition-colors flex items-center gap-2"
+                className="px-4 py-2 text-sm font-medium text-slate-700 bg-white/75 border border-slate-300 rounded-full transition-colors hover:bg-white flex items-center gap-2"
                 title="Restart tutorial"
               >
                 <span className="text-lg">❓</span>
                 <span className="hidden sm:inline">Tutorial</span>
               </button>
             </div>
-            <p className="text-gray-600 mb-4">Admin Control Panel</p>
+            <p className="text-gray-600 mb-4">Operate teams, links, results, and publishing from one place.</p>
             
             {/* Event Links Manager */}
             <EventLinksManager
@@ -443,7 +446,7 @@ export default function AdminPage({ params }: { params: { token: string } }) {
               <a
                 href={`/recap/${event?.public_token}`}
                 target="_blank"
-                className="inline-flex items-center gap-2 px-4 py-2 bg-amber-100 text-amber-700 rounded-lg hover:bg-amber-200 transition-colors text-sm font-medium"
+                className="inline-flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-full hover:bg-slate-800 transition-colors text-sm font-medium"
               >
                 <span>{event?.is_finalized ? '🏆' : '⚡'}</span>
                 {event?.is_finalized ? 'Final Results' : 'Live Scores'}
@@ -454,11 +457,11 @@ export default function AdminPage({ params }: { params: { token: string } }) {
 
         {/* Finalization & Export Section */}
         {event && (
-          <div className="bg-white rounded-xl shadow-lg p-6">
+          <div className="surface-strong rounded-[28px] p-6">
             <h2 className="text-xl font-bold text-gray-900 mb-4">📊 Results Management</h2>
             <div className="space-y-4">
               {/* Finalization Status */}
-              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+              <div className="flex items-center justify-between p-4 rounded-[22px] border border-slate-200 bg-white/70">
                 <div>
                   <h3 className="font-semibold text-gray-900">Event Status</h3>
                   <p className="text-sm text-gray-600 mt-1">
@@ -477,7 +480,7 @@ export default function AdminPage({ params }: { params: { token: string } }) {
                       <button
                         onClick={handleUnfinalizeEvent}
                         disabled={finalizing}
-                        className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 disabled:opacity-50 text-sm font-medium"
+                        className="px-4 py-2 bg-gray-700 text-white rounded-full hover:bg-gray-800 disabled:opacity-50 text-sm font-medium"
                       >
                         {finalizing ? 'Reopening...' : 'Reopen for Editing'}
                       </button>
@@ -485,7 +488,7 @@ export default function AdminPage({ params }: { params: { token: string } }) {
                   ) : (
                     <button
                       onClick={() => setShowFinalizeModal(true)}
-                      className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm font-medium"
+                      className="px-4 py-2 bg-[linear-gradient(135deg,#0f766e_0%,#1f9d8f_100%)] text-white rounded-full text-sm font-medium shadow-lg"
                     >
                       Publish Final Results
                     </button>
@@ -494,7 +497,7 @@ export default function AdminPage({ params }: { params: { token: string } }) {
               </div>
 
               {/* PDF Export */}
-              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+              <div className="flex items-center justify-between p-4 rounded-[22px] border border-slate-200 bg-white/70">
                 <div>
                   <h3 className="font-semibold text-gray-900">Export Results</h3>
                   <p className="text-sm text-gray-600 mt-1">
@@ -572,14 +575,14 @@ export default function AdminPage({ params }: { params: { token: string } }) {
         )}
 
         {/* SECTION 1: Bulk Team Import (Enhanced with 3 Methods) */}
-        <div className="bg-white rounded-2xl shadow-lg p-8 border-2 border-purple-200">
+        <div className="surface-panel rounded-[32px] p-8">
           <div className="flex items-center gap-3 mb-6">
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-600 to-pink-600 flex items-center justify-center text-white font-bold text-2xl shadow-lg">
+            <div className="w-12 h-12 rounded-2xl bg-[linear-gradient(135deg,#14213d_0%,#0f766e_100%)] flex items-center justify-center text-white font-bold text-2xl shadow-lg">
               ＋
             </div>
             <div>
               <h2 className="text-2xl font-bold text-gray-900">Add Teams</h2>
-              <p className="text-base text-gray-600">Choose your preferred method to add teams quickly</p>
+              <p className="text-base text-gray-600">Seed the event roster fast, whether you paste, type, or import.</p>
             </div>
           </div>
 
@@ -590,8 +593,8 @@ export default function AdminPage({ params }: { params: { token: string } }) {
               onClick={() => setImportMethod('paste')}
               className={`flex items-center gap-2 px-6 py-3 rounded-lg font-semibold transition ${
                 importMethod === 'paste'
-                  ? 'bg-purple-600 text-white shadow-md'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  ? 'bg-slate-900 text-white shadow-md'
+                  : 'bg-white text-gray-700 hover:bg-gray-100 border border-slate-200'
               }`}
             >
               <Clipboard className="w-5 h-5" />
@@ -602,8 +605,8 @@ export default function AdminPage({ params }: { params: { token: string } }) {
               onClick={() => setImportMethod('quick')}
               className={`flex items-center gap-2 px-6 py-3 rounded-lg font-semibold transition ${
                 importMethod === 'quick'
-                  ? 'bg-purple-600 text-white shadow-md'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  ? 'bg-slate-900 text-white shadow-md'
+                  : 'bg-white text-gray-700 hover:bg-gray-100 border border-slate-200'
               }`}
             >
               <Zap className="w-5 h-5" />
@@ -614,8 +617,8 @@ export default function AdminPage({ params }: { params: { token: string } }) {
               onClick={() => setImportMethod('file')}
               className={`flex items-center gap-2 px-6 py-3 rounded-lg font-semibold transition ${
                 importMethod === 'file'
-                  ? 'bg-purple-600 text-white shadow-md'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  ? 'bg-slate-900 text-white shadow-md'
+                  : 'bg-white text-gray-700 hover:bg-gray-100 border border-slate-200'
               }`}
             >
               <Upload className="w-5 h-5" />
@@ -633,7 +636,7 @@ export default function AdminPage({ params }: { params: { token: string } }) {
                 <textarea
                   rows={10}
                   placeholder="Paste team names, one per line:&#10;Team Alpha&#10;Team Bravo&#10;Team Charlie&#10;Team Delta&#10;Team Echo"
-                  className="w-full px-6 py-4 text-lg font-mono border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-4 focus:ring-purple-300 focus:border-purple-500 bg-gray-50"
+                  className="w-full px-6 py-4 text-lg font-mono border border-slate-200 rounded-[24px] focus:outline-none focus:ring-4 focus:ring-teal-200 bg-white/90"
                   value={bulkPasteText}
                   onChange={(e) => setBulkPasteText(e.target.value)}
                 />
@@ -653,7 +656,7 @@ export default function AdminPage({ params }: { params: { token: string } }) {
                 type="button"
                 onClick={handleBulkPaste}
                 disabled={bulkAdding || !bulkPasteText.trim()}
-                className="w-full py-5 px-8 bg-gradient-to-r from-purple-600 via-pink-600 to-amber-500 text-white font-bold text-xl rounded-xl hover:shadow-2xl transition disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-[1.02] active:scale-100"
+                className="w-full py-5 px-8 bg-[linear-gradient(135deg,#14213d_0%,#244c67_56%,#0f766e_100%)] text-white font-bold text-xl rounded-[24px] hover:shadow-2xl transition disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-[1.02] active:scale-100"
               >
                 {bulkAdding ? (
                   <span className="flex items-center justify-center gap-3">
@@ -680,7 +683,7 @@ export default function AdminPage({ params }: { params: { token: string } }) {
                 <input
                   type="text"
                   placeholder="Team name (press Enter to add)"
-                  className="w-full px-6 py-5 text-xl border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-4 focus:ring-purple-300 focus:border-purple-500 bg-gray-50"
+                  className="w-full px-6 py-5 text-xl border border-slate-200 rounded-[24px] focus:outline-none focus:ring-4 focus:ring-teal-200 bg-white/90"
                   value={quickAddInput}
                   onChange={(e) => setQuickAddInput(e.target.value)}
                   onKeyPress={(e) => {
@@ -713,14 +716,14 @@ export default function AdminPage({ params }: { params: { token: string } }) {
                 <label className="block text-lg font-semibold text-gray-900 mb-3">
                   📁 Import from File
                 </label>
-                <div className="border-2 border-dashed border-gray-300 rounded-xl p-12 text-center hover:border-purple-400 transition bg-gray-50">
+                <div className="border-2 border-dashed border-slate-300 rounded-[24px] p-12 text-center hover:border-teal-500 transition bg-white/80">
                   <div className="flex flex-col items-center gap-4">
                     <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center">
                       <FileText className="w-8 h-8 text-purple-600" />
                     </div>
                     <div>
                       <label htmlFor="file-upload" className="cursor-pointer">
-                        <span className="px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-semibold inline-block">
+                        <span className="px-6 py-3 bg-slate-900 text-white rounded-full hover:bg-slate-800 font-semibold inline-block">
                           Choose File
                         </span>
                         <input
@@ -752,7 +755,7 @@ export default function AdminPage({ params }: { params: { token: string } }) {
         </div>
 
         {/* SECTION 2: Teams List (with Edit/Delete) */}
-        <div className="bg-white rounded-2xl shadow-lg p-8 border-2 border-gray-200">
+        <div className="surface-strong rounded-[32px] p-8">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-2xl font-bold text-gray-900">
               Your Teams {teams.length > 0 && <span className="text-purple-600">({teams.length})</span>}
@@ -771,7 +774,7 @@ export default function AdminPage({ params }: { params: { token: string } }) {
               {teams.map((team, index) => (
                 <div
                   key={team.id}
-                  className="flex items-center justify-between p-5 bg-gradient-to-r from-gray-50 to-white rounded-xl hover:shadow-md transition-all border border-gray-200 hover:border-purple-300"
+                  className="flex items-center justify-between p-5 bg-white/75 rounded-[24px] hover:shadow-md transition-all border border-slate-200 hover:-translate-y-0.5"
                 >
                   <div className="flex items-center gap-4 flex-1">
                     <div className="relative">
@@ -852,21 +855,21 @@ export default function AdminPage({ params }: { params: { token: string } }) {
         </div>
 
         {/* SECTION 3: Scorer Link (Primary Operational Link) */}
-        <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-300 rounded-2xl p-6 shadow-lg">
+        <div className="surface-dark rounded-[30px] p-6">
             <div className="flex items-center gap-3 mb-4">
               <div className="text-4xl">📝</div>
               <div>
-                <h3 className="text-xl font-bold text-blue-900">Scorer Interface</h3>
-                <p className="text-sm text-blue-700">Dedicated interface for adding scores</p>
+                <h3 className="text-xl font-bold text-white">Scorer Interface</h3>
+                <p className="text-sm text-white/65">Dedicated interface for adding scores</p>
               </div>
             </div>
-            <p className="text-blue-800 mb-4">
+            <p className="text-white/75 mb-4">
               All scores must be added via the scorer link. This keeps scoring separate from admin functions and prevents accidental changes.
             </p>
             <a
               href={`/score/${event?.scorer_token}`}
               target="_blank"
-              className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:shadow-lg hover:scale-[1.02] transition font-semibold"
+              className="inline-flex items-center gap-2 px-6 py-3 bg-white text-slate-950 rounded-full hover:shadow-lg hover:scale-[1.02] transition font-semibold"
             >
               <span>🚀</span>
               Open Scorer Interface
@@ -875,7 +878,7 @@ export default function AdminPage({ params }: { params: { token: string } }) {
           </div>
 
         {/* SECTION 4: Links Section (Collapsed Dropdown) */}
-        <div className="bg-white rounded-xl shadow border border-gray-200">
+        <div className="surface-strong rounded-[28px] shadow border border-gray-200">
           <button
             onClick={() => setShowLinksDropdown(!showLinksDropdown)}
             className="w-full px-6 py-4 flex items-center justify-between hover:bg-gray-50 transition-colors"

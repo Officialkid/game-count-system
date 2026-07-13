@@ -5,7 +5,7 @@
 Write-Host "`n🔴 Testing Real-Time Scoreboard Updates" -ForegroundColor Cyan
 Write-Host "=" -NoNewline; Write-Host ("=" * 59) -ForegroundColor Gray
 
-$baseUrl = "http://localhost:3000"
+$baseUrl = "http://localhost:3002"
 
 # ============================================
 # TEST 1: Create Event with Quick Create

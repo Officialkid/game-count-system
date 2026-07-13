@@ -1,19 +1,38 @@
 'use client';
 
 import Link from 'next/link';
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { ArrowRight, ChartNoAxesCombined, Gauge, LayoutGrid, Link2, Sparkles } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import HeroCarousel from '@/components/HeroCarousel';
+
+const tutorialSteps = [
+  {
+    title: 'Create the event shell',
+    description: 'Spin up an event, get secure links, and move straight into operations without sign-up friction.',
+    icon: '01',
+  },
+  {
+    title: 'Run scoring like a control room',
+    description: 'Separate admin control from scoring input so operators stay fast and mistakes stay low.',
+    icon: '02',
+  },
+  {
+    title: 'Broadcast polished live results',
+    description: 'Share a scoreboard that looks intentional on phones, projectors, and recap views.',
+    icon: '03',
+  },
+];
 
 export default function HomePage() {
   const [showTutorial, setShowTutorial] = useState(false);
   const [tutorialStep, setTutorialStep] = useState(0);
 
   useEffect(() => {
-    // Check if user has seen tutorial
     const hasSeenTutorial = localStorage.getItem('hasSeenTutorial');
     if (!hasSeenTutorial) {
-      setTimeout(() => setShowTutorial(true), 2000);
+      const timer = window.setTimeout(() => setShowTutorial(true), 1800);
+      return () => window.clearTimeout(timer);
     }
   }, []);
 
@@ -22,283 +41,209 @@ export default function HomePage() {
     localStorage.setItem('hasSeenTutorial', 'true');
   };
 
-  const tutorialSteps = [
-    {
-      title: "Welcome! 👋",
-      description: "GameScore is the simplest way to track scores for any event. No signup, no hassle.",
-      emoji: "🎯"
-    },
-    {
-      title: "Create Your Event",
-      description: "Click 'Start Creating Events' to get unique links for managing your competition.",
-      emoji: "✨"
-    },
-    {
-      title: "That's It!",
-      description: "Share links with your team, add scores, and watch the live scoreboard. Easy!",
-      emoji: "🚀"
-    }
-  ];
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-purple-50 to-amber-50">
+    <div className="site-shell">
       <Navbar />
 
-      {/* Hero Carousel Section */}
-      <section id="home" className="pt-16">
-        <HeroCarousel />
-
-      </section>
-
-      {/* CTA Buttons */}
-      <section className="py-12 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto">
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-            <Link
-              href="/events/create"
-              className="px-8 py-4 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl hover:shadow-2xl hover:scale-105 transform transition-all duration-300 font-semibold text-lg w-full sm:w-auto group"
-            >
-              Start Creating Events
-              <span className="ml-2 inline-block group-hover:translate-x-1 transition-transform">→</span>
-            </Link>
-            <button
-              onClick={() => setShowTutorial(true)}
-              className="px-8 py-4 bg-white/80 backdrop-blur-lg border-2 border-purple-200 text-purple-600 rounded-xl hover:shadow-xl hover:scale-105 transform transition-all duration-300 font-semibold text-lg w-full sm:w-auto"
-            >
-              Watch Quick Tutorial
-            </button>
-          </div>
-
-          {/* Trust badges */}
-          <div className="flex flex-wrap items-center justify-center gap-6 mt-8 text-sm text-gray-700">
-            <div className="flex items-center gap-2">
-              <span className="text-green-500">✓</span>
-              <span>No signup required</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-green-500">✓</span>
-              <span>Live updates</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-green-500">✓</span>
-              <span>100% free</span>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* How It Works - 3 Steps */}
-      <section id="how-it-works" className="py-16 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-6xl mx-auto">
-          <h2 className="text-3xl sm:text-4xl font-bold text-center mb-4 text-gray-900">
-            How It Works
-          </h2>
-          <p className="text-center text-gray-600 mb-12 text-lg">
-            Get started in under 60 seconds
-          </p>
-
-          <div className="grid md:grid-cols-3 gap-8">
-            {/* Step 1 */}
-            <div className="relative bg-white rounded-2xl p-8 shadow-lg hover:shadow-xl transition-shadow">
-              <div className="absolute -top-4 left-8 w-12 h-12 bg-gradient-to-r from-purple-600 to-pink-600 rounded-full flex items-center justify-center text-white font-bold text-xl shadow-lg">
-                1
-              </div>
-              <div className="mt-4">
-                <div className="text-5xl mb-4">🎯</div>
-                <h3 className="text-xl font-bold mb-3 text-gray-900">Create Event</h3>
-                <p className="text-gray-600 leading-relaxed">
-                  Enter your event name and start time. Get instant access links for admin, scoring, and public viewing.
+      <main className="relative z-10">
+        <section id="home" className="container-safe pt-28 pb-16 md:pt-36">
+          <div className="mx-auto max-w-6xl">
+            <div className="mb-10 flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+              <div className="max-w-3xl">
+                <div className="section-label">Next-generation event scoring</div>
+                <h1 className="mt-6 text-balance text-[clamp(3rem,7vw,6.25rem)] font-black leading-[0.92] text-slate-950">
+                  Redesigning live scoring into a product people trust on sight.
+                </h1>
+                <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-600 md:text-xl">
+                  GameScore helps you launch events, run scoring cleanly, and present standings with a stronger modern
+                  interface from admin control to public scoreboard.
                 </p>
               </div>
-            </div>
 
-            {/* Step 2 */}
-            <div className="relative bg-white rounded-2xl p-8 shadow-lg hover:shadow-xl transition-shadow">
-              <div className="absolute -top-4 left-8 w-12 h-12 bg-gradient-to-r from-pink-600 to-amber-500 rounded-full flex items-center justify-center text-white font-bold text-xl shadow-lg">
-                2
-              </div>
-              <div className="mt-4">
-                <div className="text-5xl mb-4">👥</div>
-                <h3 className="text-xl font-bold mb-3 text-gray-900">Add Teams & Score</h3>
-                <p className="text-gray-600 leading-relaxed">
-                  Use your admin link to add teams. Then use the scorer link to enter points as your event unfolds.
-                </p>
-              </div>
-            </div>
-
-            {/* Step 3 */}
-            <div className="relative bg-white rounded-2xl p-8 shadow-lg hover:shadow-xl transition-shadow">
-              <div className="absolute -top-4 left-8 w-12 h-12 bg-gradient-to-r from-amber-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold text-xl shadow-lg">
-                3
-              </div>
-              <div className="mt-4">
-                <div className="text-5xl mb-4">📺</div>
-                <h3 className="text-xl font-bold mb-3 text-gray-900">View Live Results</h3>
-                <p className="text-gray-600 leading-relaxed">
-                  Share the public scoreboard with everyone. It updates automatically — no refreshing needed!
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Features Section */}
-      <section id="features" className="py-16 px-4 sm:px-6 lg:px-8 bg-white/50">
-        <div className="max-w-5xl mx-auto">
-          <h2 className="text-3xl font-bold text-center mb-12 text-gray-900">
-            Everything You Need
-          </h2>
-
-          <div className="grid sm:grid-cols-2 gap-6">
-            <div className="flex gap-4 p-6 bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow">
-              <div className="text-3xl">⚡</div>
-              <div>
-                <h3 className="font-semibold text-gray-900 mb-2">Lightning Fast</h3>
-                <p className="text-gray-600 text-sm">Updates appear instantly on all connected devices</p>
-              </div>
-            </div>
-
-            <div className="flex gap-4 p-6 bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow">
-              <div className="text-3xl">🔗</div>
-              <div>
-                <h3 className="font-semibold text-gray-900 mb-2">Secure Access Links</h3>
-                <p className="text-gray-600 text-sm">Control who can add teams, enter scores, or just view results</p>
-              </div>
-            </div>
-
-            <div className="flex gap-4 p-6 bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow">
-              <div className="text-3xl">📱</div>
-              <div>
-                <h3 className="font-semibold text-gray-900 mb-2">Mobile Friendly</h3>
-                <p className="text-gray-600 text-sm">Works perfectly on phones, tablets, and computers</p>
-              </div>
-            </div>
-
-            <div className="flex gap-4 p-6 bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow">
-              <div className="text-3xl">🎨</div>
-              <div>
-                <h3 className="font-semibold text-gray-900 mb-2">Clean Design</h3>
-                <p className="text-gray-600 text-sm">Beautiful scoreboards that put your event in the spotlight</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* CTA Section */}
-      <section className="py-16 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-4xl mx-auto text-center bg-gradient-to-r from-purple-600 to-pink-600 rounded-3xl p-12 shadow-2xl">
-          <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">
-            Ready to Start?
-          </h2>
-          <p className="text-xl text-purple-100 mb-8">
-            Create your first event in less than a minute
-          </p>
-          <Link
-            href="/events/create"
-            className="inline-block px-10 py-4 bg-white text-purple-600 rounded-xl hover:shadow-2xl hover:scale-105 transform transition-all duration-300 font-bold text-lg"
-          >
-            Create Free Event →
-          </Link>
-        </div>
-      </section>
-
-      {/* Tutorial Overlay */}
-      {showTutorial && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-white rounded-3xl max-w-md w-full p-8 shadow-2xl relative animate-scale-in">
-            <button
-              onClick={closeTutorial}
-              className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200 transition-colors text-gray-600"
-            >
-              ✕
-            </button>
-
-            <div className="text-center">
-              <div className="text-6xl mb-6">{tutorialSteps[tutorialStep].emoji}</div>
-              <h3 className="text-2xl font-bold mb-4 text-gray-900">
-                {tutorialSteps[tutorialStep].title}
-              </h3>
-              <p className="text-gray-600 text-lg leading-relaxed mb-8">
-                {tutorialSteps[tutorialStep].description}
-              </p>
-
-              {/* Progress dots */}
-              <div className="flex justify-center gap-2 mb-6">
-                {tutorialSteps.map((_, index) => (
-                  <div
-                    key={index}
-                    className={`h-2 rounded-full transition-all ${
-                      index === tutorialStep
-                        ? 'w-8 bg-purple-600'
-                        : 'w-2 bg-gray-300'
-                    }`}
-                  />
+              <div className="grid gap-3 sm:grid-cols-3 lg:max-w-xl">
+                {[
+                  ['Launch', 'Tokenized setup'],
+                  ['Operate', 'Separate scorer flow'],
+                  ['Share', 'Audience-ready output'],
+                ].map(([label, value]) => (
+                  <div key={label} className="metric-card">
+                    <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">{label}</div>
+                    <div className="mt-2 text-lg font-bold text-slate-900">{value}</div>
+                  </div>
                 ))}
               </div>
+            </div>
 
-              {/* Navigation */}
-              <div className="flex gap-3">
-                {tutorialStep < tutorialSteps.length - 1 ? (
-                  <>
-                    <button
-                      onClick={closeTutorial}
-                      className="flex-1 px-6 py-3 border-2 border-gray-200 rounded-xl font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
-                    >
-                      Skip
-                    </button>
-                    <button
-                      onClick={() => setTutorialStep(tutorialStep + 1)}
-                      className="flex-1 px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl font-semibold hover:shadow-lg transition-shadow"
-                    >
-                      Next
-                    </button>
-                  </>
-                ) : (
-                  <Link
-                    href="/events/create"
-                    onClick={closeTutorial}
-                    className="flex-1 px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl font-semibold hover:shadow-lg transition-shadow text-center"
-                  >
-                    Create My First Event
-                  </Link>
-                )}
+            <HeroCarousel />
+
+            <div className="mt-10 flex flex-col items-stretch gap-4 sm:flex-row">
+              <Link href="/events/create" className="btn-primary text-center text-base md:text-lg">
+                Start a live event
+                <ArrowRight className="ml-2 h-5 w-5" />
+              </Link>
+              <button onClick={() => setShowTutorial(true)} className="btn-secondary text-base md:text-lg">
+                See the 60-second product tour
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <section id="how-it-works" className="container-safe py-16 md:py-20">
+          <div className="mx-auto max-w-6xl">
+            <div className="mb-10 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+              <div>
+                <div className="section-label">How the product flows</div>
+                <h2 className="mt-5 text-4xl font-black text-slate-950 md:text-5xl">Three clear stages, one calm workflow.</h2>
               </div>
+              <p className="max-w-xl text-lg text-slate-600">
+                The redesign is built around operational clarity so setup, scoring, and public display each get the right level of focus.
+              </p>
+            </div>
+
+            <div className="grid gap-6 md:grid-cols-3">
+              {tutorialSteps.map((step) => (
+                <article key={step.icon} className="surface-panel rounded-[32px] p-8">
+                  <div className="inline-flex rounded-full border border-slate-300 bg-white px-4 py-2 text-xs font-black tracking-[0.24em] text-slate-500">
+                    {step.icon}
+                  </div>
+                  <h3 className="mt-6 text-2xl font-bold text-slate-950">{step.title}</h3>
+                  <p className="mt-4 text-base leading-7 text-slate-600">{step.description}</p>
+                </article>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section id="features" className="container-safe py-16 md:py-20">
+          <div className="mx-auto max-w-6xl rounded-[40px] border border-white/50 bg-[rgba(255,250,241,0.72)] p-8 shadow-[0_30px_90px_rgba(20,33,61,0.1)] backdrop-blur-xl md:p-10">
+            <div className="grid gap-10 lg:grid-cols-[1fr_1.2fr]">
+              <div>
+                <div className="section-label">What the redesign is optimizing</div>
+                <h2 className="mt-5 text-4xl font-black text-slate-950 md:text-5xl">Less clutter. More confidence. Better event energy.</h2>
+                <p className="mt-5 text-lg leading-8 text-slate-600">
+                  We are pushing the app away from “utility page” styling and into a sharper product identity with clearer hierarchy, stronger motion, and better live-event presence.
+                </p>
+                <div className="mt-8 grid gap-3">
+                  {[
+                    'Cleaner information grouping for admins and scorers',
+                    'Premium public scoreboard feel for shared links and projectors',
+                    'More intentional color, typography, spacing, and motion across the product',
+                  ].map((item) => (
+                    <div key={item} className="flex items-start gap-3 rounded-2xl bg-white/80 px-4 py-4">
+                      <Sparkles className="mt-0.5 h-5 w-5 text-amber-600" />
+                      <span className="text-slate-700">{item}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                {[
+                  {
+                    title: 'Operator clarity',
+                    description: 'Admin pages behave like a command center, not a loose form collection.',
+                    icon: Gauge,
+                  },
+                  {
+                    title: 'Faster setup',
+                    description: 'Event creation stays quick while the visual system feels far more premium.',
+                    icon: LayoutGrid,
+                  },
+                  {
+                    title: 'Shareable outputs',
+                    description: 'Public scoreboard and recap views feel polished enough to project confidently.',
+                    icon: Link2,
+                  },
+                  {
+                    title: 'Better insight surfaces',
+                    description: 'Standings, score history, and metrics get clearer emphasis and visual rhythm.',
+                    icon: ChartNoAxesCombined,
+                  },
+                ].map((feature) => {
+                  const Icon = feature.icon;
+                  return (
+                    <article key={feature.title} className="surface-strong rounded-[28px] p-6">
+                      <div className="inline-flex rounded-2xl bg-slate-900 p-3 text-white">
+                        <Icon className="h-5 w-5" />
+                      </div>
+                      <h3 className="mt-5 text-xl font-bold text-slate-950">{feature.title}</h3>
+                      <p className="mt-3 text-sm leading-7 text-slate-600">{feature.description}</p>
+                    </article>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="container-safe pb-24 pt-6">
+          <div className="mx-auto max-w-5xl rounded-[42px] bg-[linear-gradient(135deg,#14213d_0%,#234662_100%)] px-8 py-12 text-center text-white shadow-[0_30px_100px_rgba(20,33,61,0.22)] md:px-12">
+            <div className="section-label mx-auto w-fit border-white/10 bg-white/10 text-white">Ready to launch</div>
+            <h2 className="mt-6 text-balance text-4xl font-black md:text-5xl">Create an event that already feels production-ready.</h2>
+            <p className="mx-auto mt-5 max-w-2xl text-lg leading-8 text-white/75">
+              Start with the redesigned flow, get your secure links instantly, and run the event with a much stronger UI foundation.
+            </p>
+            <div className="mt-8">
+              <Link
+                href="/events/create"
+                className="inline-flex items-center gap-2 rounded-full bg-white px-7 py-4 text-lg font-bold text-slate-950 transition hover:-translate-y-0.5 hover:shadow-2xl"
+              >
+                Create free event
+                <ArrowRight className="h-5 w-5" />
+              </Link>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      {showTutorial && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm">
+          <div className="surface-strong w-full max-w-xl rounded-[36px] p-8 md:p-10">
+            <div className="mb-6 flex items-start justify-between gap-4">
+              <div>
+                <div className="section-label">Quick walkthrough</div>
+                <h3 className="mt-4 text-3xl font-black text-slate-950">{tutorialSteps[tutorialStep].title}</h3>
+              </div>
+              <button
+                onClick={closeTutorial}
+                className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700"
+              >
+                Close
+              </button>
+            </div>
+
+            <p className="text-lg leading-8 text-slate-600">{tutorialSteps[tutorialStep].description}</p>
+
+            <div className="mt-8 flex gap-2">
+              {tutorialSteps.map((step, index) => (
+                <div
+                  key={step.icon}
+                  className={`h-2 rounded-full transition-all ${
+                    index === tutorialStep ? 'w-16 bg-slate-900' : 'w-8 bg-slate-300'
+                  }`}
+                />
+              ))}
+            </div>
+
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+              {tutorialStep < tutorialSteps.length - 1 ? (
+                <>
+                  <button onClick={closeTutorial} className="btn-secondary">
+                    Skip for now
+                  </button>
+                  <button onClick={() => setTutorialStep((step) => step + 1)} className="btn-primary">
+                    Next step
+                  </button>
+                </>
+              ) : (
+                <Link href="/events/create" onClick={closeTutorial} className="btn-primary text-center">
+                  Launch my first event
+                </Link>
+              )}
             </div>
           </div>
         </div>
       )}
-
-      <style jsx>{`
-        @keyframes fade-in {
-          from {
-            opacity: 0;
-          }
-          to {
-            opacity: 1;
-          }
-        }
-
-        @keyframes scale-in {
-          from {
-            opacity: 0;
-            transform: scale(0.9);
-          }
-          to {
-            opacity: 1;
-            transform: scale(1);
-          }
-        }
-
-        .animate-fade-in {
-          animation: fade-in 0.3s ease-out;
-        }
-
-        .animate-scale-in {
-          animation: scale-in 0.3s ease-out;
-        }
-      `}</style>
     </div>
   );
 }

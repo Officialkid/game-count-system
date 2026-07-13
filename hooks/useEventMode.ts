@@ -12,7 +12,7 @@ import {
   isQuickMode,
   isMultiDayMode,
   isCustomMode,
-} from '@/lib/firebase-frontend-helpers';
+} from '@/lib/client-helpers';
 
 interface Event {
   id: string;

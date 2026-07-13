@@ -1,275 +1,73 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query } from '@/lib/db-client';
-import { getEventByToken } from '@/lib/db-access';
+import { exportEventAsCsvData } from '@/lib/server/event-lifecycle-service';
+import { requireAdminToken } from '@/lib/token-middleware';
 
-// ============================================================================
-// TYPE DEFINITIONS
-// ============================================================================
-
-interface QueryResult<T> {
-  rows: T[];
+function getAdminToken(request: NextRequest) {
+  const authHeader = request.headers.get('authorization');
+  const bearerToken = authHeader?.toLowerCase().startsWith('bearer ') ? authHeader.slice(7) : null;
+  return request.headers.get('x-admin-token') || bearerToken;
 }
 
-interface EventData {
-  id: string;
-  name: string;
-  mode: string;
-  status: string;
-  admin_token: string;
-}
-
-interface TeamData {
-  id: string;
-  name: string;
-  total_points: number;
-}
-
-interface ScoreData {
-  team_id: string;
-  day_number: number;
-  category: string;
-  points: number;
-  created_at: string;
-  team_name: string;
-}
-
-/**
- * GET /api/events/[event_id]/export-csv
- * Export archived event data as CSV
- * 
- * ⚠️ NOTE: This route still uses PostgreSQL queries and needs to be migrated to Firebase.
- * The query() function currently throws an error since PostgreSQL has been removed.
- * This route will not work until migrated to use Firebase Firestore.
- * 
- * TODO: Migrate to Firebase using:
- * - getEvent() from @/lib/db-access
- * - getTeamsByEvent() from @/lib/db-access  
- * - getScoresByEvent() from @/lib/db-access
- *
- * 
- * Headers:
- *   X-ADMIN-TOKEN: Admin token to verify access
- * 
- * Returns: CSV file with teams and scores
- * 
- * Error responses:
- * - 400: Missing admin token header
- * - 403: Invalid admin token or event not archived
- * - 404: Event not found
- * - 500: Server error
- */
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { event_id: string } }
-) {
+export async function GET(request: NextRequest, { params }: { params: { event_id: string } }) {
   try {
-    const { event_id } = params;
-    
-    // Get admin token from header
-    const admin_token = request.headers.get('X-ADMIN-TOKEN');
-    
-    if (!admin_token) {
-      return NextResponse.json(
-        { 
-          success: false, 
-          error: 'X-ADMIN-TOKEN header required' 
-        },
-        { status: 400 }
-      );
+    const adminToken = getAdminToken(request);
+    if (!adminToken) {
+      return NextResponse.json({ success: false, error: 'X-ADMIN-TOKEN header or Bearer token required' }, { status: 400 });
     }
 
-    // Verify admin token
-    const adminEvent = await getEventByToken(admin_token, 'admin');
-    
-    if (!adminEvent) {
-      return NextResponse.json(
-        { 
-          success: false, 
-          error: 'Invalid admin token' 
-        },
-        { status: 403 }
-      );
+    const validation = await requireAdminToken(params.event_id, adminToken);
+    if (validation instanceof NextResponse) return validation;
+
+    const exported = await exportEventAsCsvData(params.event_id);
+    if (exported.event.eventStatus !== 'archived') {
+      return NextResponse.json({ success: false, error: 'Only archived events can be exported' }, { status: 403 });
     }
 
-    // Get event details
-    const eventResult = await query(
-      `SELECT id, name, mode, status, admin_token 
-       FROM events 
-       WHERE id = $1`,
-      [event_id]
-    ) as unknown as QueryResult<EventData>;
-
-    if (eventResult.rows.length === 0) {
-      return NextResponse.json(
-        { 
-          success: false, 
-          error: 'Event not found' 
-        },
-        { status: 404 }
-      );
-    }
-
-    const event = eventResult.rows[0] as EventData;
-
-    // Verify admin owns this event
-    if (event.admin_token !== admin_token) {
-      return NextResponse.json(
-        { 
-          success: false, 
-          error: 'You do not have permission to export this event' 
-        },
-        { status: 403 }
-      );
-    }
-
-    // Verify event is archived
-    if (event.status !== 'archived') {
-      return NextResponse.json(
-        { 
-          success: false, 
-          error: 'Only archived events can be exported' 
-        },
-        { status: 403 }
-      );
-    }
-
-    // Fetch teams
-    const teamsResult = await query(
-      `SELECT id, name, total_points 
-       FROM teams 
-       WHERE event_id = $1 
-       ORDER BY total_points DESC`,
-      [event_id]
-    ) as unknown as QueryResult<TeamData>;
-
-    const teams = teamsResult.rows;
-
-    // Fetch scores grouped by day
-    const scoresResult = await query(
-      `SELECT 
-        s.team_id, 
-        s.day_number, 
-        s.category,
-        s.points,
-        s.created_at,
-        t.name as team_name
-       FROM scores s
-       JOIN teams t ON s.team_id = t.id
-       WHERE s.event_id = $1
-       ORDER BY s.day_number, s.created_at`,
-      [event_id]
-    ) as unknown as QueryResult<ScoreData>;
-
-    const scores = scoresResult.rows;
-
-    // Get unique days - properly typed to avoid 'unknown' type errors
-    const dayNumbers = scores.map((s) => s.day_number);
-    const uniqueDays = [...new Set(dayNumbers)];
-    const days: number[] = uniqueDays.sort((a, b) => a - b);
-
-    // Build CSV content
     let csv = '';
-    
-    // Header
-    csv += `Event: ${event.name}\n`;
-    csv += `Mode: ${event.mode}\n`;
-    csv += `Exported: ${new Date().toISOString()}\n`;
-    csv += `\n`;
-
-    // Teams summary
-    csv += `TEAMS SUMMARY\n`;
-    csv += `Rank,Team Name,Total Points\n`;
-    teams.forEach((team, index) => {
-      csv += `${index + 1},"${team.name}",${team.total_points || 0}\n`;
+    csv += `Event,${exported.event.name}\n`;
+    csv += `Mode,${exported.event.eventMode}\n`;
+    csv += `Exported At,${new Date().toISOString()}\n\n`;
+    csv += 'TEAMS SUMMARY\n';
+    csv += 'Rank,Team Name,Total Points\n';
+    exported.teams.forEach((team, index) => {
+      csv += `${index + 1},"${team.name}",${team.total_points}\n`;
     });
-    csv += `\n`;
+    csv += '\n';
 
-    // Scores by day
-    if (event.mode === 'camp' && days.length > 1) {
-      csv += `SCORES BY DAY\n`;
-      
-      // Properly type the day parameter in forEach
-      days.forEach((day) => {
+    if (exported.event.eventMode === 'camp' && exported.days.length > 1) {
+      csv += 'SCORES BY DAY\n';
+      exported.days.forEach((day) => {
         csv += `\nDay ${day}\n`;
-        csv += `Team,Category,Points,Timestamp\n`;
-        
-        const dayScores = scores.filter((s) => s.day_number === day);
-        dayScores.forEach((score) => {
-          const timestamp = new Date(score.created_at).toLocaleString();
-          csv += `"${score.team_name}","${score.category}",${score.points},"${timestamp}"\n`;
+        csv += 'Team,Category,Points,Timestamp\n';
+        exported.scores.filter((score) => score.day_number === day).forEach((score) => {
+          csv += `"${score.team_name}","${score.category}",${score.points},"${new Date(score.created_at).toLocaleString()}"\n`;
         });
       });
     } else {
-      // Single day or quick mode
-      csv += `ALL SCORES\n`;
-      csv += `Team,Category,Points,Timestamp\n`;
-      scores.forEach((score) => {
-        const timestamp = new Date(score.created_at).toLocaleString();
-        csv += `"${score.team_name}","${score.category}",${score.points},"${timestamp}"\n`;
+      csv += 'ALL SCORES\n';
+      csv += 'Team,Category,Points,Timestamp\n';
+      exported.scores.forEach((score) => {
+        csv += `"${score.team_name}","${score.category}",${score.points},"${new Date(score.created_at).toLocaleString()}"\n`;
       });
     }
 
-    // Totals
-    csv += `\n`;
-    csv += `TOTALS\n`;
-    csv += `Total Teams,${teams.length}\n`;
-    csv += `Total Scores,${scores.length}\n`;
-    csv += `Total Points Awarded,${teams.reduce((sum: number, t: any) => sum + (t.total_points || 0), 0)}\n`;
+    csv += '\nTOTALS\n';
+    csv += `Total Teams,${exported.teams.length}\n`;
+    csv += `Total Scores,${exported.scores.length}\n`;
+    csv += `Total Points Awarded,${exported.teams.reduce((sum, team) => sum + team.total_points, 0)}\n`;
 
-    // Create filename
-    const sanitizedName = event.name.replace(/[^a-zA-Z0-9]/g, '_');
-    const filename = `${sanitizedName}_Final_Results.csv`;
-
-    // Return CSV file
-    return new NextResponse(csv, {
-      status: 200,
-      headers: {
-        'Content-Type': 'text/csv',
-        'Content-Disposition': `attachment; filename="${filename}"`,
-      },
-    });
-  } catch (error: any) {
+    const filename = `${exported.event.name.replace(/[^a-zA-Z0-9]/g, '_')}_Final_Results.csv`;
+    return new NextResponse(csv, { status: 200, headers: { 'Content-Type': 'text/csv', 'Content-Disposition': `attachment; filename="${filename}"` } });
+  } catch (error) {
     console.error('[CSV EXPORT] Error:', error);
-
-    return NextResponse.json(
-      {
-        success: false,
-        error: error?.message || 'Failed to export CSV',
-      },
-      { status: 500 }
-    );
+    return NextResponse.json({ success: false, error: error instanceof Error ? error.message : 'Failed to export CSV' }, { status: 500 });
   }
 }
 
-/**
- * Block mutations - CSV export is read-only
- */
-export async function POST() {
-  return NextResponse.json(
-    {
-      success: false,
-      error: 'CSV export is read-only. Cannot create exports via POST.',
-    },
-    { status: 405 }
-  );
+function methodNotAllowed(message: string) {
+  return NextResponse.json({ success: false, error: message }, { status: 405 });
 }
 
-export async function PUT() {
-  return NextResponse.json(
-    {
-      success: false,
-      error: 'CSV export is read-only. Cannot modify exports.',
-    },
-    { status: 405 }
-  );
-}
-
-export async function DELETE() {
-  return NextResponse.json(
-    {
-      success: false,
-      error: 'CSV export is read-only. Cannot delete exports.',
-    },
-    { status: 405 }
-  );
-}
+export async function POST() { return methodNotAllowed('CSV export is read-only. Cannot create exports via POST.'); }
+export async function PUT() { return methodNotAllowed('CSV export is read-only. Cannot modify exports.'); }
+export async function DELETE() { return methodNotAllowed('CSV export is read-only. Cannot delete exports.'); }

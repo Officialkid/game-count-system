@@ -137,14 +137,15 @@ export default function CreateEventPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-amber-50 py-12 px-4">
+    <div className="site-shell min-h-screen py-12 px-4">
       <div className="max-w-2xl mx-auto">
         {/* Header */}
         <div className="text-center mb-12">
-          <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-purple-600 via-pink-600 to-amber-500 bg-clip-text text-transparent mb-4">
+          <div className="section-label mx-auto w-fit">Event setup</div>
+          <h1 className="mt-5 text-4xl md:text-6xl font-black text-slate-950">
             Create Your Event
           </h1>
-          <p className="text-gray-600 text-lg">Get started in 60 seconds — no signup required</p>
+          <p className="mt-4 text-slate-600 text-lg md:text-xl">Get started in 60 seconds with a cleaner setup flow and secure links ready to share.</p>
         </div>
 
         {error && (
@@ -155,7 +156,7 @@ export default function CreateEventPage() {
 
         <form onSubmit={onSubmit} className="space-y-8">
           {/* FIELD 1: Event Name */}
-          <div className="bg-white border-2 border-purple-200 rounded-2xl p-8 shadow-lg hover:shadow-xl transition-shadow">
+          <div className="surface-panel rounded-[30px] p-8 transition-shadow">
             <label htmlFor="eventName" className="block text-2xl font-bold text-gray-900 mb-3">
               🎯 Event Name <span className="text-red-500">*</span>
             </label>
@@ -165,14 +166,14 @@ export default function CreateEventPage() {
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g., Summer Basketball Tournament"
-              className="w-full px-6 py-5 text-xl border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-purple-300 focus:border-purple-500 bg-gray-50 text-gray-900 placeholder-gray-400 transition-all"
+              className="w-full rounded-[22px] border border-slate-200 bg-white/90 px-6 py-5 text-xl text-gray-900 placeholder-gray-400 transition-all focus:outline-none focus:ring-4 focus:ring-teal-200 focus:border-teal-600"
               autoFocus
               required
             />
           </div>
 
           {/* FIELD 2: Start Time */}
-          <div className="bg-white border-2 border-blue-200 rounded-2xl p-8 shadow-lg hover:shadow-xl transition-shadow">
+          <div className="surface-panel rounded-[30px] p-8 transition-shadow">
             <label htmlFor="startTime" className="block text-2xl font-bold text-gray-900 mb-3">
               📅 Start Time
             </label>
@@ -181,7 +182,7 @@ export default function CreateEventPage() {
               type="datetime-local"
               value={startTime}
               onChange={(e) => setStartTime(e.target.value)}
-              className="w-full px-6 py-5 text-xl border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-blue-300 focus:border-blue-500 bg-gray-50 text-gray-900 transition-all"
+              className="w-full rounded-[22px] border border-slate-200 bg-white/90 px-6 py-5 text-xl text-gray-900 transition-all focus:outline-none focus:ring-4 focus:ring-teal-200 focus:border-teal-600"
             />
             <p className="text-base text-gray-600 mt-3 flex items-center gap-2">
               <span>💡</span>
@@ -191,7 +192,7 @@ export default function CreateEventPage() {
 
           {/* ADVANCED OPTIONS (Collapsed) */}
           <details 
-            className="bg-gradient-to-br from-gray-50 to-gray-100 border-2 border-gray-200 rounded-2xl overflow-hidden"
+            className="surface-panel rounded-[30px] overflow-hidden"
             open={showAdvanced}
             onToggle={(e) => setShowAdvanced((e.target as HTMLDetailsElement).open)}
           >
@@ -401,7 +402,7 @@ export default function CreateEventPage() {
           <button
             type="submit"
             disabled={loading || !name.trim()}
-            className="w-full py-6 px-8 bg-gradient-to-r from-purple-600 via-pink-600 to-amber-500 text-white font-bold text-2xl rounded-2xl hover:from-purple-700 hover:via-pink-700 hover:to-amber-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-xl hover:shadow-2xl transform hover:scale-[1.02] active:scale-100"
+            className="w-full rounded-[26px] bg-[linear-gradient(135deg,#14213d_0%,#244c67_56%,#0f766e_100%)] px-8 py-6 text-2xl font-black text-white shadow-[0_24px_60px_rgba(20,33,61,0.22)] transition-all hover:-translate-y-0.5 hover:shadow-[0_30px_70px_rgba(20,33,61,0.28)] disabled:cursor-not-allowed disabled:opacity-50"
           >
             {loading ? (
               <div className="flex items-center justify-center gap-3">
@@ -417,7 +418,7 @@ export default function CreateEventPage() {
           </button>
 
           {/* Info Text */}
-          <p className="text-center text-gray-600 text-base">
+          <p className="text-center text-slate-600 text-base">
             <span className="font-semibold">Smart setup:</span> We automatically configure the best mode based on your selections
           </p>
         </form>

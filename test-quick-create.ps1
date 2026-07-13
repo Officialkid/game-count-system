@@ -5,7 +5,7 @@
 Write-Host "`n🚀 Testing Quick Event Creation Flow" -ForegroundColor Cyan
 Write-Host "=" -NoNewline; Write-Host ("=" * 59) -ForegroundColor Gray
 
-$baseUrl = "http://localhost:3000"
+$baseUrl = "http://localhost:3002"
 $apiUrl = "$baseUrl/api/events/quick-create"
 
 # Test results tracking

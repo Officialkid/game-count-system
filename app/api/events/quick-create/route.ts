@@ -5,18 +5,15 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getAdminDb } from '@/lib/firebase-admin';
-import { generateEventTokens } from '@/lib/token-utils';
+import { createEventWithTokens, buildEventShareLinks } from '@/lib/server/event-service';
+import { createTeamsForEvent } from '@/lib/server/team-service';
 import {
   parseTeamNames,
   validateQuickEventInput,
   calculateQuickEventDates,
-  generateShareableLinks,
   formatQuickEventSummary,
-  getRandomTeamColor,
   QuickEventResponse
 } from '@/lib/quick-event-helpers';
-import { FirebaseEvent, FirebaseTeam } from '@/lib/firebase-collections';
 
 export async function POST(request: NextRequest) {
   try {
@@ -44,83 +41,45 @@ export async function POST(request: NextRequest) {
     // Calculate event dates (starts today)
     const { startDate, endDate } = calculateQuickEventDates(numberOfDays);
 
-    // Generate tokens (plain + hashed)
-    const tokens = generateEventTokens();
-
-    // Create event in Firestore
-    const adminDb = await getAdminDb();
-    const eventsRef = adminDb.collection('events');
-    const eventRef = await eventsRef.add({
-      name: name.trim(),
+    const createdEvent = await createEventWithTokens({
+      name,
+      numberOfDays,
       scoringMode: numberOfDays === 1 ? 'continuous' : 'daily',
-      number_of_days: numberOfDays,
       eventMode: 'quick',
-      eventStatus: 'active',
-      status: 'active',
       requiresAuthentication: false,
-      start_at: startDate,
-      end_at: endDate,
-      created_at: new Date().toISOString(),
-      
-      // Token system
-      admin_token_hash: tokens.hashed.admin_token_hash,
-      scorer_token_hash: tokens.hashed.scorer_token_hash,
-      public_token_hash: tokens.hashed.public_token_hash,
-      
-      // Quick event features
-      is_finalized: false,
-      finalized_at: null,
-      archived_at: null,
-      lockedDays: [],
-      
-      // Auto-cleanup (24 hours after end)
-      autoCleanupDate: new Date(
-        new Date(endDate).getTime() + 24 * 60 * 60 * 1000
-      ).toISOString()
+      startAt: new Date(startDate),
     });
 
-    const eventId = eventRef.id;
-
-    // Fetch the created event
-    const eventDoc = await eventRef.get();
-    const event = { id: eventId, ...eventDoc.data() } as FirebaseEvent;
+    const event = {
+      id: createdEvent.event.id,
+      name: createdEvent.event.name,
+      start_at: createdEvent.event.startAt.toISOString(),
+      end_at: createdEvent.event.endAt.toISOString(),
+    } as any;
 
     // Create teams if provided
-    const createdTeams: Array<{ id: string; name: string; color: string }> = [];
-    
-    if (teamNames.length > 0) {
-      const teamsRef = adminDb.collection('teams');
-      const batch = adminDb.batch();
-
-      for (const teamName of teamNames) {
-        const teamRef = teamsRef.doc();
-        const teamData: Omit<FirebaseTeam, 'id'> = {
-          event_id: eventId,
-          name: teamName.trim(),
-          color: getRandomTeamColor(),
-          created_at: new Date().toISOString()
-        };
-
-        batch.set(teamRef, teamData);
-        createdTeams.push({
-          id: teamRef.id,
-          name: teamData.name,
-          color: teamData.color
-        });
-      }
-
-      await batch.commit();
-    }
+    const createdTeams = teamNames.length > 0
+      ? await createTeamsForEvent(
+          createdEvent.event.id,
+          teamNames.map((teamName) => ({ name: teamName.trim() }))
+        )
+      : [];
 
     // Generate shareable links
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 
-                    `${request.nextUrl.protocol}//${request.nextUrl.host}`;
-    
-    const links = generateShareableLinks(eventId, {
-      admin_token: tokens.plain.admin_token,
-      scorer_token: tokens.plain.scorer_token,
-      viewer_token: tokens.plain.public_token
-    }, baseUrl);
+    const baseUrl =
+      process.env.NEXT_PUBLIC_BASE_URL ||
+      process.env.NEXT_PUBLIC_APP_URL ||
+      process.env.APP_URL ||
+      `${request.nextUrl.protocol}//${request.nextUrl.host}` ||
+      'https://game-count-system.vercel.app';
+
+    const routeLinks = buildEventShareLinks(createdEvent.event.id, createdEvent.tokens, baseUrl);
+    const links = {
+      admin: routeLinks.admin,
+      scorer: routeLinks.scorer,
+      viewer: routeLinks.viewer,
+      scoreboard: routeLinks.viewer,
+    };
 
     // Generate summary
     const summary = formatQuickEventSummary(event, createdTeams.length);
@@ -130,11 +89,15 @@ export async function POST(request: NextRequest) {
       success: true,
       event,
       tokens: {
-        admin_token: tokens.plain.admin_token,
-        scorer_token: tokens.plain.scorer_token,
-        viewer_token: tokens.plain.public_token
+        admin_token: createdEvent.tokens.admin_token,
+        scorer_token: createdEvent.tokens.scorer_token,
+        viewer_token: createdEvent.tokens.public_token
       },
-      teams: createdTeams,
+      teams: createdTeams.map((team) => ({
+        id: team.id,
+        name: team.name,
+        color: team.color,
+      })),
       links,
       summary
     };

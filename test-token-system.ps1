@@ -16,7 +16,7 @@ $eventData = @{
 } | ConvertTo-Json
 
 try {
-    $response = Invoke-RestMethod -Uri 'http://localhost:3000/api/events/create' `
+    $response = Invoke-RestMethod -Uri 'http://localhost:3002/api/events/create' `
         -Method POST `
         -Body $eventData `
         -ContentType 'application/json'
@@ -65,7 +65,7 @@ if ($global:eventId) {
     } | ConvertTo-Json
     
     try {
-        $validation = Invoke-RestMethod -Uri "http://localhost:3000/api/events/$($global:eventId)/validate-token" `
+        $validation = Invoke-RestMethod -Uri "http://localhost:3002/api/events/$($global:eventId)/validate-token" `
             -Method POST `
             -Body $validateData `
             -ContentType 'application/json'
@@ -96,7 +96,7 @@ if ($global:eventId) {
     } | ConvertTo-Json
     
     try {
-        $validation = Invoke-RestMethod -Uri "http://localhost:3000/api/events/$($global:eventId)/validate-token" `
+        $validation = Invoke-RestMethod -Uri "http://localhost:3002/api/events/$($global:eventId)/validate-token" `
             -Method POST `
             -Body $validateData `
             -ContentType 'application/json'
@@ -123,7 +123,7 @@ if ($global:eventId) {
     } | ConvertTo-Json
     
     try {
-        $validation = Invoke-RestMethod -Uri "http://localhost:3000/api/events/$($global:eventId)/validate-token" `
+        $validation = Invoke-RestMethod -Uri "http://localhost:3002/api/events/$($global:eventId)/validate-token" `
             -Method POST `
             -Body $validateData `
             -ContentType 'application/json' `
@@ -141,5 +141,5 @@ Write-Host "============================================================" -Foreg
 Write-Host "Testing Complete!" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "Check Firebase Console to see hashed tokens:" -ForegroundColor White
-Write-Host "https://console.firebase.google.com/project/combinedactivities-7da43/firestore" -ForegroundColor Cyan
+Write-Host "Check the local app and Prisma-backed API responses instead of the old Firestore console." -ForegroundColor Cyan
 Write-Host ""

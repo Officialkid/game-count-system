@@ -1,325 +1,159 @@
 'use client';
 
-import React, { useEffect, useMemo, useState, useRef } from 'react';
-import { Badge, LoadingSkeleton } from '@/components/ui';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { Activity, CalendarDays, Crown, RefreshCw, Timer } from 'lucide-react';
 import { ExpiredEvent, EventNotFoundError } from '@/components/ExpiredEvent';
-import { safeName, safeNumber, safeColor, safeInitial } from '@/lib/safe-ui-helpers';
+import { LoadingSkeleton } from '@/components/ui';
+import { safeInitial } from '@/lib/safe-ui-helpers';
 
-interface Team {
-  id: number;
+type EventMeta = {
+  id: string;
+  event_name: string;
+  mode: string;
+  status: string;
+  start_date: string;
+  end_date: string;
+};
+
+type Team = {
+  id: string;
   team_name: string;
+  color: string;
   avatar_url: string | null;
   total_points: number;
-  previousRank?: number;
-}
+};
 
-interface DayScore {
+type DayScore = {
   day_number: number;
-  day_label: string | null;
-  team_name: string;
+  day_label: string;
+  scores: Array<{
+    id: string;
+    team_id: string;
+    team_name: string;
+    points: number;
+    penalty: number | null;
+    bonus: number | null;
+    created_at: string;
+  }>;
+};
+
+type HistoryItem = {
+  id: string;
   team_id: string;
-  points: number;
-}
-
-interface HistoryItem {
-  id: number;
-  game_number: number;
-  game_name: string | null;
-  points: number;
   team_name: string;
+  points: number;
+  penalty: number | null;
+  bonus: number | null;
+  notes: string | null;
+  day_number: number | null;
   created_at: string;
-}
-
-interface EventMeta {
-  id: number;
-  event_name: string;
-  mode?: string;
-  theme_color: string;
-  logo_url: string | null;
-  created_at: string;
-}
-
-interface RankChange {
-  teamId: number;
-  oldRank: number;
-  newRank: number;
-}
+};
 
 export default function PublicScoreboardPage({ params }: { params: { token: string } }) {
   const token = params.token;
-  if (!token || token === 'undefined') {
-    return (
-      <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-purple-50 to-blue-50">
-        <div className="max-w-md w-full bg-white rounded-xl shadow-lg p-8 text-center">
-          <div className="text-6xl mb-4">⚠️</div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Missing or Invalid Token</h1>
-          <p className="text-gray-600 mb-6">
-            No event token was provided in the URL. Please check your link or contact the event organizer for a valid scoreboard link.
-          </p>
-        </div>
-      </div>
-    );
-  }
-  // Wrap entire component in error boundary
-  return (
-    <ErrorBoundary
-      fallback={
-        <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-purple-50 to-blue-50">
-          <div className="max-w-md w-full bg-white rounded-xl shadow-lg p-8 text-center">
-            <div className="text-6xl mb-4">⚠️</div>
-            <h1 className="text-2xl font-bold text-gray-900 mb-2">Scoreboard Error</h1>
-            <p className="text-gray-600 mb-6">
-              Unable to load the scoreboard. Please refresh the page or try again later.
-            </p>
-            <button
-              onClick={() => window.location.reload()}
-              className="px-6 py-3 bg-purple-600 text-white rounded-lg font-semibold hover:bg-purple-700 transition-colors"
-            >
-              Refresh Page
-            </button>
-          </div>
-        </div>
-      }
-    >
-      <ScoreboardContent token={token} />
-    </ErrorBoundary>
-  );
-}
-
-function ScoreboardContent({ token }: { token: string }) {
   const [event, setEvent] = useState<EventMeta | null>(null);
   const [teams, setTeams] = useState<Team[]>([]);
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [scoresByDay, setScoresByDay] = useState<DayScore[]>([]);
   const [selectedDay, setSelectedDay] = useState<number | 'cumulative'>('cumulative');
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string>('');
-  const [isFullscreen, setIsFullscreen] = useState(false);
-  const [invalid, setInvalid] = useState<string | null>(null);
-  const [rankChanges, setRankChanges] = useState<RankChange[]>([]);
-  const prevTeamsRef = useRef<Map<number, number>>(new Map());
-  const [lastUpdate, setLastUpdate] = useState<number>(Date.now());
-  const [reloadCounter, setReloadCounter] = useState(0);
-  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [error, setError] = useState('');
+  const [invalid, setInvalid] = useState<'expired' | 'not-found' | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<number>(Date.now());
 
-  // Data loading function
-  const loadData = async (isManual = false) => {
-    if (isManual) setIsRefreshing(true);
-    try {
-      setError('');
-      // Quick token verify
-      const v = await fetch(`/api/public/verify/${token}`);
-      
-      // Handle 404 - event not found
-      if (v.status === 404) {
-        setInvalid('not-found');
-        setLoading(false);
-        return;
-      }
-      
-      // Handle 410 - event expired
-      if (v.status === 410) {
-        setInvalid('expired');
-        setLoading(false);
-        return;
-      }
-      
-      if (!v.ok && v.status >= 500) {
-        setError('Server error. Please try again later.');
-        setLoading(false);
-        return;
-      }
-        // Fetch unified public data
-        const res = await fetch(`/api/public/${token}`);
-        if (!res.ok) {
-          if (res.status >= 500) {
-            throw new Error('Server error');
-          }
-          throw new Error('Failed to load');
-        }
-      const payload = await res.json();
-      const data = payload?.data ?? payload;
-      
-      setEvent(data.event || null);
-        const newTeams = data.teams || [];
-        const scoresByDayData = data.scores_by_day || [];
-        setScoresByDay(scoresByDayData);
-        
-        // Track rank changes for animation
-        const changes: RankChange[] = [];
-        newTeams.forEach((team: Team, newRank: number) => {
-          const oldRank = prevTeamsRef.current.get(team.id);
-          if (oldRank !== undefined && oldRank !== newRank) {
-            changes.push({ teamId: team.id, oldRank, newRank });
-          }
-        });
-        
-        // Update prev ranks
-        const newMap = new Map<number, number>();
-        newTeams.forEach((team: Team, idx: number) => {
-          newMap.set(team.id, idx);
-        });
-        prevTeamsRef.current = newMap;
-        
-        if (changes.length > 0) {
-          setRankChanges(changes);
-          setTimeout(() => setRankChanges([]), 1000);
-        }
-        
-        // Normalize team fields to expected UI shape (`team_name` used in UI)
-        const normalizedTeams: Team[] = newTeams.map((t: any, idx: number) => ({
-          id: t.id,
-          team_name: t.team_name || t.name || `Team ${idx + 1}`,
-          avatar_url: t.avatar_url || null,
-          total_points: Number(t.total_points || 0),
-          previousRank: t.previousRank,
-          // include color if available for UI
-          ...(t.color ? { color: t.color } : {}),
-        }));
-
-        setTeams(normalizedTeams);
-        const scores = data.scores || data.history || [];
-      setHistory(scores);
-      setInvalid(null);
-      setLastUpdate(Date.now());
-    } catch (e: any) {
-      console.error(e);
-      const msg = e?.message === 'Server error' ? 'Server error. Please try again later.' : 'Network error. Please check your connection and retry.';
-      setError(msg);
-    } finally {
-      setLoading(false);
-      if (isManual) setIsRefreshing(false);
-    }
-  };
-
-  // Manual refresh handler
-  const handleManualRefresh = () => {
-    loadData(true);
-  };
-
-  // Auto-refresh every 5 minutes
   useEffect(() => {
+    let isMounted = true;
+
+    async function loadData() {
+      try {
+        setError('');
+        const response = await fetch(`/api/public/${token}`, { cache: 'no-store' });
+
+        if (response.status === 404) {
+          if (isMounted) {
+            setInvalid('not-found');
+            setLoading(false);
+          }
+          return;
+        }
+
+        if (response.status === 410) {
+          if (isMounted) {
+            setInvalid('expired');
+            setLoading(false);
+          }
+          return;
+        }
+
+        if (!response.ok) throw new Error('Unable to load scoreboard');
+
+        const payload = await response.json();
+        const data = payload?.data;
+        if (!data) throw new Error('Missing scoreboard payload');
+        if (!isMounted) return;
+
+        setEvent({
+          id: data.event.id,
+          event_name: data.event.name,
+          mode: data.event.mode,
+          status: data.event.status,
+          start_date: data.event.startDate,
+          end_date: data.event.endDate,
+        });
+        setTeams(
+          (data.teams ?? []).map((team: any) => ({
+            id: String(team.id),
+            team_name: team.name,
+            color: team.color || '#0f766e',
+            avatar_url: team.avatar_url || null,
+            total_points: Number(team.total_points || 0),
+          }))
+        );
+        setScoresByDay(data.scores_by_day ?? []);
+        setHistory(data.scores ?? []);
+        setInvalid(null);
+        setLastUpdated(Date.now());
+      } catch (loadError) {
+        console.error(loadError);
+        if (isMounted) setError(loadError instanceof Error ? loadError.message : 'Unable to load scoreboard');
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    }
+
     loadData();
-    const id = setInterval(() => loadData(), 300000); // 5 minute refresh (300000ms)
-    return () => { clearInterval(id); };
-  }, [token, reloadCounter]);
+    const intervalId = window.setInterval(loadData, 300000);
+    return () => {
+      isMounted = false;
+      window.clearInterval(intervalId);
+    };
+  }, [token]);
 
-  // Format relative time for last update
-  const getRelativeTime = (timestamp: number): string => {
-    const seconds = Math.floor((Date.now() - timestamp) / 1000);
-    if (seconds < 60) return 'just now';
-    const minutes = Math.floor(seconds / 60);
-    if (minutes < 60) return `${minutes}m ago`;
-    const hours = Math.floor(minutes / 60);
-    if (hours < 24) return `${hours}h ago`;
-    return 'a while ago';
-  };
+  const dayOptions = useMemo(() => scoresByDay.map((day) => day.day_number), [scoresByDay]);
 
-  const [relativeTime, setRelativeTime] = useState(getRelativeTime(lastUpdate));
-
-  // Update relative time every 10 seconds
-  useEffect(() => {
-    const id = setInterval(() => {
-      setRelativeTime(getRelativeTime(lastUpdate));
-    }, 10000);
-    return () => clearInterval(id);
-  }, [lastUpdate]);
-
-  // Simple polling-based updates (no SSE needed)
-  const statusBadge = useMemo(() => {
-    if (loading) return { label: 'Loading', variant: 'info' as const, dot: 'bg-blue-600' };
-    if (error) return { label: 'Error', variant: 'warning' as const, dot: 'bg-yellow-500' };
-    return { label: 'Live', variant: 'success' as const, dot: 'bg-green-600' };
-  }, [loading, error]);
-
-  const toggleFullscreen = () => {
-    if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen?.();
-      setIsFullscreen(true);
-    } else {
-      document.exitFullscreen?.();
-      setIsFullscreen(false);
+  const visibleTeams = useMemo(() => {
+    if (selectedDay === 'cumulative') {
+      return [...teams].sort((a, b) => b.total_points - a.total_points || a.team_name.localeCompare(b.team_name));
     }
-  };
 
-  const sortedTeams = useMemo(() => {
-    return [...teams].sort((a, b) => {
-      if (b.total_points !== a.total_points) return b.total_points - a.total_points;
-      return a.team_name.localeCompare(b.team_name);
+    const pointsByTeam = new Map<string, number>();
+    const selected = scoresByDay.find((day) => day.day_number === selectedDay);
+
+    selected?.scores.forEach((score) => {
+      const total = pointsByTeam.get(score.team_id) ?? 0;
+      pointsByTeam.set(score.team_id, total + score.points + (score.bonus ?? 0) - (score.penalty ?? 0));
     });
-  }, [teams]);
 
-  // Get unique days from scores
-  const availableDays = useMemo(() => {
-    const days = new Set<number>();
-    scoresByDay.forEach(score => days.add(score.day_number));
-    return Array.from(days).sort((a, b) => a - b);
-  }, [scoresByDay]);
-
-  // Compute per-day rankings
-  const dayRankings = useMemo(() => {
-    if (selectedDay === 'cumulative') return sortedTeams;
-    
-    // Group scores by team for selected day
-    const teamScores = new Map<string, number>();
-    scoresByDay
-      .filter(score => score.day_number === selectedDay)
-      .forEach(score => {
-        const current = teamScores.get(score.team_name) || 0;
-        teamScores.set(score.team_name, current + score.points);
-      });
-    
-    // Create ranking from day scores
-    const rankings = Array.from(teamScores.entries())
-      .map(([team_name, points]) => {
-        const team = teams.find(t => t.team_name === team_name);
-        return {
-          id: team?.id || 0,
-          team_name,
-          avatar_url: team?.avatar_url || null,
-          total_points: points,
-        };
-      })
-      .sort((a, b) => {
-        if (b.total_points !== a.total_points) return b.total_points - a.total_points;
-        return a.team_name.localeCompare(b.team_name);
-      });
-    
-    return rankings;
-  }, [selectedDay, scoresByDay, teams, sortedTeams]);
-
-  const rankEmoji = (rank: number) => (rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `#${rank}`);
-  
-  const getRankChangeIndicator = (teamId: number) => {
-    const change = rankChanges.find(c => c.teamId === teamId);
-    if (!change) return null;
-    if (change.newRank < change.oldRank) {
-      return <span className="text-green-500 text-sm font-bold ml-2">↑</span>;
-    } else if (change.newRank > change.oldRank) {
-      return <span className="text-red-500 text-sm font-bold ml-2">↓</span>;
-    }
-    return null;
-  };
-
-  const formatTimeAgo = (timestamp: string) => {
-    const date = new Date(timestamp);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffSecs = Math.floor(diffMs / 1000);
-    
-    if (diffSecs < 60) return `${diffSecs}s ago`;
-    const diffMins = Math.floor(diffSecs / 60);
-    if (diffMins < 60) return `${diffMins}m ago`;
-    const diffHours = Math.floor(diffMins / 60);
-    if (diffHours < 24) return `${diffHours}h ago`;
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-  };
+    return teams
+      .map((team) => ({ ...team, total_points: pointsByTeam.get(team.id) ?? 0 }))
+      .filter((team) => team.total_points !== 0)
+      .sort((a, b) => b.total_points - a.total_points || a.team_name.localeCompare(b.team_name));
+  }, [scoresByDay, selectedDay, teams]);
 
   if (loading) {
     return (
-      <div className="max-w-6xl mx-auto px-4 py-16">
+      <div className="mx-auto max-w-6xl px-4 py-16">
         <LoadingSkeleton variant="card" />
       </div>
     );
@@ -327,12 +161,9 @@ function ScoreboardContent({ token }: { token: string }) {
 
   if (error) {
     return (
-      <div className="max-w-6xl mx-auto px-4 py-16 text-center">
-        <p className="text-gray-700 font-semibold mb-3">{error}</p>
-        <button
-          onClick={() => setReloadCounter((c) => c + 1)}
-          className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
-        >
+      <div className="mx-auto max-w-3xl px-4 py-16 text-center">
+        <p className="mb-4 text-lg font-semibold text-slate-800">{error}</p>
+        <button onClick={() => window.location.reload()} className="btn-primary">
           Retry
         </button>
       </div>
@@ -341,7 +172,7 @@ function ScoreboardContent({ token }: { token: string }) {
 
   if (invalid === 'expired') {
     return (
-      <div className="max-w-6xl mx-auto px-4 py-16">
+      <div className="mx-auto max-w-6xl px-4 py-16">
         <ExpiredEvent showWaitlist={true} />
       </div>
     );
@@ -349,7 +180,7 @@ function ScoreboardContent({ token }: { token: string }) {
 
   if (invalid === 'not-found') {
     return (
-      <div className="max-w-6xl mx-auto px-4 py-16">
+      <div className="mx-auto max-w-6xl px-4 py-16">
         <EventNotFoundError />
       </div>
     );
@@ -357,142 +188,73 @@ function ScoreboardContent({ token }: { token: string }) {
 
   if (!event) {
     return (
-      <div className="max-w-6xl mx-auto px-4 py-16 text-center">
-        <p className="text-gray-500">Scoreboard not available.</p>
-        <Link href="/public" className="text-purple-600 hover:underline">Browse public events</Link>
+      <div className="mx-auto max-w-3xl px-4 py-16 text-center">
+        <p className="text-slate-500">Scoreboard not available.</p>
+        <Link href="/" className="mt-4 inline-flex text-sm font-semibold text-teal-700 hover:underline">
+          Back to home
+        </Link>
       </div>
     );
   }
 
+  const updatedAt = new Date(lastUpdated).toLocaleTimeString();
+
   return (
-    <div className="min-h-screen" style={{ background: '#f7f7fb' }}>
-      <style>{`
-        @keyframes slideDown {
-          from { transform: translateY(-10px); opacity: 0; }
-          to { transform: translateY(0); opacity: 1; }
-        }
-        @keyframes pulse-scale {
-          0% { transform: scale(1); }
-          50% { transform: scale(1.05); }
-          100% { transform: scale(1); }
-        }
-        @keyframes rank-up {
-          0% { color: #10b981; transform: translateY(0); }
-          100% { color: #10b981; transform: translateY(-20px); opacity: 0; }
-        }
-        @keyframes rank-down {
-          0% { color: #ef4444; transform: translateY(0); }
-          100% { color: #ef4444; transform: translateY(20px); opacity: 0; }
-        }
-        .team-card {
-          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-        .team-card-hover:hover {
-          transform: translateY(-4px);
-        }
-        .history-item {
-          animation: slideDown 0.3s ease-out;
-        }
-        .rank-change-up {
-          animation: rank-up 0.6s ease-out forwards;
-        }
-        .rank-change-down {
-          animation: rank-down 0.6s ease-out forwards;
-        }
-        .score-update {
-          animation: pulse-scale 0.6s ease-out;
-        }
-      `}</style>
-      
-      {/* Header with Logo & Theme */}
-      <div className="bg-white border-b shadow-sm sticky top-0 z-10">
-        <div className="max-w-6xl mx-auto px-4 py-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              {event?.logo_url && (
-                <img 
-                  src={event.logo_url} 
-                  alt={event?.event_name} 
-                  className="w-14 h-14 rounded-lg object-cover shadow-sm border border-gray-200" 
-                />
-              )}
-              <div className="flex-1">
-                <h1 className="text-4xl font-bold text-gray-900">{event?.event_name}</h1>
-                <div className="flex items-center gap-3 mt-2">
-                  <Badge variant="primary" className="gap-1">
-                    <span className="text-xs">🌐</span> Public Scoreboard
-                  </Badge>
-                  <Badge variant={statusBadge.variant} className="gap-2">
-                    <span
-                      className={`inline-block w-2.5 h-2.5 rounded-full ${statusBadge.dot} ${
-                        !loading && !error ? 'animate-pulse' : ''
-                      }`}
-                    ></span>
-                    {statusBadge.label}
-                  </Badge>
-                  <span className="text-sm text-gray-600 flex items-center gap-1.5">
-                    ⏱️ Auto-refresh: 5m
-                  </span>
-                  <span className="text-xs text-gray-500 flex items-center gap-1">
-                    Updated {relativeTime}
-                  </span>
-                </div>
+    <div className="site-shell">
+      <div className="scoreboard-header">
+        <div className="container-safe py-5">
+          <div className="mx-auto flex max-w-7xl flex-col gap-5 rounded-[30px] border border-white/50 bg-[rgba(255,250,241,0.82)] p-5 shadow-[0_20px_60px_rgba(20,33,61,0.1)] backdrop-blur-xl lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <div className="section-label">Public scoreboard</div>
+              <h1 className="mt-4 text-3xl font-black text-slate-950 md:text-5xl">{event.event_name}</h1>
+              <div className="mt-3 flex flex-wrap gap-2 text-sm text-slate-600">
+                <span className="badge badge-primary">{event.mode}</span>
+                <span className="badge badge-warning">{event.status}</span>
               </div>
             </div>
-            
-            <div className="flex items-center gap-3">
-              <button 
-                onClick={handleManualRefresh}
-                disabled={isRefreshing}
-                className="px-4 py-2 rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-              >
-                <span className={isRefreshing ? 'animate-spin' : ''}>🔄</span>
-                {isRefreshing ? 'Refreshing...' : 'Refresh'}
-              </button>
-              <button 
-                onClick={toggleFullscreen} 
-                className="px-4 py-2 rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors text-sm font-medium"
-              >
-                {isFullscreen ? '✕ Exit' : '⛶ Fullscreen'}
-              </button>
-              <div 
-                className="w-12 h-12 rounded-lg shadow-sm border-2 border-gray-200 cursor-pointer hover:shadow-md transition-shadow" 
-                style={{ backgroundColor: event?.theme_color || '#6b46c1' }} 
-                title={`Theme: ${event?.theme_color}`}
-              />
+
+            <div className="dashboard-grid w-full max-w-3xl">
+              <div className="metric-card">
+                <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">
+                  <UsersIcon />
+                  Teams
+                </div>
+                <div className="mt-3 text-3xl font-black text-slate-950">{teams.length}</div>
+              </div>
+              <div className="metric-card">
+                <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">
+                  <Activity className="h-4 w-4" />
+                  Updates
+                </div>
+                <div className="mt-3 text-3xl font-black text-slate-950">{history.length}</div>
+              </div>
+              <div className="metric-card">
+                <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">
+                  <RefreshCw className="h-4 w-4" />
+                  Last sync
+                </div>
+                <div className="mt-3 text-xl font-bold text-slate-950">{updatedAt}</div>
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="max-w-6xl mx-auto px-4 py-8">
-        {/* Camp Day Tabs (only for camp mode) */}
-        {event?.mode === 'camp' && availableDays.length > 0 && (
-          <div className="mb-6 bg-white rounded-xl shadow-lg p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <span className="text-sm font-semibold text-gray-700">📅 View Scores:</span>
-            </div>
+      <div className="container-safe py-8">
+        {event.mode === 'camp' && dayOptions.length > 0 && (
+          <div className="surface-panel mb-8 rounded-[30px] p-4">
             <div className="flex flex-wrap gap-2">
               <button
                 onClick={() => setSelectedDay('cumulative')}
-                className={`px-4 py-2 rounded-lg font-medium transition-all ${
-                  selectedDay === 'cumulative'
-                    ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-md scale-105'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
+                className={`pill-tab ${selectedDay === 'cumulative' ? 'pill-tab-active' : 'pill-tab-idle'}`}
               >
-                🏆 Cumulative Total
+                Overall
               </button>
-              {availableDays.map((day) => (
+              {dayOptions.map((day) => (
                 <button
                   key={day}
                   onClick={() => setSelectedDay(day)}
-                  className={`px-4 py-2 rounded-lg font-medium transition-all ${
-                    selectedDay === day
-                      ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-md scale-105'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
+                  className={`pill-tab ${selectedDay === day ? 'pill-tab-active' : 'pill-tab-idle'}`}
                 >
                   Day {day}
                 </button>
@@ -501,223 +263,144 @@ function ScoreboardContent({ token }: { token: string }) {
           </div>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Leaderboard - Main Section */}
-          <div className="lg:col-span-2 space-y-6">
-            <div className="bg-white rounded-xl shadow-lg overflow-hidden">
-              <div className="bg-gradient-to-r p-6 text-white" style={{ 
-                background: `linear-gradient(135deg, ${event?.theme_color || '#6b46c1'}dd 0%, ${event?.theme_color || '#6b46c1'} 100%)`
-              }}>
-                <h2 className="text-2xl font-bold flex items-center gap-2">
-                  🏆 Team Leaderboard
-                  {selectedDay !== 'cumulative' && (
-                    <span className="text-sm font-normal opacity-90">• Day {selectedDay}</span>
-                  )}
+        <div className="grid gap-8 xl:grid-cols-[1.65fr_0.95fr]">
+          <section className="surface-dark rounded-[34px] p-6 md:p-8">
+            <div className="flex flex-col gap-3 border-b border-white/10 pb-6 md:flex-row md:items-end md:justify-between">
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-[0.24em] text-white/55">Standings</div>
+                <h2 className="mt-2 text-3xl font-black text-white">
+                  {selectedDay === 'cumulative' ? 'Overall leaderboard' : `Day ${selectedDay} leaderboard`}
                 </h2>
-                <p className="text-sm opacity-90 mt-1">
-                  {selectedDay === 'cumulative' 
-                    ? 'Ranked by total points • Updated live'
-                    : `Day ${selectedDay} rankings only`
-                  }
+              </div>
+              <div className="text-sm text-white/55">Live ranking by net points</div>
+            </div>
+
+            <div className="mt-6 space-y-3">
+              {visibleTeams.length === 0 ? (
+                <p className="rounded-[28px] border border-white/10 bg-white/5 py-12 text-center text-white/65">
+                  No scores yet for this view.
                 </p>
-              </div>
-              
-              <div className="p-6 space-y-3">
-                {dayRankings.length === 0 ? (
-                  <div className="text-center py-12">
-                    <p className="text-gray-500 text-lg">
-                      {selectedDay === 'cumulative' 
-                        ? 'Waiting for teams to join...'
-                        : `No scores yet for Day ${selectedDay}`
-                      }
-                    </p>
-                  </div>
-                ) : (
-                  dayRankings.map((team, idx) => {
-                    const isTopThree = idx < 3;
-                    const isAnimating = rankChanges.some(c => c.teamId === team.id);
-                    
-                    return (
-                      <div
-                        key={team.id}
-                        className={`team-card team-card-hover p-6 rounded-2xl border-2 transition-all duration-300 hover:shadow-xl hover:scale-102 overflow-hidden relative ${
-                          isAnimating ? 'scale-105' : ''
-                        }`}
-                        style={{
-                          borderColor: isTopThree ? event?.theme_color + '60' : '#e5e7eb',
-                          borderLeft: `6px solid ${event?.theme_color}`,
-                          background: isTopThree
-                            ? idx === 0
-                              ? 'linear-gradient(135deg, rgba(251,191,36,0.12) 0%, transparent 100%)'
-                              : idx === 1
-                              ? 'linear-gradient(135deg, rgba(156,163,175,0.12) 0%, transparent 100%)'
-                              : 'linear-gradient(135deg, rgba(244,114,182,0.12) 0%, transparent 100%)'
-                            : '#fafafa',
-                          boxShadow: isTopThree ? `0 0 20px ${event?.theme_color}20` : undefined,
-                        }}
-                      >
-                        {/* Animated glow for rank changes */}
-                        {isAnimating && (
-                          <div className="absolute inset-0 bg-yellow-200 opacity-10 animate-pulse"></div>
-                        )}
-                        
-                        <div className="flex items-center justify-between gap-6 relative z-10">
-                          {/* Left: Rank Badge & Info */}
-                          <div className="flex items-center gap-5 flex-1 min-w-0">
-                            {/* Rank Medal */}
-                            <div className="flex flex-col items-center justify-center w-16 h-16 rounded-full font-black text-3xl flex-shrink-0" 
-                              style={{ 
-                                background: isTopThree 
-                                  ? idx === 0 
-                                    ? 'rgba(251,191,36,0.2)' 
-                                    : idx === 1 
-                                    ? 'rgba(156,163,175,0.2)' 
-                                    : 'rgba(244,114,182,0.2)'
-                                  : 'rgba(229,231,235,0.6)',
-                                border: `3px solid ${event?.theme_color}40`,
-                              }}
-                            >
-                              {rankEmoji(idx + 1)}
-                            </div>
-                            
-                            {/* Avatar & Team Info */}
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-3 mb-2">
-                                {team.avatar_url ? (
-                                  <img 
-                                    src={team.avatar_url} 
-                                    alt={team.team_name} 
-                                    className="w-12 h-12 rounded-full object-cover border-3 shadow-md"
-                                    style={{ borderColor: `${event?.theme_color}50` }}
-                                  />
-                                ) : (
-                                  <div 
-                                    className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-base shadow-md"
-                                    style={{ backgroundColor: (team as any).color || event?.theme_color || '#6b46c1' }}
-                                  >
-                                    {safeInitial(team.team_name)}
-                                  </div>
-                                )}
-                                <div className="truncate">
-                                  <div className="text-base font-black text-gray-900 truncate">
-                                    {team.team_name}
-                                    {getRankChangeIndicator(team.id)}
-                                  </div>
-                                  <div className="text-xs text-gray-500 font-semibold">
-                                    #{idx + 1}
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                          
-                          {/* Right: Score Display */}
-                          <div className="text-right flex-shrink-0">
-                            <div className="text-5xl font-black score-update transition-all" style={{ color: event?.theme_color }}>
-                              {team.total_points}
-                            </div>
-                            <div className="text-xs font-bold text-gray-500 mt-1 tracking-wide">PTS</div>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Stats Sidebar */}
-          <div className="space-y-4">
-            <div className="bg-white rounded-lg shadow-md p-5 border-l-4" style={{ borderLeftColor: event?.theme_color }}>
-              <h3 className="text-sm font-bold text-gray-600 uppercase tracking-wide">Teams</h3>
-              <div className="text-3xl font-bold text-gray-900 mt-2">{teams.length}</div>
-            </div>
-            
-            <div className="bg-white rounded-lg shadow-md p-5 border-l-4" style={{ borderLeftColor: event?.theme_color }}>
-              <h3 className="text-sm font-bold text-gray-600 uppercase tracking-wide">Total Points</h3>
-              <div className="text-3xl font-bold text-gray-900 mt-2">
-                {teams.reduce((sum, t) => sum + t.total_points, 0)}
-              </div>
-            </div>
-            
-            <div className="bg-white rounded-lg shadow-md p-5 border-l-4" style={{ borderLeftColor: event?.theme_color }}>
-              <h3 className="text-sm font-bold text-gray-600 uppercase tracking-wide">Game Entries</h3>
-              <div className="text-3xl font-bold text-gray-900 mt-2">{history.length}</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Game History - Full Width */}
-      <div className="bg-gray-50 border-t">
-        <div className="max-w-6xl mx-auto px-4 py-8">
-          <div className="bg-white rounded-xl shadow-lg overflow-hidden">
-            <div className="bg-gradient-to-r p-6 text-white" style={{ 
-              background: `linear-gradient(135deg, ${event?.theme_color || '#6b46c1'}dd 0%, ${event?.theme_color || '#6b46c1'} 100%)`
-            }}>
-              <h2 className="text-2xl font-bold flex items-center gap-2">
-                📜 Full Game History
-              </h2>
-              <p className="text-sm opacity-90 mt-1">
-                {event?.mode === 'quick' ? `${history.length} updates • Most recent first` : `${history.length} entries • Most recent first`}
-              </p>
-            </div>
-            
-            <div className="p-6">
-              {history.length === 0 ? (
-                <div className="text-center py-12">
-                  <p className="text-gray-500 text-lg">No game entries yet.</p>
-                </div>
               ) : (
-                <div className="space-y-2 max-h-96 overflow-y-auto">
-                  {history.map((h, idx) => (
-                    <div 
-                      key={h.id} 
-                      className="history-item flex items-center justify-between p-4 rounded-lg border border-gray-200 hover:bg-blue-50 hover:border-blue-300 transition-all"
-                    >
-                      <div className="flex items-center gap-3 flex-1 min-w-0">
-                        <div 
-                          className="inline-flex items-center px-2.5 py-0.5 text-sm font-medium rounded-full whitespace-nowrap"
-                          style={{ backgroundColor: event?.theme_color + '15', color: event?.theme_color || '#6b46c1' }}
-                        >
-                          Game {h.game_number}
+                visibleTeams.map((team, index) => (
+                  <div
+                    key={team.id}
+                    className={`rounded-[28px] border px-5 py-5 transition-all ${
+                      index === 0
+                        ? 'border-amber-300/30 bg-[linear-gradient(135deg,rgba(244,182,61,0.18),rgba(255,255,255,0.04))]'
+                        : 'border-white/10 bg-white/6'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-4">
+                      <div className="flex items-center gap-4">
+                        <div className={`${index === 0 ? 'bg-amber-300 text-slate-950' : 'score-rank'} h-11 w-11`}>
+                          {index === 0 ? <Crown className="h-5 w-5" /> : index + 1}
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="font-semibold text-gray-900 truncate">{h.team_name}</div>
-                          {h.game_name && (
-                            <div className="text-xs text-gray-500 truncate">{h.game_name}</div>
-                          )}
+                        {team.avatar_url ? (
+                          <img src={team.avatar_url} alt={team.team_name} className="h-14 w-14 rounded-2xl object-cover" />
+                        ) : (
+                          <div
+                            className="flex h-14 w-14 items-center justify-center rounded-2xl text-base font-black text-white shadow-lg"
+                            style={{ backgroundColor: team.color }}
+                          >
+                            {safeInitial(team.team_name)}
+                          </div>
+                        )}
+                        <div>
+                          <p className="text-xl font-bold text-white">{team.team_name}</p>
+                          <p className="text-sm text-white/55">
+                            {selectedDay === 'cumulative' ? 'Total campaign score' : `Day ${selectedDay} score`}
+                          </p>
                         </div>
                       </div>
-                      
-                      <div className="flex items-center gap-4 ml-4">
-                        <div className={`text-right flex-1 ${
-                          h.points > 0 ? 'text-green-600' : h.points < 0 ? 'text-red-600' : 'text-gray-500'
-                        }`}>
-                          <div className="text-lg font-bold">
-                            {h.points > 0 ? '+' : ''}{h.points}
-                          </div>
-                        </div>
-                        <div className="text-xs text-gray-500 text-right whitespace-nowrap">
-                          {formatTimeAgo(h.created_at)}
-                        </div>
+
+                      <div className="text-right">
+                        <p className="text-4xl font-black" style={{ color: index === 0 ? '#f4b63d' : '#ffffff' }}>
+                          {team.total_points}
+                        </p>
+                        <p className="text-xs uppercase tracking-[0.24em] text-white/45">points</p>
                       </div>
                     </div>
-                  ))}
-                </div>
+                  </div>
+                ))
               )}
             </div>
-          </div>
-        </div>
-      </div>
+          </section>
 
-      {/* Footer */}
-      <div className="bg-gray-50 border-t mt-8">
-        <div className="max-w-6xl mx-auto px-4 py-6 text-center text-sm text-gray-600">
-          <p>Last updated: {new Date(lastUpdate).toLocaleTimeString()} • Public access • Live updates via SSE</p>
+          <aside className="space-y-5">
+            <div className="surface-panel rounded-[30px] p-6">
+              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
+                <CalendarDays className="h-4 w-4" />
+                Event window
+              </div>
+              <div className="mt-4 text-2xl font-black text-slate-950">{new Date(event.start_date).toLocaleDateString()}</div>
+              <div className="mt-2 text-sm text-slate-600">to {new Date(event.end_date).toLocaleDateString()}</div>
+            </div>
+
+            <div className="surface-panel rounded-[30px] p-6">
+              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
+                <Timer className="h-4 w-4" />
+                Score pulse
+              </div>
+              <div className="mt-4 grid gap-3">
+                <div className="rounded-[22px] bg-white/70 px-4 py-4">
+                  <div className="text-xs uppercase tracking-[0.2em] text-slate-500">Day groups</div>
+                  <div className="mt-2 text-2xl font-black text-slate-950">{scoresByDay.length}</div>
+                </div>
+                <div className="rounded-[22px] bg-white/70 px-4 py-4">
+                  <div className="text-xs uppercase tracking-[0.2em] text-slate-500">Latest sync</div>
+                  <div className="mt-2 text-xl font-bold text-slate-950">{updatedAt}</div>
+                </div>
+              </div>
+            </div>
+          </aside>
         </div>
+
+        <section className="surface-panel mt-8 rounded-[34px] p-6 md:p-8">
+          <div className="flex flex-col gap-3 border-b border-slate-200 pb-6 md:flex-row md:items-end md:justify-between">
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Timeline</div>
+              <h2 className="mt-2 text-3xl font-black text-slate-950">Recent score history</h2>
+            </div>
+            <div className="text-sm text-slate-500">Latest submissions first</div>
+          </div>
+
+          <div className="mt-4 divide-y divide-slate-200/70">
+            {history.length === 0 ? (
+              <p className="py-12 text-center text-slate-500">No score entries yet.</p>
+            ) : (
+              history
+                .slice()
+                .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+                .map((item) => (
+                  <div key={item.id} className="flex flex-col gap-3 py-4 md:flex-row md:items-center md:justify-between">
+                    <div>
+                      <p className="text-lg font-bold text-slate-950">{item.team_name}</p>
+                      <p className="text-sm text-slate-500">
+                        {item.day_number ? `Day ${item.day_number} · ` : ''}
+                        {new Date(item.created_at).toLocaleString()}
+                      </p>
+                    </div>
+                    <div className="rounded-full bg-slate-900 px-4 py-2 text-center text-white">
+                      <p className="text-lg font-black">{item.points + (item.bonus ?? 0) - (item.penalty ?? 0)}</p>
+                      <p className="text-[10px] uppercase tracking-[0.22em] text-white/60">net points</p>
+                    </div>
+                  </div>
+                ))
+            )}
+          </div>
+        </section>
       </div>
     </div>
+  );
+}
+
+function UsersIcon() {
+  return (
+    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+    </svg>
   );
 }

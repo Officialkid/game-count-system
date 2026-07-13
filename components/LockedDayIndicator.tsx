@@ -1,10 +1,10 @@
 'use client';
 
-import { FirebaseEvent } from '@/lib/firebase-collections';
+import { EventRecord } from '@/lib/event-domain';
 import { isDayLocked, getLockedDays, formatLockedDays } from '@/lib/day-locking';
 
 interface LockedDayIndicatorProps {
-  event: FirebaseEvent;
+  event: EventRecord;
   dayNumber?: number;
   showAllLocked?: boolean;
   size?: 'small' | 'medium' | 'large';

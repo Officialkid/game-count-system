@@ -1,12 +1,6 @@
-/**
- * Teams API - Add Team to Event
- * Converted from PostgreSQL to Firestore
- * POST /api/teams/add
- */
-
 import { NextResponse } from 'next/server';
-import { adminCreateDocument, adminQueryCollection, adminGetDocument } from '@/lib/firestore-admin-helpers';
-import { COLLECTIONS } from '@/lib/firebase-collections';
+import prisma from '@/lib/server/prisma';
+import { createTeamsForEvent } from '@/lib/server/team-service';
 
 interface AddTeamRequest {
   event_id: string;
@@ -19,7 +13,6 @@ export async function POST(request: Request) {
     const body: AddTeamRequest = await request.json();
     const { event_id, name, color = '#3B82F6' } = body;
 
-    // Validation
     if (!event_id || !name || !name.trim()) {
       return NextResponse.json(
         { success: false, error: 'Event ID and team name are required' },
@@ -27,8 +20,10 @@ export async function POST(request: Request) {
       );
     }
 
-    // Verify event exists
-    const event = await adminGetDocument(COLLECTIONS.EVENTS, event_id);
+    const event = await prisma.event.findUnique({
+      where: { id: event_id },
+    });
+
     if (!event) {
       return NextResponse.json(
         { success: false, error: 'Event not found' },
@@ -36,35 +31,26 @@ export async function POST(request: Request) {
       );
     }
 
-    // Check for duplicate team name in this event
-    const existingTeams = await adminQueryCollection(COLLECTIONS.TEAMS, [
-      { field: 'event_id', operator: '==', value: event_id },
-      { field: 'name', operator: '==', value: name.trim() },
-    ]);
+    const existingTeam = await prisma.team.findFirst({
+      where: {
+        eventId: event_id,
+        name: name.trim(),
+      },
+    });
 
-    if (existingTeams.length > 0) {
+    if (existingTeam) {
       return NextResponse.json(
         { success: false, error: 'A team with this name already exists in this event' },
         { status: 409 }
       );
     }
 
-    // Create team
-    const teamData = {
-      event_id,
-      name: name.trim(),
-      color,
-    };
-
-    const teamId = await adminCreateDocument(COLLECTIONS.TEAMS, teamData);
+    const [team] = await createTeamsForEvent(event_id, [{ name: name.trim(), color }]);
 
     return NextResponse.json({
       success: true,
       data: {
-        team: {
-          id: teamId,
-          ...teamData,
-        },
+        team,
       },
     }, { status: 201 });
 

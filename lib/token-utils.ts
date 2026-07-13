@@ -96,7 +96,7 @@ export function generateEventTokens() {
       scorer_token: scorerToken,
       public_token: viewerToken,
     },
-    // Hashed tokens - store these in Firestore
+    // Hashed tokens - store these in the database, never the plain tokens
     hashed: {
       admin_token_hash: hashToken(adminToken),
       scorer_token_hash: hashToken(scorerToken),

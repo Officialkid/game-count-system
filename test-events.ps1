@@ -16,7 +16,7 @@ $quickEvent = @{
 } | ConvertTo-Json
 
 try {
-    $response1 = Invoke-RestMethod -Uri 'http://localhost:3000/api/events/create' -Method POST -Body $quickEvent -ContentType 'application/json'
+    $response1 = Invoke-RestMethod -Uri 'http://localhost:3002/api/events/create' -Method POST -Body $quickEvent -ContentType 'application/json'
     
     Write-Host "SUCCESS: Quick Event Created!" -ForegroundColor Green
     Write-Host "Event ID: $($response1.data.event.id)" -ForegroundColor Gray
@@ -39,7 +39,7 @@ $campEvent = @{
 } | ConvertTo-Json
 
 try {
-    $response2 = Invoke-RestMethod -Uri 'http://localhost:3000/api/events/create' -Method POST -Body $campEvent -ContentType 'application/json'
+    $response2 = Invoke-RestMethod -Uri 'http://localhost:3002/api/events/create' -Method POST -Body $campEvent -ContentType 'application/json'
     
     Write-Host "SUCCESS: Camp Event Created!" -ForegroundColor Green
     Write-Host "Event ID: $($response2.data.event.id)" -ForegroundColor Gray
@@ -53,5 +53,5 @@ Write-Host "============================================================" -Foreg
 Write-Host "Testing Complete!" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "Check Firebase Console:" -ForegroundColor White
-Write-Host "https://console.firebase.google.com/project/combinedactivities-7da43/firestore" -ForegroundColor Cyan
+Write-Host "Check the local app and Prisma-backed API responses instead of the old Firestore console." -ForegroundColor Cyan
 Write-Host ""

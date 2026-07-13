@@ -1,5 +1,7 @@
 # Token-Based Access Control System Documentation
 
+> Migration note: this document contains some historical token examples from the pre-Prisma migration. The active runtime target is Prisma + Neon, and current backend direction is documented in [MASTER-PHASE-PLAN-NEON-MIGRATION-2026-07-12.md](C:/Users/DANIEL/Documents/WebApp Projects/game-count-system/MASTER-PHASE-PLAN-NEON-MIGRATION-2026-07-12.md) and [BACKEND-APPROVAL-PROPOSAL-2026-07-13.md](C:/Users/DANIEL/Documents/WebApp Projects/game-count-system/BACKEND-APPROVAL-PROPOSAL-2026-07-13.md).
+
 ## Overview
 
 The Game Count System uses a secure token-based access control system that allows events to be shared without requiring user accounts. Each event has three types of access tokens with different permission levels.
@@ -86,12 +88,12 @@ const tokens = generateEventTokens();
 
 ### Token Storage
 
-**Firestore (Secure):**
+**Database storage (secure):**
 - Store ONLY hashed versions
 - Never store plain tokens in database
 
 ```typescript
-// Store in Firestore
+// Store in the database
 const eventData = {
   name: 'Summer Camp 2026',
   admin_token_hash: tokens.hashed.admin_token_hash,
@@ -284,7 +286,7 @@ Authorization: Bearer a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6
 
 ---
 
-## Firestore Security Rules
+## Historical Firestore Security Notes
 
 ```javascript
 // events collection
@@ -303,7 +305,7 @@ match /events/{eventId} {
 }
 
 // Note: Token validation happens in API layer with hashed comparison
-// Firestore rules allow permissive access, but API enforces token checks
+// Legacy Firestore rules allowed permissive access, but the API enforced token checks
 ```
 
 ---
@@ -434,7 +436,7 @@ const desc = getTokenTypeDescription('scorer'); // "Score submission - Can add a
 ## Security Best Practices
 
 1. **Never expose plain tokens**
-   - Store only hashed versions in Firestore
+   - Store only hashed versions in the database
    - Return plain tokens only once when event is created
 
 2. **Use HTTPS in production**
@@ -466,14 +468,14 @@ node -e "const {generateEventTokens} = require('./lib/token-utils'); console.log
 
 ```powershell
 $body = '{"name":"Test Event","number_of_days":1,"eventMode":"quick","scoringMode":"continuous"}'
-Invoke-RestMethod -Uri 'http://localhost:3000/api/events/create' -Method POST -Body $body -ContentType 'application/json'
+Invoke-RestMethod -Uri 'http://localhost:3002/api/events/create' -Method POST -Body $body -ContentType 'application/json'
 ```
 
 ### Test Score Submission with Token
 
 ```powershell
 $body = '{"event_id":"abc123","team_id":"team456","points":100,"token":"your_scorer_token"}'
-Invoke-RestMethod -Uri 'http://localhost:3000/api/scores/submit' -Method POST -Body $body -ContentType 'application/json'
+Invoke-RestMethod -Uri 'http://localhost:3002/api/scores/submit' -Method POST -Body $body -ContentType 'application/json'
 ```
 
 ---

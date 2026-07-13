@@ -4,7 +4,7 @@
 Write-Host "`n🧪 Testing Event Lifecycle Management System" -ForegroundColor Cyan
 Write-Host "=" -NoNewline; Write-Host ("=" * 59) -ForegroundColor Gray
 
-$baseUrl = "http://localhost:3000"
+$baseUrl = "http://localhost:3002"
 $headers = @{ "Content-Type" = "application/json" }
 
 # ============================================
@@ -255,7 +255,7 @@ Write-Host "`nEvent ID for reference: $eventId" -ForegroundColor Gray
 Write-Host ("=" * 60) -ForegroundColor Gray
 
 Write-Host "`n💡 Next Steps:" -ForegroundColor Yellow
-Write-Host "   1. Check Firestore Console to see archived_at field"
+Write-Host "   1. Verify archived_at and lifecycle fields through the Prisma-backed API"
 Write-Host "   2. Wait 24 hours for auto-cleanup (or manually delete)"
 Write-Host "   3. Deploy to Vercel to enable automatic hourly cron"
 Write-Host "   4. Set CRON_SECRET environment variable in production"

@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, PlusCircle, Trophy, Info, Settings } from 'lucide-react';
+import { Compass, House, PlusCircle, Trophy } from 'lucide-react';
 
 interface TabItem {
   label: string;
@@ -17,37 +17,24 @@ interface BottomTabBarProps {
   showOnDesktop?: boolean;
 }
 
-/**
- * Mobile-first bottom tab bar navigation.
- * Shows as fixed bottom bar on mobile, hidden on desktop by default.
- * Provides large touch targets and visual feedback.
- */
 export function BottomTabBar({ tabs, showOnDesktop = false }: BottomTabBarProps) {
   const pathname = usePathname();
 
   const defaultTabs: TabItem[] = [
-    { 
-      label: 'Home', 
-      href: '/', 
-      icon: <Home size={24} />,
-    },
-    { 
-      label: 'Create', 
-      href: '/events/create', 
-      icon: <PlusCircle size={24} />,
+    { label: 'Home', href: '/', icon: <House size={20} /> },
+    {
+      label: 'Create',
+      href: '/events/create',
+      icon: <PlusCircle size={20} />,
       matchPaths: ['/events/create', '/quick-create'],
     },
-    { 
-      label: 'Events', 
-      href: '/dashboard', 
-      icon: <Trophy size={24} />,
+    {
+      label: 'Events',
+      href: '/dashboard',
+      icon: <Trophy size={20} />,
       matchPaths: ['/dashboard', '/events'],
     },
-    { 
-      label: 'About', 
-      href: '/#features', 
-      icon: <Info size={24} />,
-    },
+    { label: 'Explore', href: '/#features', icon: <Compass size={20} /> },
   ];
 
   const items = tabs && tabs.length > 0 ? tabs : defaultTabs;
@@ -56,50 +43,36 @@ export function BottomTabBar({ tabs, showOnDesktop = false }: BottomTabBarProps)
     if (pathname === tab.href) return true;
     if (pathname === '/' && tab.href === '/') return true;
     if (tab.href !== '/' && pathname.startsWith(tab.href)) return true;
-    if (tab.matchPaths) {
-      return tab.matchPaths.some(path => pathname.startsWith(path));
-    }
+    if (tab.matchPaths) return tab.matchPaths.some((path) => pathname.startsWith(path));
     return false;
   };
 
   return (
     <nav
-      className={`fixed bottom-0 left-0 right-0 bg-white border-t-2 border-gray-200 shadow-2xl z-50 ${
+      className={`fixed bottom-3 left-3 right-3 z-50 rounded-[28px] border border-white/50 bg-[rgba(255,250,241,0.92)] shadow-[0_20px_60px_rgba(20,33,61,0.18)] backdrop-blur-xl ${
         showOnDesktop ? '' : 'md:hidden'
       }`}
       role="navigation"
       aria-label="Mobile bottom navigation"
     >
-      <div className="grid grid-cols-4 h-16 max-w-screen-xl mx-auto">
+      <div className="mx-auto grid h-[74px] max-w-screen-xl grid-cols-4 gap-1 p-2">
         {items.map((tab) => {
           const active = isActive(tab);
-          
+
           return (
             <Link
               key={tab.href}
               href={tab.href}
-              className={`
-                flex flex-col items-center justify-center gap-1
-                transition-all duration-200 ease-in-out
-                active:scale-95 active:bg-gray-100
-                ${active 
-                  ? 'text-purple-600 bg-purple-50 border-t-3 border-purple-600' 
-                  : 'text-gray-700 hover:text-purple-700 hover:bg-gray-50'
-                }
-              `}
+              className={`flex flex-col items-center justify-center gap-1 rounded-[20px] px-2 transition-all duration-200 active:scale-95 ${
+                active
+                  ? 'bg-slate-900 text-white shadow-[0_12px_30px_rgba(20,33,61,0.22)]'
+                  : 'text-slate-600 hover:bg-white hover:text-slate-900'
+              }`}
               aria-label={tab.label}
               aria-current={active ? 'page' : undefined}
             >
-              <div 
-                className={`transition-transform ${
-                  active ? 'scale-110' : 'scale-100'
-                }`}
-              >
-                {tab.icon}
-              </div>
-              <span className="text-xs font-medium">
-                {tab.label}
-              </span>
+              <div className={`${active ? 'scale-110' : 'scale-100'} transition-transform`}>{tab.icon}</div>
+              <span className="text-[11px] font-semibold uppercase tracking-[0.18em]">{tab.label}</span>
             </Link>
           );
         })}

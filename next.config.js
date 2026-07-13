@@ -1,9 +1,7 @@
 /**
  * Next.js configuration
- * NOTE: This project runs on Render as a Web Service. Do NOT deploy as a
- * static site or use `next export`. Keep `output: 'export'` or any
- * static-export options removed to prevent Pages Router/static export behavior.
- * This file intentionally contains no Pages Router compatibility flags.
+ * This project is intended to run as a server-rendered Next.js app with
+ * Prisma-backed route handlers. Do not use static export settings here.
  */
 /** @type {import('next').NextConfig} */
 const nextConfig = {

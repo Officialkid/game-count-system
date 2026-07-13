@@ -3,12 +3,12 @@
  * Functions to manage day locking for multi-day events
  */
 
-import { FirebaseEvent } from './firebase-collections';
+import { EventRecord } from './event-domain';
 
 /**
  * Check if a specific day is locked
  */
-export function isDayLocked(event: FirebaseEvent, dayNumber: number): boolean {
+export function isDayLocked(event: EventRecord, dayNumber: number): boolean {
   if (!event.lockedDays || event.lockedDays.length === 0) {
     return false;
   }
@@ -18,21 +18,21 @@ export function isDayLocked(event: FirebaseEvent, dayNumber: number): boolean {
 /**
  * Get all locked days for an event
  */
-export function getLockedDays(event: FirebaseEvent): number[] {
+export function getLockedDays(event: EventRecord): number[] {
   return event.lockedDays || [];
 }
 
 /**
  * Check if any days are locked
  */
-export function hasLockedDays(event: FirebaseEvent): boolean {
+export function hasLockedDays(event: EventRecord): boolean {
   return event.lockedDays !== undefined && event.lockedDays.length > 0;
 }
 
 /**
  * Get unlocked days for an event
  */
-export function getUnlockedDays(event: FirebaseEvent): number[] {
+export function getUnlockedDays(event: EventRecord): number[] {
   const totalDays = event.scoringMode === 'daily' 
     ? calculateTotalDays(event.start_at, event.end_at)
     : 1;
@@ -58,7 +58,7 @@ function calculateTotalDays(startDate: string, endDate: string): number {
  * Validate if a day can be locked
  */
 export function canLockDay(
-  event: FirebaseEvent,
+  event: EventRecord,
   dayNumber: number
 ): { allowed: boolean; reason?: string } {
   // Can't lock if event is finalized
@@ -104,7 +104,7 @@ export function canLockDay(
  * Validate if a day can be unlocked
  */
 export function canUnlockDay(
-  event: FirebaseEvent,
+  event: EventRecord,
   dayNumber: number
 ): { allowed: boolean; reason?: string } {
   // Can't unlock if event is finalized
@@ -179,7 +179,7 @@ export function formatLockedDays(lockedDays: number[]): string {
  * Check if score submission is allowed for a day
  */
 export function canSubmitScoreForDay(
-  event: FirebaseEvent,
+  event: EventRecord,
   dayNumber: number
 ): { allowed: boolean; reason?: string } {
   // Check if day is locked

@@ -4,7 +4,7 @@
 Write-Host "`n🧪 Testing Day Locking System" -ForegroundColor Cyan
 Write-Host "=" -NoNewline; Write-Host ("=" * 59) -ForegroundColor Gray
 
-$baseUrl = "http://localhost:3000"
+$baseUrl = "http://localhost:3002"
 $headers = @{ "Content-Type" = "application/json" }
 
 # ============================================
@@ -307,6 +307,6 @@ Write-Host ("=" * 60) -ForegroundColor Gray
 Write-Host "`n💡 Next Steps:" -ForegroundColor Yellow
 Write-Host "   1. Test DayLockManager component in admin UI"
 Write-Host "   2. Test LockedDayIndicator in scorer view"
-Write-Host "   3. Verify Firestore rules enforcement"
-Write-Host "   4. Deploy updated rules to Firebase Console"
+Write-Host "   3. Verify Prisma-backed lock enforcement through the live API"
+Write-Host "   4. Re-test once the real Neon database target is connected"
 Write-Host ""

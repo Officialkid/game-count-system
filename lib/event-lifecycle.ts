@@ -3,7 +3,7 @@
  * Handles event status transitions, archival, and cleanup
  */
 
-import { EventMode, EventStatus } from './firebase-collections';
+import { EventMode, EventStatus } from './event-domain';
 import { shouldCleanupEvent } from './event-mode-helpers';
 
 export interface LifecycleTransition {

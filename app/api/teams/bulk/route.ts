@@ -5,7 +5,8 @@
  */
 
 import { NextResponse } from 'next/server';
-import { db } from '@/lib/firebase-admin';
+import { requireAdminToken } from '@/lib/token-middleware';
+import { createTeamsForEvent } from '@/lib/server/team-service';
 
 export async function POST(request: Request) {
   try {
@@ -66,28 +67,12 @@ export async function POST(request: Request) {
       }
     }
 
-    // Create all teams
-    const createdTeams = [];
-    const batch = db.batch();
-
-    for (const team of teams) {
-      const teamRef = db.collection('teams').doc();
-      const teamData = {
-        event_id,
-        name: team.name.trim(),
-        color: team.color || '#3B82F6',
-        total_points: 0,
-        created_at: new Date().toISOString(),
-      };
-      
-      batch.set(teamRef, teamData);
-      createdTeams.push({
-        id: teamRef.id,
-        ...teamData
-      });
+    const validation = await requireAdminToken(event_id, adminToken);
+    if (validation instanceof NextResponse) {
+      return validation;
     }
 
-    await batch.commit();
+    const createdTeams = await createTeamsForEvent(event_id, teams);
 
     return NextResponse.json({
       success: true,

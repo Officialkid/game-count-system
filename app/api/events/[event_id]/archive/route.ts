@@ -4,8 +4,7 @@
  */
 
 import { NextResponse } from 'next/server';
-import { adminGetDocument, adminUpdateDocument } from '@/lib/firestore-admin-helpers';
-import { COLLECTIONS, EventStatus } from '@/lib/firebase-collections';
+import { archiveEvent } from '@/lib/server/event-lifecycle-service';
 import { requireAdminToken } from '@/lib/token-middleware';
 import { canTransitionTo } from '@/lib/event-lifecycle';
 
@@ -22,9 +21,8 @@ export async function POST(
     const body: ArchiveEventRequest = await request.json();
     const { token } = body;
 
-    // Validate admin token
     const validation = await requireAdminToken(event_id, token);
-    
+
     if (validation instanceof NextResponse) {
       return validation;
     }
@@ -32,30 +30,24 @@ export async function POST(
     const { event } = validation;
     const currentStatus = (event as any).eventStatus || 'draft';
 
-    // Check if transition is allowed
     const transition = canTransitionTo(
       currentStatus,
       'archived',
       (event as any).eventMode,
-      (event as any).is_finalized
+      (event as any).isFinalized
     );
 
     if (!transition.allowed) {
       return NextResponse.json(
-        { 
-          success: false, 
+        {
+          success: false,
           error: transition.reason || 'Cannot archive event',
         },
         { status: 400 }
       );
     }
 
-    // Update event status to archived
-    await adminUpdateDocument(COLLECTIONS.EVENTS, event_id, {
-      eventStatus: 'archived',
-      status: 'expired', // Legacy field
-      archived_at: new Date().toISOString(),
-    });
+    const archived = await archiveEvent(event_id);
 
     return NextResponse.json({
       success: true,
@@ -63,10 +55,9 @@ export async function POST(
         eventId: event_id,
         previousStatus: currentStatus,
         newStatus: 'archived',
-        archivedAt: new Date().toISOString(),
+        archivedAt: archived.archivedAt?.toISOString() ?? new Date().toISOString(),
       },
     });
-
   } catch (error) {
     console.error('Archive event error:', error);
     return NextResponse.json(

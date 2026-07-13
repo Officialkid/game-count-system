@@ -7,12 +7,8 @@
  */
 
 import { NextResponse } from 'next/server';
-import { 
-  addScore, 
-  getEventByToken, 
-  createDayIfNotExists,
-  getEventDay 
-} from '@/lib/db-access';
+import { addScoreForEvent, ensureEventDay, getEventDayInfo } from '@/lib/server/score-service';
+import { requireScorerToken } from '@/lib/token-middleware';
 import { CreateScoreSchema } from '@/lib/db-validations';
 import { successResponse, errorResponse, ERROR_STATUS_MAP } from '@/lib/api-responses';
 import { ZodError } from 'zod';
@@ -34,18 +30,13 @@ export async function POST(
       );
     }
     
-    // Verify scorer token has access to this event
-    const event = await getEventByToken(scorerToken, 'scorer');
-    
-    if (!event || event.id !== event_id) {
-      return NextResponse.json(
-        errorResponse('FORBIDDEN', 'Invalid token or access denied'),
-        { status: ERROR_STATUS_MAP.FORBIDDEN }
-      );
+    const validation = await requireScorerToken(event_id, scorerToken);
+    if (validation instanceof NextResponse) {
+      return validation;
     }
     
     // Check event is active
-    if (event.status !== 'active') {
+    if ((validation.event as any).eventStatus !== 'active') {
       return NextResponse.json(
         errorResponse('BAD_REQUEST', 'Event is not active'),
         { status: ERROR_STATUS_MAP.BAD_REQUEST }
@@ -57,11 +48,11 @@ export async function POST(
     // Auto-create event day if day_number provided
     let dayInfo: any = null;
     if (body.day_number) {
-      await createDayIfNotExists(event_id, body.day_number);
-      dayInfo = await getEventDay(event_id, body.day_number);
+      await ensureEventDay(event_id, body.day_number);
+      dayInfo = await getEventDayInfo(event_id, body.day_number);
       
       // Check if day is locked
-      if (dayInfo?.locked) {
+      if (dayInfo?.isLocked) {
         return NextResponse.json(
           errorResponse('CONFLICT', `Day ${body.day_number} is locked`),
           { status: ERROR_STATUS_MAP.CONFLICT }
@@ -79,8 +70,19 @@ export async function POST(
       notes: body.notes,
     });
     
-    // Add score using Firebase structure
-    const score = await addScore(event_id, validated);
+    const score = await addScoreForEvent({
+      eventId: event_id,
+      teamId: validated.teamId,
+      day: validated.day,
+      points: validated.points,
+      penalty: validated.penalty,
+      bonus: validated.bonus,
+      notes: validated.notes,
+      tokenType:
+        validation.tokenType && validation.tokenType !== 'viewer'
+          ? validation.tokenType
+          : undefined,
+    });
     
     return NextResponse.json(
       successResponse({
@@ -116,7 +118,7 @@ export async function POST(
         );
       }
 
-      // Team validation errors thrown from db-access
+      // Team validation errors thrown from service layer
       if (msg.toLowerCase().includes('team')) {
         return NextResponse.json(
           errorResponse('BAD_REQUEST', msg),

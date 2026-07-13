@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { EventMode, EVENT_MODE_CONFIGS } from '@/lib/firebase-collections';
+import { EventMode, EVENT_MODE_CONFIGS } from '@/lib/event-domain';
 import { 
   getModeName, 
   getModeDescription, 
