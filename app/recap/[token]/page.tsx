@@ -874,17 +874,10 @@ export default function CampRecapShowPage() {
                               ? `+${animatedTeamPoints}`
                               : animatedTeamPoints}
                           </span>
-                          <span className="text-lg font-bold text-slate-300">pts</span>
+                          <span className="text-lg font-bold text-slate-300">
+                            pts today
+                          </span>
                         </div>
-
-                        {data.event.numberOfDays > 1 && (
-                          <p className="mt-4 text-sm font-semibold text-slate-300">
-                            Overall Camp Total:{' '}
-                            <span className="font-black text-white">
-                              {revealedTeam.overall_points} pts
-                            </span>
-                          </p>
-                        )}
                       </div>
                     )}
                   </div>
@@ -969,6 +962,36 @@ export default function CampRecapShowPage() {
                     </div>
                   )}
                 </div>
+
+                {/* Overall Camp Standings Strip (Separate & Below Per-Day Podium) */}
+                {data.event.numberOfDays > 1 && data.overall_standings.length > 0 && (
+                  <div
+                    className="anim-rise-up mx-auto max-w-3xl rounded-2xl border border-white/15 bg-white/5 px-5 py-3.5 backdrop-blur"
+                    style={{ animationDelay: '950ms' }}
+                  >
+                    <p className="text-[11px] font-extrabold uppercase tracking-[0.24em] text-slate-400">
+                      Overall Camp Standings (All Days Combined)
+                    </p>
+                    <div className="mt-2 flex flex-wrap items-center justify-center gap-3 sm:gap-5">
+                      {data.overall_standings.map((team) => (
+                        <div
+                          key={team.id}
+                          className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-black/30 px-3.5 py-1.5 text-xs sm:text-sm"
+                        >
+                          <span className="font-bold text-amber-300">#{team.rank}</span>
+                          <span
+                            className="h-2.5 w-2.5 rounded-full"
+                            style={{ backgroundColor: team.color }}
+                          />
+                          <span className="font-bold text-white">{team.name}</span>
+                          <span className="font-black tabular-nums text-slate-200">
+                            {team.points} pts
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
