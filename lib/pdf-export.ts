@@ -48,17 +48,21 @@ export async function generateResultsPDF(options: PDFExportOptions): Promise<voi
   const marginRight = 40;
   let yPosition = 40;
 
-  // ===== HEADER: AlphaTech Branding =====
+  // ===== HEADER: Eventsslot Technologies Branding =====
   doc.setFontSize(10);
   doc.setTextColor(100, 100, 100);
-  doc.text('Powered by', pageWidth - 15, yPosition, { align: 'right' });
+  doc.text('Powered by', pageWidth - 20, yPosition, { align: 'right' });
   
-  yPosition += 5;
-  doc.setFontSize(16);
+  yPosition += 14;
+  doc.setFontSize(14);
   doc.setFont('helvetica', 'bold');
-  doc.setTextColor(107, 70, 193); // AlphaTech purple
-  doc.text('AlphaTech', pageWidth - 15, yPosition, { align: 'right' });
+  doc.setTextColor(37, 99, 235); // Eventsslot Blue
+  doc.text('Eventsslot Technologies', pageWidth - 20, yPosition, { align: 'right' });
+  yPosition += 12;
+  doc.setFontSize(9);
   doc.setFont('helvetica', 'normal');
+  doc.setTextColor(100, 116, 139);
+  doc.text('www.eventsslot.com', pageWidth - 20, yPosition, { align: 'right' });
   
   // Reset position for title
   yPosition = 25;

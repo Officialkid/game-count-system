@@ -1,406 +1,651 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Activity, CalendarDays, Crown, RefreshCw, Timer } from 'lucide-react';
-import { ExpiredEvent, EventNotFoundError } from '@/components/ExpiredEvent';
-import { LoadingSkeleton } from '@/components/ui';
-import { safeInitial } from '@/lib/safe-ui-helpers';
+import { useParams } from 'next/navigation';
+import {
+  CalendarDays,
+  ChevronDown,
+  ChevronUp,
+  Crown,
+  Lock,
+  Moon,
+  RefreshCw,
+  Sparkles,
+  Sun,
+  Trophy,
+} from 'lucide-react';
+import { saveEventToDevice } from '@/lib/device-vault';
+import { PoweredByFooter } from '@/components/PoweredByFooter';
 
-type EventMeta = {
+interface RankedTeam {
   id: string;
-  event_name: string;
-  mode: string;
-  status: string;
-  start_date: string;
-  end_date: string;
-};
-
-type Team = {
-  id: string;
-  team_name: string;
+  name: string;
   color: string;
   avatar_url: string | null;
-  total_points: number;
-};
+  points: number;
+  overall_points: number;
+  rank: number;
+}
 
-type DayScore = {
+interface DayInfo {
   day_number: number;
-  day_label: string;
-  scores: Array<{
-    id: string;
-    team_id: string;
-    team_name: string;
-    points: number;
-    penalty: number | null;
-    bonus: number | null;
-    created_at: string;
-  }>;
-};
+  label: string;
+  is_locked: boolean;
+  carry_over_from_previous: boolean;
+}
 
-type HistoryItem = {
+interface ActivityItem {
   id: string;
   team_id: string;
   team_name: string;
+  team_color: string;
+  category: string;
   points: number;
-  penalty: number | null;
-  bonus: number | null;
-  notes: string | null;
-  day_number: number | null;
+  day_number: number;
+  day_label: string;
   created_at: string;
-};
+}
 
-export default function PublicScoreboardPage({ params }: { params: { token: string } }) {
-  const token = params.token;
-  const [event, setEvent] = useState<EventMeta | null>(null);
-  const [teams, setTeams] = useState<Team[]>([]);
-  const [history, setHistory] = useState<HistoryItem[]>([]);
-  const [scoresByDay, setScoresByDay] = useState<DayScore[]>([]);
-  const [selectedDay, setSelectedDay] = useState<number | 'cumulative'>('cumulative');
+interface PublicBoardPayload {
+  event: {
+    id: string;
+    name: string;
+    status: string;
+    scoringMode: string;
+    numberOfDays: number;
+    activeDayNumber: number;
+    showPublicActivity: boolean;
+    isFinalized: boolean;
+  };
+  overall_standings: RankedTeam[];
+  day_standings: Record<number, RankedTeam[]>;
+  scores: ActivityItem[];
+  days: DayInfo[];
+  waiting: boolean;
+  totals: {
+    total_teams: number;
+    total_scores: number;
+    total_points: number;
+    total_days: number;
+  };
+}
+
+function formatRankBadge(rank: number) {
+  if (rank === 1) return '🥇';
+  if (rank === 2) return '🥈';
+  if (rank === 3) return '🥉';
+  return `#${rank}`;
+}
+
+export default function PublicScoreboardPage() {
+  const params = useParams();
+  const token = String(params?.token || '');
+
+  const [data, setData] = useState<PublicBoardPayload | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [invalid, setInvalid] = useState<'expired' | 'not-found' | null>(null);
-  const [lastUpdated, setLastUpdated] = useState<number>(Date.now());
+  const [errorMsg, setErrorMsg] = useState('');
+  const [selectedView, setSelectedView] = useState<'overall' | number>(1);
+  const [initializedView, setInitializedView] = useState(false);
+  const [darkMode, setDarkMode] = useState(false);
+  const [showActivity, setShowActivity] = useState(true);
+  const [lastUpdated, setLastUpdated] = useState<string>('');
+
+  const fetchBoard = useCallback(
+    async (silent = false) => {
+      if (!token) return;
+      if (!silent) {
+        setLoading(true);
+        setErrorMsg('');
+      }
+      try {
+        const res = await fetch(`/api/public/${token}`, { cache: 'no-store' });
+        const payload = await res.json().catch(() => ({}));
+        if (!res.ok || !payload.success) {
+          if (!silent) {
+            setErrorMsg(
+              payload?.message || payload?.error || 'Scoreboard not found.'
+            );
+          }
+          return;
+        }
+
+        const board: PublicBoardPayload = payload.data;
+        setData(board);
+        setLastUpdated(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+
+        if (!initializedView) {
+          setSelectedView(board.event.activeDayNumber || 1);
+          setInitializedView(true);
+        }
+
+        saveEventToDevice({
+          eventId: board.event.id,
+          eventName: board.event.name,
+          role: 'viewer',
+          token,
+          path: `/scoreboard/${token}`,
+          numberOfDays: board.event.numberOfDays,
+        });
+      } catch {
+        if (!silent) {
+          setErrorMsg('Unable to reach the scoreboard right now. Please retry.');
+        }
+      } finally {
+        if (!silent) setLoading(false);
+      }
+    },
+    [token, initializedView]
+  );
 
   useEffect(() => {
-    let isMounted = true;
+    fetchBoard(false);
+  }, [fetchBoard]);
 
-    async function loadData() {
-      try {
-        setError('');
-        const response = await fetch(`/api/public/${token}`, { cache: 'no-store' });
+  // Live auto-refresh every 6 seconds
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      fetchBoard(true);
+    }, 6000);
+    return () => window.clearInterval(id);
+  }, [fetchBoard]);
 
-        if (response.status === 404) {
-          if (isMounted) {
-            setInvalid('not-found');
-            setLoading(false);
-          }
-          return;
-        }
+  const activeDayNumber = data?.event.activeDayNumber || 1;
+  const currentDayViewNumber =
+    typeof selectedView === 'number' ? selectedView : activeDayNumber;
 
-        if (response.status === 410) {
-          if (isMounted) {
-            setInvalid('expired');
-            setLoading(false);
-          }
-          return;
-        }
-
-        if (!response.ok) throw new Error('Unable to load scoreboard');
-
-        const payload = await response.json();
-        const data = payload?.data;
-        if (!data) throw new Error('Missing scoreboard payload');
-        if (!isMounted) return;
-
-        setEvent({
-          id: data.event.id,
-          event_name: data.event.name,
-          mode: data.event.mode,
-          status: data.event.status,
-          start_date: data.event.startDate,
-          end_date: data.event.endDate,
-        });
-        setTeams(
-          (data.teams ?? []).map((team: any) => ({
-            id: String(team.id),
-            team_name: team.name,
-            color: team.color || '#0f766e',
-            avatar_url: team.avatar_url || null,
-            total_points: Number(team.total_points || 0),
-          }))
-        );
-        setScoresByDay(data.scores_by_day ?? []);
-        setHistory(data.scores ?? []);
-        setInvalid(null);
-        setLastUpdated(Date.now());
-      } catch (loadError) {
-        console.error(loadError);
-        if (isMounted) setError(loadError instanceof Error ? loadError.message : 'Unable to load scoreboard');
-      } finally {
-        if (isMounted) setLoading(false);
+  const currentDayInfo = useMemo(() => {
+    return (
+      data?.days.find((d) => d.day_number === currentDayViewNumber) || {
+        day_number: currentDayViewNumber,
+        label: `Day ${currentDayViewNumber}`,
+        is_locked: false,
+        carry_over_from_previous: true,
       }
-    }
+    );
+  }, [data, currentDayViewNumber]);
 
-    loadData();
-    const intervalId = window.setInterval(loadData, 300000);
-    return () => {
-      isMounted = false;
-      window.clearInterval(intervalId);
-    };
-  }, [token]);
+  const dayStandings: RankedTeam[] = useMemo(() => {
+    if (!data) return [];
+    return data.day_standings?.[currentDayViewNumber] || [];
+  }, [data, currentDayViewNumber]);
 
-  const dayOptions = useMemo(() => scoresByDay.map((day) => day.day_number), [scoresByDay]);
+  const overallStandings: RankedTeam[] = useMemo(() => {
+    return data?.overall_standings || [];
+  }, [data]);
 
-  const visibleTeams = useMemo(() => {
-    if (selectedDay === 'cumulative') {
-      return [...teams].sort((a, b) => b.total_points - a.total_points || a.team_name.localeCompare(b.team_name));
-    }
-
-    const pointsByTeam = new Map<string, number>();
-    const selected = scoresByDay.find((day) => day.day_number === selectedDay);
-
-    selected?.scores.forEach((score) => {
-      const total = pointsByTeam.get(score.team_id) ?? 0;
-      pointsByTeam.set(score.team_id, total + score.points + (score.bonus ?? 0) - (score.penalty ?? 0));
-    });
-
-    return teams
-      .map((team) => ({ ...team, total_points: pointsByTeam.get(team.id) ?? 0 }))
-      .filter((team) => team.total_points !== 0)
-      .sort((a, b) => b.total_points - a.total_points || a.team_name.localeCompare(b.team_name));
-  }, [scoresByDay, selectedDay, teams]);
+  const filteredActivity = useMemo(() => {
+    if (!data?.scores) return [];
+    if (selectedView === 'overall') return data.scores.slice(0, 20);
+    return data.scores.filter((s) => s.day_number === selectedView).slice(0, 20);
+  }, [data, selectedView]);
 
   if (loading) {
     return (
-      <div className="mx-auto max-w-6xl px-4 py-16">
-        <LoadingSkeleton variant="card" />
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="mx-auto max-w-3xl px-4 py-16 text-center">
-        <p className="mb-4 text-lg font-semibold text-slate-800">{error}</p>
-        <button onClick={() => window.location.reload()} className="btn-primary">
-          Retry
-        </button>
-      </div>
-    );
-  }
-
-  if (invalid === 'expired') {
-    return (
-      <div className="mx-auto max-w-6xl px-4 py-16">
-        <ExpiredEvent showWaitlist={true} />
-      </div>
-    );
-  }
-
-  if (invalid === 'not-found') {
-    return (
-      <div className="mx-auto max-w-6xl px-4 py-16">
-        <EventNotFoundError />
-      </div>
-    );
-  }
-
-  if (!event) {
-    return (
-      <div className="mx-auto max-w-3xl px-4 py-16 text-center">
-        <p className="text-slate-500">Scoreboard not available.</p>
-        <Link href="/" className="mt-4 inline-flex text-sm font-semibold text-teal-700 hover:underline">
-          Back to home
-        </Link>
-      </div>
-    );
-  }
-
-  const updatedAt = new Date(lastUpdated).toLocaleTimeString();
-
-  return (
-    <div className="site-shell">
-      <div className="scoreboard-header">
-        <div className="container-safe py-5">
-          <div className="mx-auto flex max-w-7xl flex-col gap-5 rounded-[30px] border border-white/50 bg-[rgba(255,250,241,0.82)] p-5 shadow-[0_20px_60px_rgba(20,33,61,0.1)] backdrop-blur-xl lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <div className="section-label">Public scoreboard</div>
-              <h1 className="mt-4 text-3xl font-black text-slate-950 md:text-5xl">{event.event_name}</h1>
-              <div className="mt-3 flex flex-wrap gap-2 text-sm text-slate-600">
-                <span className="badge badge-primary">{event.mode}</span>
-                <span className="badge badge-warning">{event.status}</span>
-              </div>
-            </div>
-
-            <div className="dashboard-grid w-full max-w-3xl">
-              <div className="metric-card">
-                <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">
-                  <UsersIcon />
-                  Teams
-                </div>
-                <div className="mt-3 text-3xl font-black text-slate-950">{teams.length}</div>
-              </div>
-              <div className="metric-card">
-                <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">
-                  <Activity className="h-4 w-4" />
-                  Updates
-                </div>
-                <div className="mt-3 text-3xl font-black text-slate-950">{history.length}</div>
-              </div>
-              <div className="metric-card">
-                <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">
-                  <RefreshCw className="h-4 w-4" />
-                  Last sync
-                </div>
-                <div className="mt-3 text-xl font-bold text-slate-950">{updatedAt}</div>
-              </div>
-            </div>
-          </div>
+      <div className="flex min-h-screen items-center justify-center bg-slate-50 p-6">
+        <div className="text-center">
+          <RefreshCw className="mx-auto h-8 w-8 animate-spin text-blue-600" />
+          <p className="mt-3 text-sm font-semibold text-slate-600">
+            Loading live scoreboard…
+          </p>
         </div>
       </div>
+    );
+  }
 
-      <div className="container-safe py-8">
-        {event.mode === 'camp' && dayOptions.length > 0 && (
-          <div className="surface-panel mb-8 rounded-[30px] p-4">
-            <div className="flex flex-wrap gap-2">
-              <button
-                onClick={() => setSelectedDay('cumulative')}
-                className={`pill-tab ${selectedDay === 'cumulative' ? 'pill-tab-active' : 'pill-tab-idle'}`}
+  if (errorMsg || !data) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-50 p-4">
+        <div className="max-w-md rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+          <Trophy className="mx-auto h-10 w-10 text-slate-400" />
+          <h1 className="mt-3 text-xl font-bold text-slate-900">
+            Scoreboard Unavailable
+          </h1>
+          <p className="mt-1.5 text-sm text-slate-600">{errorMsg}</p>
+          <button
+            type="button"
+            onClick={() => fetchBoard(false)}
+            className="mt-5 inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700"
+          >
+            <RefreshCw className="h-4 w-4" />
+            Try Again
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const dayLeader = dayStandings[0];
+  const overallLeader = overallStandings[0];
+  const maxDayPoints = Math.max(1, ...dayStandings.map((t) => Math.max(0, t.points)));
+  const maxOverallPoints = Math.max(
+    1,
+    ...overallStandings.map((t) => Math.max(0, t.points))
+  );
+
+  const shellClass = darkMode
+    ? 'min-h-screen bg-slate-950 text-slate-50'
+    : 'min-h-screen bg-slate-50 text-slate-900';
+  const cardClass = darkMode
+    ? 'rounded-2xl border border-slate-800 bg-slate-900/90 shadow-lg'
+    : 'rounded-2xl border border-slate-200 bg-white shadow-sm';
+  const mutedText = darkMode ? 'text-slate-400' : 'text-slate-500';
+
+  return (
+    <div className={shellClass}>
+      {/* Top Header */}
+      <header
+        className={`sticky top-0 z-30 border-b backdrop-blur ${
+          darkMode
+            ? 'border-slate-800 bg-slate-950/90'
+            : 'border-slate-200 bg-white/95'
+        }`}
+      >
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-6">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-xs font-bold text-emerald-500">
+                <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500" />
+                {data.event.isFinalized ? 'FINAL RESULTS' : 'LIVE'}
+              </span>
+              <span
+                className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                  darkMode
+                    ? 'bg-blue-500/20 text-blue-300'
+                    : 'bg-blue-50 text-blue-700'
+                }`}
               >
-                Overall
+                <CalendarDays className="h-3.5 w-3.5" />
+                {data.days.find((d) => d.day_number === activeDayNumber)?.label ||
+                  `Day ${activeDayNumber}`}
+              </span>
+              {lastUpdated && (
+                <span className={`text-xs ${mutedText}`}>Updated {lastUpdated}</span>
+              )}
+            </div>
+            <h1 className="mt-1 truncate text-2xl font-extrabold tracking-tight sm:text-3xl">
+              {data.event.name}
+            </h1>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Link
+              href={`/recap/${token}`}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 px-3.5 py-2 text-xs font-bold text-white shadow-sm transition hover:from-indigo-700 hover:to-purple-700"
+            >
+              <Sparkles className="h-4 w-4" />
+              Reveal Show
+            </Link>
+            <button
+              type="button"
+              onClick={() => setDarkMode((prev) => !prev)}
+              className={`inline-flex items-center gap-1.5 rounded-xl border px-3.5 py-2 text-xs font-semibold transition ${
+                darkMode
+                  ? 'border-slate-700 bg-slate-800 text-slate-100 hover:bg-slate-700'
+                  : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-100'
+              }`}
+            >
+              {darkMode ? (
+                <>
+                  <Sun className="h-4 w-4 text-amber-400" />
+                  Light Mode
+                </>
+              ) : (
+                <>
+                  <Moon className="h-4 w-4 text-slate-600" />
+                  TV Dark Mode
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+
+        {/* Day Switcher Pills */}
+        {data.days.length > 1 && (
+          <div className="mx-auto max-w-6xl px-4 pb-3 sm:px-6">
+            <div className="flex items-center gap-1.5 overflow-x-auto">
+              {data.days.map((day) => {
+                const active = selectedView === day.day_number;
+                return (
+                  <button
+                    key={day.day_number}
+                    type="button"
+                    onClick={() => setSelectedView(day.day_number)}
+                    className={`inline-flex shrink-0 items-center gap-1.5 rounded-xl px-3.5 py-1.5 text-xs font-bold transition ${
+                      active
+                        ? 'bg-blue-600 text-white shadow-sm'
+                        : darkMode
+                        ? 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                    }`}
+                  >
+                    {day.label}
+                    {day.day_number === activeDayNumber && !active && (
+                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                    )}
+                    {day.is_locked && <Lock className="h-3 w-3 opacity-70" />}
+                  </button>
+                );
+              })}
+              <button
+                type="button"
+                onClick={() => setSelectedView('overall')}
+                className={`inline-flex shrink-0 items-center gap-1.5 rounded-xl px-3.5 py-1.5 text-xs font-bold transition ${
+                  selectedView === 'overall'
+                    ? 'bg-amber-500 text-slate-950 shadow-sm'
+                    : darkMode
+                    ? 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                <Trophy className="h-3.5 w-3.5" />
+                Overall Camp
               </button>
-              {dayOptions.map((day) => (
-                <button
-                  key={day}
-                  onClick={() => setSelectedDay(day)}
-                  className={`pill-tab ${selectedDay === day ? 'pill-tab-active' : 'pill-tab-idle'}`}
-                >
-                  Day {day}
-                </button>
-              ))}
             </div>
           </div>
         )}
+      </header>
 
-        <div className="grid gap-8 xl:grid-cols-[1.65fr_0.95fr]">
-          <section className="surface-dark rounded-[34px] p-6 md:p-8">
-            <div className="flex flex-col gap-3 border-b border-white/10 pb-6 md:flex-row md:items-end md:justify-between">
-              <div>
-                <div className="text-xs font-semibold uppercase tracking-[0.24em] text-white/55">Standings</div>
-                <h2 className="mt-2 text-3xl font-black text-white">
-                  {selectedDay === 'cumulative' ? 'Overall leaderboard' : `Day ${selectedDay} leaderboard`}
-                </h2>
-              </div>
-              <div className="text-sm text-white/55">Live ranking by net points</div>
-            </div>
-
-            <div className="mt-6 space-y-3">
-              {visibleTeams.length === 0 ? (
-                <p className="rounded-[28px] border border-white/10 bg-white/5 py-12 text-center text-white/65">
-                  No scores yet for this view.
-                </p>
-              ) : (
-                visibleTeams.map((team, index) => (
-                  <div
-                    key={team.id}
-                    className={`rounded-[28px] border px-5 py-5 transition-all ${
-                      index === 0
-                        ? 'border-amber-300/30 bg-[linear-gradient(135deg,rgba(244,182,61,0.18),rgba(255,255,255,0.04))]'
-                        : 'border-white/10 bg-white/6'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between gap-4">
-                      <div className="flex items-center gap-4">
-                        <div className={`${index === 0 ? 'bg-amber-300 text-slate-950' : 'score-rank'} h-11 w-11`}>
-                          {index === 0 ? <Crown className="h-5 w-5" /> : index + 1}
-                        </div>
-                        {team.avatar_url ? (
-                          <img src={team.avatar_url} alt={team.team_name} className="h-14 w-14 rounded-2xl object-cover" />
-                        ) : (
-                          <div
-                            className="flex h-14 w-14 items-center justify-center rounded-2xl text-base font-black text-white shadow-lg"
-                            style={{ backgroundColor: team.color }}
-                          >
-                            {safeInitial(team.team_name)}
-                          </div>
-                        )}
-                        <div>
-                          <p className="text-xl font-bold text-white">{team.team_name}</p>
-                          <p className="text-sm text-white/55">
-                            {selectedDay === 'cumulative' ? 'Total campaign score' : `Day ${selectedDay} score`}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="text-right">
-                        <p className="text-4xl font-black" style={{ color: index === 0 ? '#f4b63d' : '#ffffff' }}>
-                          {team.total_points}
-                        </p>
-                        <p className="text-xs uppercase tracking-[0.24em] text-white/45">points</p>
-                      </div>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </section>
-
-          <aside className="space-y-5">
-            <div className="surface-panel rounded-[30px] p-6">
-              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
-                <CalendarDays className="h-4 w-4" />
-                Event window
-              </div>
-              <div className="mt-4 text-2xl font-black text-slate-950">{new Date(event.start_date).toLocaleDateString()}</div>
-              <div className="mt-2 text-sm text-slate-600">to {new Date(event.end_date).toLocaleDateString()}</div>
-            </div>
-
-            <div className="surface-panel rounded-[30px] p-6">
-              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
-                <Timer className="h-4 w-4" />
-                Score pulse
-              </div>
-              <div className="mt-4 grid gap-3">
-                <div className="rounded-[22px] bg-white/70 px-4 py-4">
-                  <div className="text-xs uppercase tracking-[0.2em] text-slate-500">Day groups</div>
-                  <div className="mt-2 text-2xl font-black text-slate-950">{scoresByDay.length}</div>
-                </div>
-                <div className="rounded-[22px] bg-white/70 px-4 py-4">
-                  <div className="text-xs uppercase tracking-[0.2em] text-slate-500">Latest sync</div>
-                  <div className="mt-2 text-xl font-bold text-slate-950">{updatedAt}</div>
-                </div>
-              </div>
-            </div>
-          </aside>
-        </div>
-
-        <section className="surface-panel mt-8 rounded-[34px] p-6 md:p-8">
-          <div className="flex flex-col gap-3 border-b border-slate-200 pb-6 md:flex-row md:items-end md:justify-between">
-            <div>
-              <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Timeline</div>
-              <h2 className="mt-2 text-3xl font-black text-slate-950">Recent score history</h2>
-            </div>
-            <div className="text-sm text-slate-500">Latest submissions first</div>
+      <main className="mx-auto max-w-6xl space-y-6 px-4 py-6 sm:px-6">
+        {overallStandings.length === 0 ? (
+          <div className={`${cardClass} p-12 text-center`}>
+            <Trophy className="mx-auto h-12 w-12 text-blue-500 opacity-70" />
+            <h2 className="mt-3 text-xl font-bold">Waiting for teams &amp; scores</h2>
+            <p className={`mt-1 text-sm ${mutedText}`}>
+              This scoreboard updates automatically as soon as teams and marks are added.
+            </p>
           </div>
+        ) : (
+          <>
+            {/* Dual Leader Spotlight (Day Leader + Overall Leader) */}
+            {data.days.length > 1 && selectedView !== 'overall' && (
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div
+                  className={`rounded-2xl border p-5 ${
+                    darkMode
+                      ? 'border-blue-500/30 bg-blue-950/40'
+                      : 'border-blue-200 bg-blue-50/70'
+                  }`}
+                >
+                  <p className="text-xs font-bold uppercase tracking-wider text-blue-500">
+                    {currentDayInfo.label} Leader
+                  </p>
+                  <div className="mt-2 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5">
+                      <Crown className="h-6 w-6 text-blue-500" />
+                      <span className="text-xl font-extrabold sm:text-2xl">
+                        {dayLeader ? dayLeader.name : '—'}
+                      </span>
+                    </div>
+                    <span className="text-2xl font-black tabular-nums text-blue-600 dark:text-blue-400">
+                      {dayLeader
+                        ? `${dayLeader.points > 0 ? '+' : ''}${dayLeader.points}`
+                        : '0'}{' '}
+                      <span className="text-xs font-semibold">today</span>
+                    </span>
+                  </div>
+                </div>
 
-          <div className="mt-4 divide-y divide-slate-200/70">
-            {history.length === 0 ? (
-              <p className="py-12 text-center text-slate-500">No score entries yet.</p>
-            ) : (
-              history
-                .slice()
-                .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-                .map((item) => (
-                  <div key={item.id} className="flex flex-col gap-3 py-4 md:flex-row md:items-center md:justify-between">
+                <div
+                  className={`rounded-2xl border p-5 ${
+                    darkMode
+                      ? 'border-amber-500/30 bg-amber-950/30'
+                      : 'border-amber-200 bg-amber-50/70'
+                  }`}
+                >
+                  <p className="text-xs font-bold uppercase tracking-wider text-amber-600">
+                    Overall Camp Leader
+                  </p>
+                  <div className="mt-2 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5">
+                      <Trophy className="h-6 w-6 text-amber-500" />
+                      <span className="text-xl font-extrabold sm:text-2xl">
+                        {overallLeader ? overallLeader.name : '—'}
+                      </span>
+                    </div>
+                    <span className="text-2xl font-black tabular-nums text-amber-600 dark:text-amber-400">
+                      {overallLeader ? overallLeader.points : 0}{' '}
+                      <span className="text-xs font-semibold">total</span>
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Main Dual Standings Grid */}
+            <div
+              className={`grid gap-6 ${
+                data.days.length > 1 && selectedView !== 'overall'
+                  ? 'lg:grid-cols-2'
+                  : 'grid-cols-1'
+              }`}
+            >
+              {/* Primary Day Standings Card */}
+              {selectedView !== 'overall' && (
+                <section className={`${cardClass} p-5 sm:p-6`}>
+                  <div className="mb-4 flex items-center justify-between">
                     <div>
-                      <p className="text-lg font-bold text-slate-950">{item.team_name}</p>
-                      <p className="text-sm text-slate-500">
-                        {item.day_number ? `Day ${item.day_number} · ` : ''}
-                        {new Date(item.created_at).toLocaleString()}
+                      <h2 className="text-lg font-extrabold sm:text-xl">
+                        {currentDayInfo.label} Marks
+                      </h2>
+                      <p className={`text-xs ${mutedText}`}>
+                        {currentDayInfo.carry_over_from_previous
+                          ? 'Marks earned on this day (added to overall camp total)'
+                          : 'Fresh daily round starting from 0'}
                       </p>
                     </div>
-                    <div className="rounded-full bg-slate-900 px-4 py-2 text-center text-white">
-                      <p className="text-lg font-black">{item.points + (item.bonus ?? 0) - (item.penalty ?? 0)}</p>
-                      <p className="text-[10px] uppercase tracking-[0.22em] text-white/60">net points</p>
-                    </div>
+                    <span className="rounded-full bg-blue-600/10 px-3 py-1 text-xs font-bold text-blue-600">
+                      Per-Day
+                    </span>
                   </div>
-                ))
-            )}
-          </div>
-        </section>
-      </div>
-    </div>
-  );
-}
 
-function UsersIcon() {
-  return (
-    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-      <circle cx="9" cy="7" r="4" />
-      <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
-      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-    </svg>
+                  <div className="space-y-3">
+                    {dayStandings.map((team) => {
+                      const pct = Math.max(
+                        4,
+                        Math.min(100, (Math.max(0, team.points) / maxDayPoints) * 100)
+                      );
+                      return (
+                        <div
+                          key={team.id}
+                          className={`rounded-xl border p-4 ${
+                            darkMode
+                              ? 'border-slate-800 bg-slate-950/60'
+                              : 'border-slate-100 bg-slate-50/70'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="flex min-w-0 items-center gap-3">
+                              <span className="w-8 text-center text-lg font-extrabold">
+                                {formatRankBadge(team.rank)}
+                              </span>
+                              <span
+                                className="h-4 w-4 shrink-0 rounded-full"
+                                style={{ backgroundColor: team.color }}
+                              />
+                              <span className="truncate text-base font-bold sm:text-lg">
+                                {team.name}
+                              </span>
+                            </div>
+
+                            <div className="text-right tabular-nums">
+                              <p className="text-xl font-black sm:text-2xl">
+                                {team.points > 0 ? `+${team.points}` : team.points}
+                              </p>
+                              {data.days.length > 1 && (
+                                <p className={`text-[11px] font-semibold ${mutedText}`}>
+                                  Overall: {team.overall_points}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+
+                          <div
+                            className={`mt-2.5 h-2 w-full overflow-hidden rounded-full ${
+                              darkMode ? 'bg-slate-800' : 'bg-slate-200'
+                            }`}
+                          >
+                            <div
+                              className="h-full rounded-full transition-all duration-500"
+                              style={{
+                                width: `${team.points <= 0 ? 0 : pct}%`,
+                                backgroundColor: team.color,
+                              }}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </section>
+              )}
+
+              {/* Overall Camp Standings Card */}
+              <section className={`${cardClass} p-5 sm:p-6`}>
+                <div className="mb-4 flex items-center justify-between">
+                  <div>
+                    <h2 className="text-lg font-extrabold sm:text-xl">
+                      Overall Standings
+                    </h2>
+                    <p className={`text-xs ${mutedText}`}>
+                      Combined total across all {data.event.numberOfDays} day
+                      {data.event.numberOfDays > 1 ? 's' : ''}
+                    </p>
+                  </div>
+                  <span className="rounded-full bg-amber-500/15 px-3 py-1 text-xs font-bold text-amber-600">
+                    Overall
+                  </span>
+                </div>
+
+                <div className="space-y-3">
+                  {overallStandings.map((team) => {
+                    const pct = Math.max(
+                      4,
+                      Math.min(100, (Math.max(0, team.points) / maxOverallPoints) * 100)
+                    );
+                    return (
+                      <div
+                        key={team.id}
+                        className={`rounded-xl border p-4 ${
+                          darkMode
+                            ? 'border-slate-800 bg-slate-950/60'
+                            : 'border-slate-100 bg-slate-50/70'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex min-w-0 items-center gap-3">
+                            <span className="w-8 text-center text-lg font-extrabold">
+                              {formatRankBadge(team.rank)}
+                            </span>
+                            <span
+                              className="h-4 w-4 shrink-0 rounded-full"
+                              style={{ backgroundColor: team.color }}
+                            />
+                            <span className="truncate text-base font-bold sm:text-lg">
+                              {team.name}
+                            </span>
+                          </div>
+
+                          <div className="text-right tabular-nums">
+                            <p className="text-xl font-black sm:text-2xl">{team.points}</p>
+                            <p className={`text-[11px] font-semibold ${mutedText}`}>
+                              total pts
+                            </p>
+                          </div>
+                        </div>
+
+                        <div
+                          className={`mt-2.5 h-2 w-full overflow-hidden rounded-full ${
+                            darkMode ? 'bg-slate-800' : 'bg-slate-200'
+                          }`}
+                        >
+                          <div
+                            className="h-full rounded-full transition-all duration-500"
+                            style={{
+                              width: `${team.points <= 0 ? 0 : pct}%`,
+                              backgroundColor: team.color,
+                            }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            </div>
+
+            {/* Collapsible Recent Games & Deductions Activity Feed */}
+            {data.event.showPublicActivity && filteredActivity.length > 0 && (
+              <section className={`${cardClass} p-5 sm:p-6`}>
+                <button
+                  type="button"
+                  onClick={() => setShowActivity((prev) => !prev)}
+                  className="flex w-full items-center justify-between text-left"
+                >
+                  <div>
+                    <h2 className="text-base font-extrabold">
+                      Recent Games &amp; Deductions ({filteredActivity.length})
+                    </h2>
+                    <p className={`text-xs ${mutedText}`}>
+                      Transparent log of awards and penalties
+                    </p>
+                  </div>
+                  {showActivity ? (
+                    <ChevronUp className="h-5 w-5 text-slate-400" />
+                  ) : (
+                    <ChevronDown className="h-5 w-5 text-slate-400" />
+                  )}
+                </button>
+
+                {showActivity && (
+                  <div className="mt-4 divide-y divide-slate-200/60 dark:divide-slate-800">
+                    {filteredActivity.map((item) => (
+                      <div
+                        key={item.id}
+                        className="flex items-center justify-between gap-3 py-2.5 text-sm"
+                      >
+                        <div className="flex min-w-0 items-center gap-2.5">
+                          <span
+                            className="h-3 w-3 shrink-0 rounded-full"
+                            style={{ backgroundColor: item.team_color }}
+                          />
+                          <div className="min-w-0">
+                            <p className="truncate font-semibold">
+                              {item.team_name}{' '}
+                              <span className={`font-normal ${mutedText}`}>
+                                · {item.category}
+                              </span>
+                            </p>
+                            <p className={`text-xs ${mutedText}`}>
+                              {item.day_label} ·{' '}
+                              {new Date(item.created_at).toLocaleTimeString([], {
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              })}
+                            </p>
+                          </div>
+                        </div>
+
+                        <span
+                          className={`shrink-0 rounded-lg px-2.5 py-1 text-sm font-extrabold tabular-nums ${
+                            item.points < 0
+                              ? 'bg-red-500/15 text-red-600 dark:text-red-400'
+                              : 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400'
+                          }`}
+                        >
+                          {item.points > 0 ? `+${item.points}` : item.points}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+            )}
+          </>
+        )}
+
+        <PoweredByFooter dark={darkMode} className="pt-4" />
+      </main>
+    </div>
   );
 }

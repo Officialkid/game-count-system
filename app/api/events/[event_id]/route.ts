@@ -65,15 +65,33 @@ export async function PATCH(request: Request, { params }: { params: { event_id: 
     const body = await request.json();
     const eventName = typeof body?.event_name === 'string' ? body.event_name : undefined;
     const themeColor = typeof body?.theme_color === 'string' ? body.theme_color : undefined;
+    const showPublicActivity =
+      typeof body?.show_public_activity === 'boolean'
+        ? body.show_public_activity
+        : undefined;
+    const activeDayNumber =
+      typeof body?.active_day_number === 'number' && Number.isInteger(body.active_day_number)
+        ? body.active_day_number
+        : undefined;
 
-    if (!eventName && !themeColor) {
-      return NextResponse.json({ success: false, error: 'At least one supported event field is required' }, { status: 400 });
+    if (
+      eventName === undefined &&
+      themeColor === undefined &&
+      showPublicActivity === undefined &&
+      activeDayNumber === undefined
+    ) {
+      return NextResponse.json(
+        { success: false, error: 'At least one supported event field is required' },
+        { status: 400 }
+      );
     }
 
     const updated = await updateEventById({
       eventId: params.event_id,
       name: eventName,
       themeColor,
+      showPublicActivity,
+      activeDayNumber,
     });
 
     return NextResponse.json({
@@ -83,11 +101,12 @@ export async function PATCH(request: Request, { params }: { params: { event_id: 
           id: updated.id,
           event_name: updated.name,
           name: updated.name,
-          theme_color: updated.themeColor || 'purple',
-          allow_negative: false,
+          theme_color: updated.themeColor || 'blue',
+          show_public_activity: updated.showPublicActivity,
+          active_day_number: updated.activeDayNumber,
+          allow_negative: true,
           display_mode: 'standard',
         },
-        note: 'allow_negative and display_mode are not yet backed by the Prisma schema and were left unchanged.',
       },
     });
   } catch (error) {

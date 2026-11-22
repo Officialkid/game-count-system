@@ -1,6 +1,13 @@
+/**
+ * Score History API
+ * GET /api/events/{event_id}/history
+ * Allows BOTH Admin and Scorer tokens to read score history!
+ */
+
 import { NextResponse } from 'next/server';
-import { requireAdminToken } from '@/lib/token-middleware';
+import { requireScorerToken } from '@/lib/token-middleware';
 import { getScoreHistoryForEvent } from '@/lib/server/score-service';
+import { sanitizeApiError } from '@/lib/server/prisma';
 
 export async function GET(
   request: Request,
@@ -9,9 +16,13 @@ export async function GET(
   try {
     const authHeader = request.headers.get('authorization');
     const bearerToken = authHeader?.toLowerCase().startsWith('bearer ') ? authHeader.slice(7) : null;
-    const adminToken = request.headers.get('x-admin-token') || bearerToken;
+    const token =
+      request.headers.get('x-admin-token') ||
+      request.headers.get('x-scorer-token') ||
+      bearerToken;
 
-    const validation = await requireAdminToken(params.event_id, adminToken);
+    // requireScorerToken accepts BOTH admin and scorer tokens
+    const validation = await requireScorerToken(params.event_id, token);
     if (validation instanceof NextResponse) {
       return validation;
     }
@@ -20,7 +31,10 @@ export async function GET(
 
     return NextResponse.json({
       success: true,
-      data: { scores },
+      data: {
+        scores,
+        role: validation.tokenType,
+      },
     });
   } catch (error: any) {
     console.error('Get history error:', error);
@@ -28,7 +42,7 @@ export async function GET(
       {
         success: false,
         error: 'Failed to load history',
-        details: error.message,
+        details: sanitizeApiError(error),
       },
       { status: 500 }
     );

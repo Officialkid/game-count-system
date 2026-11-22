@@ -1,1000 +1,1324 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
+import { useParams } from 'next/navigation';
+import toast from 'react-hot-toast';
+import { QRCodeSVG } from 'qrcode.react';
+import {
+  AlertTriangle,
+  ArrowRight,
+  CalendarDays,
+  Check,
+  CheckCircle2,
+  Copy,
+  Download,
+  ExternalLink,
+  History,
+  Lock,
+  Monitor,
+  Pencil,
+  PencilLine,
+  Plus,
+  RefreshCw,
+  Settings,
+  Share2,
+  Shield,
+  Sparkles,
+  Trophy,
+  Unlock,
+  Users,
+  X,
+} from 'lucide-react';
+import { saveEventToDevice } from '@/lib/device-vault';
 import { generateResultsPDF } from '@/lib/pdf-export';
-import PastEventsSection from '@/components/PastEventsSection';
-import { AdminTutorial, resetAdminTutorial } from '@/components/AdminTutorial';
-import { EventLinksManager } from '@/components/EventLinksManager';
-import { ExpiredEvent, EventNotFoundError } from '@/components/ExpiredEvent';
-import { safeInitial } from '@/lib/safe-ui-helpers';
-import { Upload, Edit, Trash2, Zap, FileText, Clipboard } from 'lucide-react';
-import { NoTeamsEmpty } from '@/components/EmptyStates';
+import { PoweredByFooter } from '@/components/PoweredByFooter';
 
-interface Team {
+const TEAM_COLOR_CHOICES = [
+  '#2563EB',
+  '#DC2626',
+  '#16A34A',
+  '#D97706',
+  '#9333EA',
+  '#0891B2',
+  '#EA580C',
+  '#DB2777',
+];
+
+interface EventDay {
   id: string;
-  name: string;
-  color: string;
-  avatar_url?: string;
-  total_points?: number;
+  day_number: number;
+  label: string;
+  is_locked: boolean;
+  carry_over_from_previous: boolean;
 }
 
-interface Event {
+interface AdminEvent {
   id: string;
   name: string;
   mode: string;
   status: string;
-  public_token: string;
-  scorer_token: string;
+  scoringMode: string;
+  number_of_days: number;
+  active_day_number: number;
+  show_public_activity: boolean;
+  is_finalized: boolean;
+  start_at: string;
+  end_at: string;
   admin_token?: string;
-  is_finalized?: boolean;
-  finalized_at?: string;
-  theme_color?: string;
+  scorer_token?: string;
+  public_token?: string;
+  days: EventDay[];
 }
 
-export default function AdminPage({ params }: { params: { token: string } }) {
-  const router = useRouter();
-  const { token } = params;
-  const [event, setEvent] = useState<Event | null>(null);
-  const [teams, setTeams] = useState<Team[]>([]);
+interface TeamSummary {
+  id: string;
+  name: string;
+  color: string;
+  total_points: number;
+  day_totals?: Record<number, number>;
+}
+
+type AdminTab = 'overview' | 'teams' | 'share' | 'results';
+
+export default function AdminDashboardPage() {
+  const params = useParams();
+  const token = String(params?.token || '');
+
+  const [event, setEvent] = useState<AdminEvent | null>(null);
+  const [teams, setTeams] = useState<TeamSummary[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [errorType, setErrorType] = useState<'expired' | 'not-found' | null>(null);
-  const [teamName, setTeamName] = useState('');
-  const [teamColor, setTeamColor] = useState('#3B82F6');
-  const [bulkRows, setBulkRows] = useState<{ name: string; color: string }[]>([
-    { name: '', color: '#3B82F6' },
-  ]);
-  const [bulkAdding, setBulkAdding] = useState(false);
-  const [adding, setAdding] = useState(false);
-  
-  // Bulk import methods state
-  const [importMethod, setImportMethod] = useState<'quick' | 'paste' | 'file'>('paste');
-  const [quickAddInput, setQuickAddInput] = useState('');
-  const [bulkPasteText, setBulkPasteText] = useState('');
-  const [teamsAdded, setTeamsAdded] = useState<number | null>(null);
-  
-  // Finalization state
-  const [finalizing, setFinalizing] = useState(false);
+  const [errorType, setErrorType] = useState<'none' | 'denied' | 'network'>('none');
+  const [errorMessage, setErrorMessage] = useState('');
+  const [activeTab, setActiveTab] = useState<AdminTab>('overview');
+  const [origin, setOrigin] = useState('');
+
+  // Team creation & editing state
+  const [singleTeamName, setSingleTeamName] = useState('');
+  const [bulkTeamText, setBulkTeamText] = useState('');
+  const [addingTeams, setAddingTeams] = useState(false);
+  const [editingTeamId, setEditingTeamId] = useState<string | null>(null);
+  const [editTeamName, setEditTeamName] = useState('');
+  const [editTeamColor, setEditTeamColor] = useState('#2563EB');
+  const [savingTeamEdit, setSavingTeamEdit] = useState(false);
+
+  // Day transition modal state
+  const [showNextDayModal, setShowNextDayModal] = useState(false);
+  const [nextDayCarryOver, setNextDayCarryOver] = useState(true);
+  const [lockPrevDay, setLockPrevDay] = useState(true);
+  const [switchingDay, setSwitchingDay] = useState(false);
+  const [lockingDayNum, setLockingDayNum] = useState<number | null>(null);
+
+  // Finalize & export state
   const [showFinalizeModal, setShowFinalizeModal] = useState(false);
-  const [exportingPDF, setExportingPDF] = useState(false);
-  const [successMessage, setSuccessMessage] = useState('');
-  const [showLinksDropdown, setShowLinksDropdown] = useState(false);
+  const [finalizing, setFinalizing] = useState(false);
+  const [exportingPdf, setExportingPdf] = useState(false);
+  const [updatingSettings, setUpdatingSettings] = useState(false);
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
   useEffect(() => {
-    loadData();
-  }, [token]);
+    setOrigin(window.location.origin);
+  }, []);
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
+    if (!token) return;
     try {
       setLoading(true);
-      setError('');
-      setErrorType(null);
+      setErrorType('none');
+      setErrorMessage('');
 
-      // Verify token and get event
       const eventRes = await fetch(`/api/event-by-token/${token}`, {
-        headers: { 'X-ADMIN-TOKEN': token }
+        headers: { 'X-ADMIN-TOKEN': token },
+        cache: 'no-store',
       });
 
-      if (eventRes.status === 410) {
-        setErrorType('expired');
-        setLoading(false);
-        return;
-      }
-      
-      if (eventRes.status === 404) {
-        setErrorType('not-found');
-        setLoading(false);
+      if (eventRes.status === 401 || eventRes.status === 403 || eventRes.status === 404) {
+        setErrorType('denied');
+        setErrorMessage('This Admin link is invalid or has expired.');
         return;
       }
 
       if (!eventRes.ok) {
-        throw new Error('Invalid admin token');
-      }
-
-      const eventData = await eventRes.json();
-      const eventInfo = eventData.data?.event || eventData.event;
-      setEvent(eventInfo);
-
-      // Load teams
-      const teamsRes = await fetch(`/api/events/${eventInfo.id}/teams`, {
-        headers: { 'X-ADMIN-TOKEN': token }
-      });
-
-      if (teamsRes.ok) {
-        const teamsData = await teamsRes.json();
-        setTeams(teamsData.data?.teams || teamsData.teams || []);
-      }
-    } catch (err: any) {
-      setError(err.message || 'Failed to load event');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleAddTeam = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!event || !teamName.trim()) return;
-
-    try {
-      setAdding(true);
-      const res = await fetch(`/api/events/${event.id}/teams`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-ADMIN-TOKEN': token
-        },
-        body: JSON.stringify({
-          name: teamName.trim(),
-          color: teamColor
-        })
-      });
-
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Failed to add team');
-      }
-
-      setTeamName('');
-      setTeamColor('#3B82F6');
-      await loadData();
-    } catch (err: any) {
-      alert(err.message || 'Failed to add team');
-    } finally {
-      setAdding(false);
-    }
-  };
-
-  // Color palette for auto-assignment
-  const teamColors = [
-    '#9333ea', // purple
-    '#db2777', // pink
-    '#f59e0b', // amber
-    '#10b981', // green
-    '#3b82f6', // blue
-    '#ef4444', // red
-    '#8b5cf6', // violet
-    '#ec4899', // rose
-    '#f97316', // orange
-    '#14b8a6', // teal
-    '#06b6d4', // cyan
-    '#84cc16', // lime
-  ];
-
-  // Helper to show success toast
-  const showSuccessToast = (count: number) => {
-    setTeamsAdded(count);
-    setTimeout(() => setTeamsAdded(null), 4000);
-  };
-
-  // Add multiple teams with auto-assigned colors
-  const addMultipleTeams = async (teamNames: string[]) => {
-    if (!event || teamNames.length === 0) return;
-
-    try {
-      setBulkAdding(true);
-      
-      // Assign colors automatically
-      const teamsData = teamNames.map((name, index) => ({
-        name: name.trim(),
-        color: teamColors[teams.length + index % teamColors.length],
-      }));
-
-      const res = await fetch('/api/teams/bulk', {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json', 
-          'X-ADMIN-TOKEN': token 
-        },
-        body: JSON.stringify({ 
-          event_id: event.id, 
-          teams: teamsData 
-        })
-      });
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || 'Failed to add teams');
-      }
-
-      showSuccessToast(teamNames.length);
-      await loadData();
-    } catch (err: any) {
-      alert(err?.message || 'Failed to add teams');
-    } finally {
-      setBulkAdding(false);
-    }
-  };
-
-  // Quick add single team (press Enter)
-  const handleQuickAdd = async () => {
-    if (!quickAddInput.trim()) return;
-    
-    await addMultipleTeams([quickAddInput.trim()]);
-    setQuickAddInput('');
-  };
-
-  // Bulk paste handler
-  const handleBulkPaste = async () => {
-    const teamNames = bulkPasteText
-      .split('\n')
-      .map(name => name.trim())
-      .filter(name => name.length > 0);
-    
-    if (teamNames.length === 0) {
-      alert('Please enter at least one team name');
-      return;
-    }
-
-    await addMultipleTeams(teamNames);
-    setBulkPasteText('');
-  };
-
-  // File import handler
-  const handleFileImport = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = async (event) => {
-      const text = event.target?.result as string;
-      const teamNames = text
-        .split(/[\n,]/)
-        .map(name => name.trim())
-        .filter(name => name.length > 0);
-      
-      if (teamNames.length === 0) {
-        alert('No valid team names found in file');
+        const body = await eventRes.json().catch(() => ({}));
+        setErrorType('network');
+        setErrorMessage(
+          body?.error?.message ||
+            body?.error ||
+            'Temporary server issue. Please tap Retry.'
+        );
         return;
       }
 
-      await addMultipleTeams(teamNames);
-    };
-    reader.readAsText(file);
-    
-    // Reset input
-    e.target.value = '';
+      const eventPayload = await eventRes.json();
+      const loadedEvent: AdminEvent = eventPayload?.data?.event;
+
+      if (!loadedEvent || loadedEvent.admin_token !== token) {
+        setErrorType('denied');
+        setErrorMessage('This link does not have Admin permissions.');
+        return;
+      }
+
+      setEvent(loadedEvent);
+
+      // Remember this event permanently on this device (Zero-Signup Vault)
+      saveEventToDevice({
+        eventId: loadedEvent.id,
+        eventName: loadedEvent.name,
+        role: 'admin',
+        token,
+        path: `/admin/${token}`,
+        numberOfDays: loadedEvent.number_of_days,
+      });
+
+      const teamsRes = await fetch(`/api/events/${loadedEvent.id}/teams`, {
+        headers: { 'X-ADMIN-TOKEN': token },
+        cache: 'no-store',
+      });
+      if (teamsRes.ok) {
+        const teamsPayload = await teamsRes.json();
+        setTeams(teamsPayload?.data?.teams || []);
+      }
+    } catch {
+      setErrorType('network');
+      setErrorMessage('Could not reach the server. Check your internet and tap Retry.');
+    } finally {
+      setLoading(false);
+    }
+  }, [token]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  const handleAddSingleTeam = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!event || !singleTeamName.trim()) return;
+    try {
+      setAddingTeams(true);
+      const res = await fetch('/api/teams/bulk', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-ADMIN-TOKEN': token,
+        },
+        body: JSON.stringify({
+          event_id: event.id,
+          teams: [{ name: singleTeamName.trim() }],
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data?.error?.message || data?.error || 'Failed to add team');
+      }
+      setSingleTeamName('');
+      toast.success('Team added!');
+      await loadData();
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to add team');
+    } finally {
+      setAddingTeams(false);
+    }
   };
 
-  // Finalize event
+  const handleBulkAddTeams = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!event) return;
+    const names = bulkTeamText
+      .split(/[\n,]+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (names.length === 0) {
+      toast.error('Enter at least one team name');
+      return;
+    }
+
+    try {
+      setAddingTeams(true);
+      const res = await fetch('/api/teams/bulk', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-ADMIN-TOKEN': token,
+        },
+        body: JSON.stringify({
+          event_id: event.id,
+          teams: names.map((name) => ({ name })),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data?.error?.message || data?.error || 'Failed to add teams');
+      }
+      setBulkTeamText('');
+      toast.success(`Added ${names.length} team${names.length > 1 ? 's' : ''}!`);
+      await loadData();
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to add teams');
+    } finally {
+      setAddingTeams(false);
+    }
+  };
+
+  const handleStartEditTeam = (team: TeamSummary) => {
+    setEditingTeamId(team.id);
+    setEditTeamName(team.name);
+    setEditTeamColor(team.color || '#2563EB');
+  };
+
+  const handleSaveTeamEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!event || !editingTeamId || !editTeamName.trim()) return;
+    try {
+      setSavingTeamEdit(true);
+      const res = await fetch(`/api/events/${event.id}/teams/${editingTeamId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-ADMIN-TOKEN': token,
+        },
+        body: JSON.stringify({
+          name: editTeamName.trim(),
+          color: editTeamColor,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) {
+        throw new Error(data?.error || 'Failed to rename team');
+      }
+      toast.success('Team updated!');
+      setEditingTeamId(null);
+      await loadData();
+    } catch (err: any) {
+      toast.error(err?.message || 'Could not update team');
+    } finally {
+      setSavingTeamEdit(false);
+    }
+  };
+
+  const handleToggleDayLock = async (dayNumber: number, currentlyLocked: boolean) => {
+    if (!event) return;
+    try {
+      setLockingDayNum(dayNumber);
+      const res = await fetch(`/api/events/${event.id}/days/${dayNumber}/lock`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-ADMIN-TOKEN': token,
+        },
+        body: JSON.stringify({
+          action: currentlyLocked ? 'unlock' : 'lock',
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data?.error || 'Failed to update day lock');
+      }
+      toast.success(currentlyLocked ? `Day ${dayNumber} unlocked` : `Day ${dayNumber} locked`);
+      await loadData();
+    } catch (err: any) {
+      toast.error(err?.message || 'Could not update day lock');
+    } finally {
+      setLockingDayNum(null);
+    }
+  };
+
+  const handleAdvanceDay = async (targetDayNumber: number, carryOver: boolean, lockPrev: boolean) => {
+    if (!event) return;
+    try {
+      setSwitchingDay(true);
+      const res = await fetch(`/api/events/${event.id}/days/advance`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-ADMIN-TOKEN': token,
+        },
+        body: JSON.stringify({
+          target_day_number: targetDayNumber,
+          carry_over_from_previous: carryOver,
+          lock_previous_day: lockPrev,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data?.error || 'Failed to switch day');
+      }
+      setShowNextDayModal(false);
+      toast.success(
+        `Switched to Day ${targetDayNumber} (${
+          carryOver ? 'continuing totals' : 'starting fresh'
+        })`
+      );
+      await loadData();
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to switch day');
+    } finally {
+      setSwitchingDay(false);
+    }
+  };
+
   const handleFinalizeEvent = async () => {
     if (!event) return;
-
     try {
       setFinalizing(true);
       const res = await fetch(`/api/events/${event.id}/finalize`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'X-ADMIN-TOKEN': token,
         },
-        body: JSON.stringify({ admin_token: token })
+        body: JSON.stringify({ admin_token: token }),
       });
-
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Failed to finalize event');
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) {
+        const msg =
+          typeof data?.error === 'string'
+            ? data.error
+            : data?.error?.message || 'Failed to finalize event';
+        throw new Error(msg);
       }
-
-      setSuccessMessage('✅ Event finalized! Results are now published.');
       setShowFinalizeModal(false);
-      loadData();
+      toast.success('Final results published!');
+      await loadData();
     } catch (err: any) {
-      alert(err.message || 'Failed to finalize event');
+      toast.error(err?.message || 'Failed to publish final results');
     } finally {
       setFinalizing(false);
     }
   };
 
-  // Unfinalize event
   const handleUnfinalizeEvent = async () => {
     if (!event) return;
-
     try {
       setFinalizing(true);
-      const res = await fetch(`/api/events/${event.id}/finalize?admin_token=${token}`, {
+      const res = await fetch(`/api/events/${event.id}/finalize`, {
         method: 'DELETE',
+        headers: {
+          'X-ADMIN-TOKEN': token,
+        },
       });
-
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Failed to unfinalize event');
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) {
+        const msg =
+          typeof data?.error === 'string'
+            ? data.error
+            : data?.error?.message || 'Failed to reopen event';
+        throw new Error(msg);
       }
-
-      setSuccessMessage('✅ Event reopened for editing');
-      loadData();
+      toast.success('Event reopened for scoring');
+      await loadData();
     } catch (err: any) {
-      alert(err.message || 'Failed to unfinalize event');
+      toast.error(err?.message || 'Failed to reopen event');
     } finally {
       setFinalizing(false);
     }
   };
 
-  // Export PDF
-  const handleExportPDF = async () => {
+  const handleTogglePublicActivity = async () => {
     if (!event) return;
-
     try {
-      setExportingPDF(true);
-
-      // Re-fetch latest teams using admin token to ensure freshest standings
-      const teamsRes = await fetch(`/api/events/${event.id}/teams`, {
-        headers: { 'X-ADMIN-TOKEN': token }
+      setUpdatingSettings(true);
+      const nextVal = !event.show_public_activity;
+      const res = await fetch(`/api/events/${event.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-ADMIN-TOKEN': token,
+        },
+        body: JSON.stringify({ show_public_activity: nextVal }),
       });
-
-      if (!teamsRes.ok) throw new Error('Failed to fetch teams for PDF');
-      const teamsData = await teamsRes.json();
-      const latestTeams = teamsData.data?.teams || teamsData.teams || [];
-
-      // Fetch scores by day (public endpoint is fine for this)
-      const res = await fetch(`/api/public/${event.public_token}`);
-      if (!res.ok) throw new Error('Failed to fetch data for PDF');
       const data = await res.json();
-      const scoresByDay = data.data?.scores_by_day || [];
+      if (!res.ok || !data.success) {
+        throw new Error(data?.error || 'Failed to update setting');
+      }
+      setEvent((prev) => (prev ? { ...prev, show_public_activity: nextVal } : prev));
+      toast.success(
+        nextVal
+          ? 'Public activity feed enabled'
+          : 'Public activity feed hidden (totals only)'
+      );
+    } catch (err: any) {
+      toast.error(err?.message || 'Could not update setting');
+    } finally {
+      setUpdatingSettings(false);
+    }
+  };
 
+  const handleExportPdf = async () => {
+    if (!event) return;
+    try {
+      setExportingPdf(true);
+      const ranked = [...teams].sort((a, b) => b.total_points - a.total_points);
       await generateResultsPDF({
         event: {
           event_name: event.name,
-          mode: event.mode as any,
-          theme_color: event.theme_color,
-          public_token: event.public_token,
-          finalized_at: event.finalized_at
+          mode: (event.mode as 'quick' | 'camp' | 'advanced') || 'camp',
+          theme_color: '#2563eb',
+          public_token: event.public_token || '',
+          finalized_at: event.is_finalized ? new Date().toISOString() : undefined,
         },
-        teams: latestTeams.map((t: any) => ({
-          id: Number(t.id),
+        teams: ranked.map((t, index) => ({
+          id: index + 1,
           team_name: t.name,
-          avatar_url: t.avatar_url || null,
-          total_points: t.total_points || 0
+          avatar_url: null,
+          total_points: t.total_points,
         })),
-        scoresByDay,
-        includeLink: true
+        includeLink: true,
       });
-
-      setSuccessMessage('✅ PDF downloaded successfully');
-      setTimeout(() => setSuccessMessage(''), 3000);
-    } catch (err: any) {
-      alert(err.message || 'Failed to export PDF');
+      toast.success('PDF downloaded!');
+    } catch {
+      toast.error('Failed to generate PDF');
     } finally {
-      setExportingPDF(false);
+      setExportingPdf(false);
+    }
+  };
+
+  const copyLink = async (key: string, url: string) => {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopiedKey(key);
+      toast.success('Link copied!');
+      setTimeout(() => setCopiedKey(null), 2000);
+    } catch {
+      toast.error('Failed to copy link');
     }
   };
 
   if (loading) {
     return (
-      <div className="site-shell min-h-screen flex items-center justify-center">
+      <div className="flex min-h-screen items-center justify-center bg-slate-50 p-6">
         <div className="text-center">
-          <div className="w-12 h-12 border-4 border-teal-700 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-slate-600">Loading command center...</p>
+          <RefreshCw className="mx-auto h-8 w-8 animate-spin text-blue-600" />
+          <p className="mt-3 text-sm font-medium text-slate-600">Loading Admin Dashboard…</p>
         </div>
       </div>
     );
   }
 
-  if (errorType === 'expired') {
+  if (errorType === 'denied') {
     return (
-      <div className="site-shell min-h-screen flex items-center justify-center px-4">
-        <ExpiredEvent showWaitlist={true} />
-      </div>
-    );
-  }
-
-  if (errorType === 'not-found') {
-    return (
-      <div className="site-shell min-h-screen flex items-center justify-center px-4">
-        <EventNotFoundError />
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="site-shell min-h-screen flex items-center justify-center">
-        <div className="surface-strong max-w-md rounded-[28px] p-6 text-center">
-          <div className="text-5xl mb-4">🔒</div>
-          <h1 className="text-2xl font-bold mb-2">Access Denied</h1>
-          <p className="text-gray-600 mb-4">{error}</p>
-          <button
-            onClick={() => router.push('/events/create')}
-            className="btn-primary"
+      <div className="flex min-h-screen items-center justify-center bg-slate-50 p-4">
+        <div className="max-w-md rounded-2xl border border-red-200 bg-white p-8 text-center shadow-sm">
+          <Shield className="mx-auto h-10 w-10 text-red-500" />
+          <h1 className="mt-3 text-xl font-bold text-slate-900">Access Denied</h1>
+          <p className="mt-1.5 text-sm text-slate-600">{errorMessage}</p>
+          <Link
+            href="/"
+            className="mt-6 inline-flex rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-slate-800"
           >
-            Create New Event
+            Back to Home
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  if (errorType === 'network' || !event) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-50 p-4">
+        <div className="max-w-md rounded-2xl border border-amber-200 bg-white p-8 text-center shadow-sm">
+          <AlertTriangle className="mx-auto h-10 w-10 text-amber-500" />
+          <h1 className="mt-3 text-xl font-bold text-slate-900">Connection Issue</h1>
+          <p className="mt-1.5 text-sm text-slate-600">{errorMessage}</p>
+          <button
+            type="button"
+            onClick={loadData}
+            className="mt-6 inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700"
+          >
+            <RefreshCw className="h-4 w-4" />
+            Retry
           </button>
         </div>
       </div>
     );
   }
 
+  const activeDay = event.active_day_number || 1;
+  const sortedOverall = [...teams].sort((a, b) => b.total_points - a.total_points);
+  const overallLeader = sortedOverall[0];
+  const nextDayNumber = activeDay + 1;
+  const hasNextDay = nextDayNumber <= Math.max(event.number_of_days, event.days.length);
+
+  const scorerUrl = `${origin}/score/${event.scorer_token || ''}`;
+  const publicUrl = `${origin}/scoreboard/${event.public_token || ''}`;
+  const adminUrl = `${origin}/admin/${token}`;
+
+  const tabs: Array<{ id: AdminTab; label: string; icon: any }> = [
+    { id: 'overview', label: 'Overview & Days', icon: CalendarDays },
+    { id: 'teams', label: `Teams (${teams.length})`, icon: Users },
+    { id: 'share', label: 'Share & QR', icon: Share2 },
+    { id: 'results', label: 'Results & Settings', icon: Settings },
+  ];
+
   return (
-    <div className="site-shell min-h-screen py-10 px-4">
-      {/* Interactive Tutorial */}
-      <AdminTutorial />
-
-      <div className="max-w-4xl mx-auto space-y-8 relative z-10">
-        {/* Header */}
-        <div className="surface-panel relative overflow-hidden rounded-[34px]">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(15,118,110,0.18),transparent_28%),radial-gradient(circle_at_bottom_left,rgba(201,106,61,0.16),transparent_30%)]" />
-          <div className="relative p-8">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-3">
-                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,#14213d_0%,#0f766e_100%)] text-sm font-black text-white shadow-lg">A</div>
-                <div>
-                  <div className="section-label">Admin command center</div>
-                  <h1 className="mt-3 text-3xl md:text-4xl font-extrabold text-gray-900 tracking-tight">{event?.name}</h1>
-                </div>
-              </div>
-              <button
-                onClick={resetAdminTutorial}
-                className="px-4 py-2 text-sm font-medium text-slate-700 bg-white/75 border border-slate-300 rounded-full transition-colors hover:bg-white flex items-center gap-2"
-                title="Restart tutorial"
+    <div className="min-h-screen bg-slate-50 pb-12 text-slate-900">
+      {/* Top Bar */}
+      <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur">
+        <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-4 py-3.5 sm:px-6">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <Link
+                href="/"
+                className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-blue-600 text-white"
+                title="GamesCo Home"
               >
-                <span className="text-lg">❓</span>
-                <span className="hidden sm:inline">Tutorial</span>
-              </button>
+                <Trophy className="h-4 w-4" />
+              </Link>
+              <span className="rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-semibold text-blue-700">
+                Admin
+              </span>
+              {event.is_finalized ? (
+                <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-800">
+                  Finalized
+                </span>
+              ) : (
+                <span className="rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-800">
+                  Day {activeDay} of {event.number_of_days}
+                </span>
+              )}
             </div>
-            <p className="text-gray-600 mb-4">Operate teams, links, results, and publishing from one place.</p>
-            
-            {/* Event Links Manager */}
-            <EventLinksManager
-              eventId={event?.id || ''}
-              eventName={event?.name || ''}
-              adminToken={token}
-              scorerToken={event?.scorer_token || ''}
-              publicToken={event?.public_token || ''}
-            />
-            
-            {/* Quick Access Links */}
-            <div className="mt-6 flex flex-wrap gap-3">
-              <a
-                href={`/recap/${event?.public_token}`}
-                target="_blank"
-                className="inline-flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-full hover:bg-slate-800 transition-colors text-sm font-medium"
+            <h1 className="mt-1 truncate text-lg font-extrabold text-slate-900 sm:text-xl">
+              {event.name}
+            </h1>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {event.scorer_token && (
+              <Link
+                href={`/score/${event.scorer_token}`}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3.5 py-2 text-xs font-semibold text-white shadow-sm hover:bg-emerald-700"
               >
-                <span>{event?.is_finalized ? '🏆' : '⚡'}</span>
-                {event?.is_finalized ? 'Final Results' : 'Live Scores'}
-              </a>
-            </div>
-          </div>
-        </div>
-
-        {/* Finalization & Export Section */}
-        {event && (
-          <div className="surface-strong rounded-[28px] p-6">
-            <h2 className="text-xl font-bold text-gray-900 mb-4">📊 Results Management</h2>
-            <div className="space-y-4">
-              {/* Finalization Status */}
-              <div className="flex items-center justify-between p-4 rounded-[22px] border border-slate-200 bg-white/70">
-                <div>
-                  <h3 className="font-semibold text-gray-900">Event Status</h3>
-                  <p className="text-sm text-gray-600 mt-1">
-                    {event.is_finalized 
-                      ? `Finalized on ${new Date(event.finalized_at!).toLocaleString()}`
-                      : 'Event is still active - scores can be edited'
-                    }
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  {event.is_finalized ? (
-                    <>
-                      <span className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm font-medium">
-                        ✓ Finalized
-                      </span>
-                      <button
-                        onClick={handleUnfinalizeEvent}
-                        disabled={finalizing}
-                        className="px-4 py-2 bg-gray-700 text-white rounded-full hover:bg-gray-800 disabled:opacity-50 text-sm font-medium"
-                      >
-                        {finalizing ? 'Reopening...' : 'Reopen for Editing'}
-                      </button>
-                    </>
-                  ) : (
-                    <button
-                      onClick={() => setShowFinalizeModal(true)}
-                      className="px-4 py-2 bg-[linear-gradient(135deg,#0f766e_0%,#1f9d8f_100%)] text-white rounded-full text-sm font-medium shadow-lg"
-                    >
-                      Publish Final Results
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {/* PDF Export */}
-              <div className="flex items-center justify-between p-4 rounded-[22px] border border-slate-200 bg-white/70">
-                <div>
-                  <h3 className="font-semibold text-gray-900">Export Results</h3>
-                  <p className="text-sm text-gray-600 mt-1">
-                    Download a PDF with team rankings, scores, and branding
-                  </p>
-                </div>
-                <button
-                  onClick={handleExportPDF}
-                  disabled={exportingPDF}
-                  className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 text-sm font-medium flex items-center gap-2"
+                <PencilLine className="h-3.5 w-3.5" />
+                Enter Scores
+              </Link>
+            )}
+            {event.public_token && (
+              <>
+                <Link
+                  href={`/recap/${event.public_token}`}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 px-3.5 py-2 text-xs font-bold text-white shadow-sm hover:from-indigo-700 hover:to-purple-700"
                 >
-                  <span>{exportingPDF ? '⏳' : '📄'}</span>
-                  {exportingPDF ? 'Generating...' : 'Download PDF'}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Finalize Confirmation Modal */}
-        {showFinalizeModal && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
-              <h3 className="text-xl font-bold text-gray-900 mb-4">
-                Publish Final Results?
-              </h3>
-              <div className="space-y-3 mb-6 text-sm text-gray-600">
-                <p>This will:</p>
-                <ul className="list-disc list-inside space-y-1 pl-2">
-                  <li>Mark the event as officially completed</li>
-                  <li>Change "Live Scores" label to "Final Results"</li>
-                  <li>Allow you to export results as PDF</li>
-                  <li>You can still reopen for editing later</li>
-                </ul>
-              </div>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setShowFinalizeModal(false)}
-                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium"
+                  <Sparkles className="h-3.5 w-3.5" />
+                  Reveal Show
+                </Link>
+                <Link
+                  href={`/scoreboard/${event.public_token}`}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-xs font-semibold text-slate-800 hover:bg-slate-50"
                 >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleFinalizeEvent}
-                  disabled={finalizing}
-                  className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 font-medium"
-                >
-                  {finalizing ? 'Publishing...' : 'Publish Results'}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Success Message */}
-        {successMessage && (
-          <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-green-800 font-medium">
-            {successMessage}
-          </div>
-        )}
-
-        {/* Success Toast (floating) */}
-        {teamsAdded !== null && (
-          <div className="fixed bottom-6 right-6 p-6 bg-green-500 text-white rounded-xl shadow-2xl animate-slide-up z-50 max-w-sm">
-            <div className="flex items-center gap-4">
-              <div className="text-4xl animate-bounce">✅</div>
-              <div>
-                <p className="font-bold text-lg">Teams Added!</p>
-                <p className="text-sm opacity-90">
-                  {teamsAdded} {teamsAdded === 1 ? 'team' : 'teams'} created successfully
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* SECTION 1: Bulk Team Import (Enhanced with 3 Methods) */}
-        <div className="surface-panel rounded-[32px] p-8">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-12 h-12 rounded-2xl bg-[linear-gradient(135deg,#14213d_0%,#0f766e_100%)] flex items-center justify-center text-white font-bold text-2xl shadow-lg">
-              ＋
-            </div>
-            <div>
-              <h2 className="text-2xl font-bold text-gray-900">Add Teams</h2>
-              <p className="text-base text-gray-600">Seed the event roster fast, whether you paste, type, or import.</p>
-            </div>
-          </div>
-
-          {/* Method Selector Tabs */}
-          <div className="flex gap-3 mb-6 border-b border-gray-200 pb-4">
-            <button
-              type="button"
-              onClick={() => setImportMethod('paste')}
-              className={`flex items-center gap-2 px-6 py-3 rounded-lg font-semibold transition ${
-                importMethod === 'paste'
-                  ? 'bg-slate-900 text-white shadow-md'
-                  : 'bg-white text-gray-700 hover:bg-gray-100 border border-slate-200'
-              }`}
-            >
-              <Clipboard className="w-5 h-5" />
-              Bulk Paste
-            </button>
-            <button
-              type="button"
-              onClick={() => setImportMethod('quick')}
-              className={`flex items-center gap-2 px-6 py-3 rounded-lg font-semibold transition ${
-                importMethod === 'quick'
-                  ? 'bg-slate-900 text-white shadow-md'
-                  : 'bg-white text-gray-700 hover:bg-gray-100 border border-slate-200'
-              }`}
-            >
-              <Zap className="w-5 h-5" />
-              Quick Add
-            </button>
-            <button
-              type="button"
-              onClick={() => setImportMethod('file')}
-              className={`flex items-center gap-2 px-6 py-3 rounded-lg font-semibold transition ${
-                importMethod === 'file'
-                  ? 'bg-slate-900 text-white shadow-md'
-                  : 'bg-white text-gray-700 hover:bg-gray-100 border border-slate-200'
-              }`}
-            >
-              <Upload className="w-5 h-5" />
-              Import File
-            </button>
-          </div>
-
-          {/* METHOD 1: Bulk Paste (Primary) */}
-          {importMethod === 'paste' && (
-            <div className="space-y-4">
-              <div>
-                <label className="block text-lg font-semibold text-gray-900 mb-3">
-                  📋 Paste Team Names
-                </label>
-                <textarea
-                  rows={10}
-                  placeholder="Paste team names, one per line:&#10;Team Alpha&#10;Team Bravo&#10;Team Charlie&#10;Team Delta&#10;Team Echo"
-                  className="w-full px-6 py-4 text-lg font-mono border border-slate-200 rounded-[24px] focus:outline-none focus:ring-4 focus:ring-teal-200 bg-white/90"
-                  value={bulkPasteText}
-                  onChange={(e) => setBulkPasteText(e.target.value)}
-                />
-                <div className="flex items-center justify-between mt-3">
-                  <p className="text-sm text-gray-600">
-                    💡 Copy from Excel, Google Sheets, or any list
-                  </p>
-                  {bulkPasteText.trim() && (
-                    <p className="text-sm font-semibold text-purple-600">
-                      {bulkPasteText.split('\n').filter(line => line.trim()).length} teams ready
-                    </p>
-                  )}
-                </div>
-              </div>
-              
-              <button
-                type="button"
-                onClick={handleBulkPaste}
-                disabled={bulkAdding || !bulkPasteText.trim()}
-                className="w-full py-5 px-8 bg-[linear-gradient(135deg,#14213d_0%,#244c67_56%,#0f766e_100%)] text-white font-bold text-xl rounded-[24px] hover:shadow-2xl transition disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-[1.02] active:scale-100"
-              >
-                {bulkAdding ? (
-                  <span className="flex items-center justify-center gap-3">
-                    <svg className="animate-spin h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    Adding Teams...
-                  </span>
-                ) : (
-                  `Add All ${bulkPasteText.split('\n').filter(line => line.trim()).length} Teams →`
-                )}
-              </button>
-            </div>
-          )}
-
-          {/* METHOD 2: Quick Add (Press Enter) */}
-          {importMethod === 'quick' && (
-            <div className="space-y-4">
-              <div>
-                <label className="block text-lg font-semibold text-gray-900 mb-3">
-                  ⚡ Quick Add Teams
-                </label>
-                <input
-                  type="text"
-                  placeholder="Team name (press Enter to add)"
-                  className="w-full px-6 py-5 text-xl border border-slate-200 rounded-[24px] focus:outline-none focus:ring-4 focus:ring-teal-200 bg-white/90"
-                  value={quickAddInput}
-                  onChange={(e) => setQuickAddInput(e.target.value)}
-                  onKeyPress={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      handleQuickAdd();
-                    }
-                  }}
-                  disabled={bulkAdding}
-                  autoFocus
-                />
-                <div className="mt-3 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                  <p className="text-base text-blue-800 flex items-start gap-2">
-                    <span className="text-2xl">💡</span>
-                    <span>
-                      <strong>Tip:</strong> Type team name → Press <kbd className="px-2 py-1 bg-white border border-blue-300 rounded text-sm font-mono">Enter</kbd> → Repeat
-                      <br />
-                      <span className="text-sm">Perfect for quickly adding teams one at a time!</span>
-                    </span>
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* METHOD 3: File Import */}
-          {importMethod === 'file' && (
-            <div className="space-y-4">
-              <div>
-                <label className="block text-lg font-semibold text-gray-900 mb-3">
-                  📁 Import from File
-                </label>
-                <div className="border-2 border-dashed border-slate-300 rounded-[24px] p-12 text-center hover:border-teal-500 transition bg-white/80">
-                  <div className="flex flex-col items-center gap-4">
-                    <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center">
-                      <FileText className="w-8 h-8 text-purple-600" />
-                    </div>
-                    <div>
-                      <label htmlFor="file-upload" className="cursor-pointer">
-                        <span className="px-6 py-3 bg-slate-900 text-white rounded-full hover:bg-slate-800 font-semibold inline-block">
-                          Choose File
-                        </span>
-                        <input
-                          id="file-upload"
-                          type="file"
-                          accept=".csv,.txt"
-                          onChange={handleFileImport}
-                          className="hidden"
-                        />
-                      </label>
-                      <p className="text-base text-gray-600 mt-3">
-                        Upload a <strong>.txt</strong> or <strong>.csv</strong> file with team names
-                      </p>
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-lg">
-                  <p className="text-sm font-semibold text-amber-900 mb-2">Supported formats:</p>
-                  <ul className="text-sm text-amber-800 space-y-1">
-                    <li>• <strong>Text file (.txt):</strong> One team per line</li>
-                    <li>• <strong>CSV file (.csv):</strong> Teams separated by commas or newlines</li>
-                    <li>• <strong>Example:</strong> Team A, Team B, Team C</li>
-                  </ul>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* SECTION 2: Teams List (with Edit/Delete) */}
-        <div className="surface-strong rounded-[32px] p-8">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-2xl font-bold text-gray-900">
-              Your Teams {teams.length > 0 && <span className="text-purple-600">({teams.length})</span>}
-            </h2>
-            {teams.length > 0 && (
-              <div className="text-sm text-gray-600">
-                Colors auto-assigned • Tap to edit
-              </div>
+                  <Monitor className="h-3.5 w-3.5" />
+                  Public Board
+                </Link>
+              </>
             )}
           </div>
-          
-          {teams.length === 0 ? (
-            <NoTeamsEmpty onAddTeams={() => window.scrollTo({ top: 0, behavior: 'smooth' })} />
-          ) : (
-            <div className="space-y-3">
-              {teams.map((team, index) => (
-                <div
-                  key={team.id}
-                  className="flex items-center justify-between p-5 bg-white/75 rounded-[24px] hover:shadow-md transition-all border border-slate-200 hover:-translate-y-0.5"
+        </div>
+
+        {/* Clean 4-Tab Bar */}
+        <div className="mx-auto max-w-5xl px-4 sm:px-6">
+          <div className="flex gap-1 overflow-x-auto border-t border-slate-100 pt-1">
+            {tabs.map((tab) => {
+              const Icon = tab.icon;
+              const isActive = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`inline-flex shrink-0 items-center gap-2 border-b-2 px-3.5 py-2.5 text-sm font-semibold transition ${
+                    isActive
+                      ? 'border-blue-600 text-blue-600'
+                      : 'border-transparent text-slate-600 hover:text-slate-900'
+                  }`}
                 >
-                  <div className="flex items-center gap-4 flex-1">
-                    <div className="relative">
+                  <Icon className="h-4 w-4" />
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </header>
+
+      <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6">
+        {/* TAB 1: OVERVIEW & DAYS */}
+        {activeTab === 'overview' && (
+          <div className="space-y-6">
+            {/* Summary Metrics */}
+            <div className="grid gap-4 sm:grid-cols-3">
+              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                  Active Day
+                </p>
+                <p className="mt-1 text-2xl font-extrabold text-slate-900">
+                  {event.days.find((d) => d.day_number === activeDay)?.label ||
+                    `Day ${activeDay}`}
+                </p>
+                <p className="mt-1 text-xs text-slate-500">
+                  of {event.number_of_days} total day{event.number_of_days > 1 ? 's' : ''}
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                  Overall Leader
+                </p>
+                <p className="mt-1 truncate text-2xl font-extrabold text-slate-900">
+                  {overallLeader ? overallLeader.name : 'No teams yet'}
+                </p>
+                <p className="mt-1 text-xs font-semibold text-blue-600 tabular-nums">
+                  {overallLeader ? `${overallLeader.total_points} pts overall` : 'Add teams to begin'}
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                  Teams &amp; History
+                </p>
+                <p className="mt-1 text-2xl font-extrabold text-slate-900">
+                  {teams.length} Teams
+                </p>
+                <Link
+                  href={`/history/${token}`}
+                  className="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-blue-600 hover:underline"
+                >
+                  <History className="h-3.5 w-3.5" />
+                  View &amp; Edit Score History
+                </Link>
+              </div>
+            </div>
+
+            {/* Day Management & Transition */}
+            <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900">
+                    Day Schedule &amp; Locking
+                  </h2>
+                  <p className="text-sm text-slate-600">
+                    Lock finished days to prevent accidental edits, and move to the next day
+                    with carry-over or a fresh start.
+                  </p>
+                </div>
+
+                {!event.is_finalized && hasNextDay && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNextDayCarryOver(true);
+                      setLockPrevDay(true);
+                      setShowNextDayModal(true);
+                    }}
+                    className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
+                  >
+                    Start Day {nextDayNumber}
+                    <ArrowRight className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+
+              <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                {event.days.map((day) => {
+                  const isActiveDay = day.day_number === activeDay;
+                  return (
+                    <div
+                      key={day.id}
+                      className={`flex items-center justify-between gap-3 rounded-xl border p-4 ${
+                        isActiveDay
+                          ? 'border-blue-300 bg-blue-50/60'
+                          : 'border-slate-200 bg-slate-50/50'
+                      }`}
+                    >
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-slate-900">{day.label}</span>
+                          {isActiveDay && (
+                            <span className="rounded-full bg-blue-600 px-2 py-0.5 text-[11px] font-semibold text-white">
+                              Active
+                            </span>
+                          )}
+                          {day.is_locked && (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-slate-200 px-2 py-0.5 text-[11px] font-semibold text-slate-700">
+                              <Lock className="h-3 w-3" />
+                              Locked
+                            </span>
+                          )}
+                        </div>
+                        {day.day_number > 1 && (
+                          <p className="mt-1 text-xs text-slate-500">
+                            {day.carry_over_from_previous
+                              ? 'Continues from previous day totals'
+                              : 'Starts fresh at 0 (overall still tracked)'}
+                          </p>
+                        )}
+                      </div>
+
+                      {!event.is_finalized && (
+                        <div className="flex items-center gap-1.5">
+                          {!isActiveDay && !day.is_locked && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleAdvanceDay(
+                                  day.day_number,
+                                  day.carry_over_from_previous,
+                                  false
+                                )
+                              }
+                              disabled={switchingDay}
+                              className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                            >
+                              Set Active
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleToggleDayLock(day.day_number, day.is_locked)
+                            }
+                            disabled={lockingDayNum === day.day_number}
+                            className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition ${
+                              day.is_locked
+                                ? 'border border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100'
+                                : 'border border-slate-300 bg-white text-slate-700 hover:bg-slate-100'
+                            }`}
+                          >
+                            {day.is_locked ? (
+                              <>
+                                <Unlock className="h-3.5 w-3.5" />
+                                Unlock
+                              </>
+                            ) : (
+                              <>
+                                <Lock className="h-3.5 w-3.5" />
+                                Lock
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+
+            {/* Quick Standings Preview */}
+            <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+              <div className="mb-4 flex items-center justify-between">
+                <h2 className="text-lg font-bold text-slate-900">Current Standings</h2>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('teams')}
+                  className="text-xs font-semibold text-blue-600 hover:underline"
+                >
+                  Manage Teams →
+                </button>
+              </div>
+              {teams.length === 0 ? (
+                <p className="text-sm text-slate-500">
+                  No teams added yet. Switch to the Teams tab to add your teams.
+                </p>
+              ) : (
+                <div className="space-y-2.5">
+                  {sortedOverall.map((team, idx) => (
+                    <div
+                      key={team.id}
+                      className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-4 py-3"
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="w-6 text-sm font-bold text-slate-400">
+                          #{idx + 1}
+                        </span>
+                        <span
+                          className="h-3.5 w-3.5 rounded-full"
+                          style={{ backgroundColor: team.color }}
+                        />
+                        <span className="font-semibold text-slate-900">{team.name}</span>
+                      </div>
+                      <div className="flex items-center gap-4 text-right tabular-nums">
+                        <span className="text-xs text-slate-500">
+                          Day {activeDay}:{' '}
+                          <strong className="text-slate-800">
+                            {team.day_totals?.[activeDay] ?? 0}
+                          </strong>
+                        </span>
+                        <span className="text-base font-extrabold text-slate-900">
+                          {team.total_points} pts
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+          </div>
+        )}
+
+        {/* TAB 2: TEAMS */}
+        {activeTab === 'teams' && (
+          <div className="grid gap-6 lg:grid-cols-2">
+            {/* Existing Teams */}
+            <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+              <h2 className="text-lg font-bold text-slate-900">
+                Teams ({teams.length})
+              </h2>
+              <p className="mt-1 text-sm text-slate-600">
+                Distinct team colors are automatically assigned.
+              </p>
+
+              <div className="mt-4 space-y-2.5">
+                {teams.length === 0 ? (
+                  <p className="rounded-xl border border-dashed border-slate-200 p-6 text-center text-sm text-slate-500">
+                    No teams yet. Add your first team on the right.
+                  </p>
+                ) : (
+                  teams.map((team) => {
+                    const isEditing = editingTeamId === team.id;
+                    if (isEditing) {
+                      return (
+                        <form
+                          key={team.id}
+                          onSubmit={handleSaveTeamEdit}
+                          className="space-y-3 rounded-xl border border-blue-300 bg-blue-50/50 p-3.5"
+                        >
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="text"
+                              value={editTeamName}
+                              onChange={(e) => setEditTeamName(e.target.value)}
+                              className="min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-900 focus:border-blue-500 focus:outline-none"
+                              autoFocus
+                            />
+                            <button
+                              type="submit"
+                              disabled={savingTeamEdit || !editTeamName.trim()}
+                              className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+                            >
+                              {savingTeamEdit ? 'Saving…' : 'Save'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setEditingTeamId(null)}
+                              aria-label="Cancel edit"
+                              className="rounded-lg p-2 text-slate-500 hover:bg-white"
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-xs font-medium text-slate-600">Color:</span>
+                            {TEAM_COLOR_CHOICES.map((hex) => (
+                              <button
+                                key={hex}
+                                type="button"
+                                onClick={() => setEditTeamColor(hex)}
+                                className={`h-6 w-6 rounded-full transition ${
+                                  editTeamColor === hex
+                                    ? 'ring-2 ring-slate-900 ring-offset-2'
+                                    : 'opacity-80 hover:opacity-100'
+                                }`}
+                                style={{ backgroundColor: hex }}
+                                aria-label={`Select color ${hex}`}
+                              />
+                            ))}
+                          </div>
+                        </form>
+                      );
+                    }
+
+                    return (
                       <div
-                        className="w-14 h-14 rounded-full flex items-center justify-center text-white font-bold text-xl shadow-md"
-                        style={{ backgroundColor: team.color }}
+                        key={team.id}
+                        className="flex items-center justify-between gap-2 rounded-xl border border-slate-200 px-4 py-3"
                       >
-                        {safeInitial(team.name)}
+                        <div className="flex min-w-0 items-center gap-3">
+                          <span
+                            className="h-4 w-4 shrink-0 rounded-full"
+                            style={{ backgroundColor: team.color }}
+                          />
+                          <span className="truncate font-semibold text-slate-900">
+                            {team.name}
+                          </span>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-2">
+                          <span className="text-sm font-bold text-slate-700 tabular-nums">
+                            {team.total_points} pts
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleStartEditTeam(team)}
+                            title="Rename team or change color"
+                            className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700"
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                            Edit
+                          </button>
+                        </div>
                       </div>
-                      <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-white rounded-full flex items-center justify-center text-xs font-bold text-gray-600 border-2 border-gray-200">
-                        #{index + 1}
-                      </div>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-bold text-lg text-gray-900 truncate">{team.name}</h3>
-                      <p className="text-sm text-gray-600">
-                        <span className="font-semibold">{team.total_points || 0}</span> points total
-                      </p>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-center gap-3">
-                    <div className="text-right mr-4">
-                      <div className="text-3xl font-bold text-purple-600">{team.total_points || 0}</div>
-                    </div>
-                    
-                    {/* Edit Button */}
+                    );
+                  })
+                )}
+              </div>
+            </section>
+
+            {/* Add Teams */}
+            <div className="space-y-5">
+              <form
+                onSubmit={handleAddSingleTeam}
+                className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6"
+              >
+                <h3 className="text-base font-bold text-slate-900">Quick Add Team</h3>
+                <div className="mt-3 flex gap-2">
+                  <input
+                    type="text"
+                    value={singleTeamName}
+                    onChange={(e) => setSingleTeamName(e.target.value)}
+                    placeholder="e.g., Team Eagles"
+                    className="min-w-0 flex-1 rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm focus:border-blue-500 focus:outline-none"
+                  />
+                  <button
+                    type="submit"
+                    disabled={addingTeams || !singleTeamName.trim()}
+                    className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Add
+                  </button>
+                </div>
+              </form>
+
+              <form
+                onSubmit={handleBulkAddTeams}
+                className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6"
+              >
+                <h3 className="text-base font-bold text-slate-900">Bulk Add Teams</h3>
+                <p className="mt-1 text-xs text-slate-500">
+                  Paste multiple team names separated by new lines or commas.
+                </p>
+                <textarea
+                  rows={4}
+                  value={bulkTeamText}
+                  onChange={(e) => setBulkTeamText(e.target.value)}
+                  placeholder={'Team Alpha\nTeam Beta\nTeam Gamma'}
+                  className="mt-3 w-full rounded-xl border border-slate-300 p-3 text-sm focus:border-blue-500 focus:outline-none"
+                />
+                <button
+                  type="submit"
+                  disabled={addingTeams || !bulkTeamText.trim()}
+                  className="mt-3 inline-flex items-center gap-1.5 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
+                >
+                  {addingTeams ? 'Adding…' : 'Add All Teams'}
+                </button>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 3: SHARE & QR */}
+        {activeTab === 'share' && (
+          <div className="grid gap-6 md:grid-cols-3">
+            <div className="space-y-4 md:col-span-2">
+              {[
+                {
+                  key: 'scorer',
+                  title: 'Scorer Link (Share with Admins / Scorers)',
+                  desc: 'Opens the offline-ready scoring pad. Once opened on their phone, it stays saved.',
+                  url: scorerUrl,
+                },
+                {
+                  key: 'public',
+                  title: 'Public Scoreboard Link',
+                  desc: 'Read-only live standings showing Today’s Leader and Overall Leader.',
+                  url: publicUrl,
+                },
+                {
+                  key: 'admin',
+                  title: 'Owner / Admin Link (Keep Private)',
+                  desc: 'Full control over teams, days, locking, and publishing final results.',
+                  url: adminUrl,
+                },
+              ].map((item) => (
+                <div
+                  key={item.key}
+                  className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+                >
+                  <h3 className="text-sm font-bold text-slate-900">{item.title}</h3>
+                  <p className="mt-1 text-xs text-slate-600">{item.desc}</p>
+                  <div className="mt-3 flex items-center gap-2">
+                    <input
+                      type="text"
+                      readOnly
+                      value={item.url}
+                      className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 font-mono text-xs text-slate-700"
+                    />
                     <button
-                      onClick={() => {
-                        const newName = prompt('Edit team name:', team.name);
-                        if (newName && newName.trim() && newName !== team.name) {
-                          // Update team name
-                          fetch(`/api/teams/${team.id}`, {
-                            method: 'PATCH',
-                            headers: {
-                              'Content-Type': 'application/json',
-                              'X-ADMIN-TOKEN': token
-                            },
-                            body: JSON.stringify({ name: newName.trim() })
-                          }).then(() => loadData()).catch(err => alert('Failed to update team'));
-                        }
-                      }}
-                      className="p-3 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition"
-                      title="Edit team name"
+                      type="button"
+                      onClick={() => copyLink(item.key, item.url)}
+                      className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-slate-900 px-3.5 py-2 text-xs font-semibold text-white hover:bg-slate-800"
                     >
-                      <Edit className="w-5 h-5" />
-                    </button>
-                    
-                    {/* Delete Button */}
-                    <button
-                      onClick={() => {
-                        if (confirm(`Delete "${team.name}"? This will also delete all their scores.`)) {
-                          fetch(`/api/teams/${team.id}`, {
-                            method: 'DELETE',
-                            headers: { 'X-ADMIN-TOKEN': token }
-                          }).then(() => loadData()).catch(err => alert('Failed to delete team'));
-                        }
-                      }}
-                      className="p-3 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition"
-                      title="Delete team"
-                    >
-                      <Trash2 className="w-5 h-5" />
+                      {copiedKey === item.key ? (
+                        <>
+                          <Check className="h-3.5 w-3.5" />
+                          Copied
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="h-3.5 w-3.5" />
+                          Copy
+                        </>
+                      )}
                     </button>
                   </div>
                 </div>
               ))}
             </div>
-          )}
-          
-          {teams.length > 0 && (
-            <div className="mt-6 p-4 bg-purple-50 border border-purple-200 rounded-lg">
-              <p className="text-sm text-purple-800">
-                <strong>💡 Tip:</strong> Colors are automatically assigned from a palette. 
-                You can edit team names or delete teams anytime.
+
+            <div className="flex flex-col items-center justify-center rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm">
+              <p className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                Public Scoreboard QR
               </p>
-            </div>
-          )}
-        </div>
-
-        {/* SECTION 3: Scorer Link (Primary Operational Link) */}
-        <div className="surface-dark rounded-[30px] p-6">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="text-4xl">📝</div>
-              <div>
-                <h3 className="text-xl font-bold text-white">Scorer Interface</h3>
-                <p className="text-sm text-white/65">Dedicated interface for adding scores</p>
+              <div className="my-4 rounded-xl border border-slate-100 p-3">
+                {publicUrl && <QRCodeSVG value={publicUrl} size={168} />}
               </div>
-            </div>
-            <p className="text-white/75 mb-4">
-              All scores must be added via the scorer link. This keeps scoring separate from admin functions and prevents accidental changes.
-            </p>
-            <a
-              href={`/score/${event?.scorer_token}`}
-              target="_blank"
-              className="inline-flex items-center gap-2 px-6 py-3 bg-white text-slate-950 rounded-full hover:shadow-lg hover:scale-[1.02] transition font-semibold"
-            >
-              <span>🚀</span>
-              Open Scorer Interface
-              <span className="text-xs opacity-75">↗</span>
-            </a>
-          </div>
-
-        {/* SECTION 4: Links Section (Collapsed Dropdown) */}
-        <div className="surface-strong rounded-[28px] shadow border border-gray-200">
-          <button
-            onClick={() => setShowLinksDropdown(!showLinksDropdown)}
-            className="w-full px-6 py-4 flex items-center justify-between hover:bg-gray-50 transition-colors"
-          >
-            <div className="flex items-center gap-3">
-              <span className="text-2xl">🔗</span>
-              <div className="text-left">
-                <h3 className="font-semibold text-gray-900">Event Links</h3>
-                <p className="text-sm text-gray-600">Admin, Scorer, and Public URLs</p>
-              </div>
-            </div>
-            <span className={`text-2xl transition-transform ${showLinksDropdown ? 'rotate-180' : ''}`}>
-              ▼
-            </span>
-          </button>
-          
-          {showLinksDropdown && (
-            <div className="px-6 pb-6 pt-2 border-t border-gray-200">
-              <EventLinksManager
-                eventId={event?.id || ''}
-                eventName={event?.name || ''}
-                adminToken={token}
-                scorerToken={event?.scorer_token || ''}
-                publicToken={event?.public_token || ''}
-              />
-              
-              {/* Quick Access Buttons */}
-              <div className="mt-4 flex flex-wrap gap-3">
-                <a
-                  href={`/history/${token}`}
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 transition-colors text-sm font-medium"
-                >
-                  <span>📊</span>
-                  Score History
-                </a>
-                <a
-                  href={`/recap/${event?.public_token}`}
-                  target="_blank"
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-amber-100 text-amber-700 rounded-lg hover:bg-amber-200 transition-colors text-sm font-medium"
-                >
-                  <span>{event?.is_finalized ? '🏆' : '⚡'}</span>
-                  {event?.is_finalized ? 'Final Results' : 'Live Scores'}
-                </a>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* SECTION 5: Results Management (Export/Finalize) */}
-        {event && (
-          <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200">
-            <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
-              <span>📊</span>
-              Results Management
-            </h2>
-            <div className="space-y-4">
-              {/* Finalization Status */}
-              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                <div>
-                  <h3 className="font-semibold text-gray-900">Event Status</h3>
-                  <p className="text-sm text-gray-600 mt-1">
-                    {event.is_finalized 
-                      ? `Finalized on ${new Date(event.finalized_at!).toLocaleString()}`
-                      : 'Event is still active - scores can be edited'
-                    }
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  {event.is_finalized ? (
-                    <>
-                      <span className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm font-medium">
-                        ✓ Finalized
-                      </span>
-                      <button
-                        onClick={handleUnfinalizeEvent}
-                        disabled={finalizing}
-                        className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 disabled:opacity-50 text-sm font-medium"
-                      >
-                        {finalizing ? 'Reopening...' : 'Reopen for Editing'}
-                      </button>
-                    </>
-                  ) : (
-                    <button
-                      onClick={() => setShowFinalizeModal(true)}
-                      className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm font-medium"
-                    >
-                      Publish Final Results
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {/* PDF Export */}
-              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                <div>
-                  <h3 className="font-semibold text-gray-900">Export Results</h3>
-                  <p className="text-sm text-gray-600 mt-1">
-                    Download a PDF with team rankings, scores, and branding
-                  </p>
-                </div>
-                <button
-                  onClick={handleExportPDF}
-                  disabled={exportingPDF}
-                  className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 text-sm font-medium flex items-center gap-2"
-                >
-                  <span>{exportingPDF ? '⏳' : '📄'}</span>
-                  {exportingPDF ? 'Generating...' : 'Download PDF'}
-                </button>
-              </div>
+              <Link
+                href={`/scoreboard/${event.public_token || ''}`}
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:underline"
+              >
+                Open Public Scoreboard
+                <ExternalLink className="h-3.5 w-3.5" />
+              </Link>
             </div>
           </div>
         )}
 
-        {/* SECTION 6: Past Events (Read-only, Last Section) */}
-        <PastEventsSection adminToken={token} />
-      </div>
+        {/* TAB 4: RESULTS & SETTINGS */}
+        {activeTab === 'results' && (
+          <div className="space-y-5">
+            {/* Single Non-Duplicated Results Management Card */}
+            <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900">Results Management</h2>
+                  <p className="mt-1 text-sm text-slate-600">
+                    Publish final standings when the event concludes, or download an official
+                    PDF report anytime.
+                  </p>
+                </div>
+                <span
+                  className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                    event.is_finalized
+                      ? 'bg-emerald-100 text-emerald-800'
+                      : 'bg-blue-100 text-blue-800'
+                  }`}
+                >
+                  {event.is_finalized ? 'Finalized' : 'Active'}
+                </span>
+              </div>
+
+              <div className="mt-5 flex flex-wrap gap-3">
+                {!event.is_finalized ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowFinalizeModal(true)}
+                    disabled={finalizing}
+                    className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-60"
+                  >
+                    <CheckCircle2 className="h-4 w-4" />
+                    Publish Final Results
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleUnfinalizeEvent}
+                    disabled={finalizing}
+                    className="inline-flex items-center gap-2 rounded-xl border border-amber-300 bg-amber-50 px-5 py-2.5 text-sm font-semibold text-amber-900 hover:bg-amber-100 disabled:opacity-60"
+                  >
+                    <Unlock className="h-4 w-4" />
+                    {finalizing ? 'Reopening…' : 'Reopen Event for Editing'}
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={handleExportPdf}
+                  disabled={exportingPdf}
+                  className="inline-flex min-w-[160px] items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-5 py-2.5 text-sm font-semibold text-slate-800 hover:bg-slate-50 disabled:opacity-60"
+                >
+                  <Download className="h-4 w-4 shrink-0" />
+                  <span className="whitespace-nowrap">
+                    {exportingPdf ? 'Generating PDF…' : 'Download PDF'}
+                  </span>
+                </button>
+
+                {event.public_token && (
+                  <Link
+                    href={`/recap/${event.public_token}`}
+                    className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-5 py-2.5 text-sm font-semibold text-slate-800 hover:bg-slate-50"
+                  >
+                    <Trophy className="h-4 w-4" />
+                    View Event Recap
+                  </Link>
+                )}
+              </div>
+            </section>
+
+            {/* Public Display Privacy Toggle */}
+            <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">
+                    Show Game &amp; Deduction Activity Publicly
+                  </h3>
+                  <p className="mt-1 text-sm text-slate-600">
+                    When enabled, viewers on the public scoreboard can expand the recent
+                    activity feed to see individual game awards and penalties.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleTogglePublicActivity}
+                  disabled={updatingSettings}
+                  className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition ${
+                    event.show_public_activity ? 'bg-blue-600' : 'bg-slate-300'
+                  }`}
+                  aria-label="Toggle public activity feed"
+                >
+                  <span
+                    className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition ${
+                      event.show_public_activity ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+              </div>
+            </section>
+          </div>
+        )}
+      </main>
+      <PoweredByFooter />
+
+      {/* Guided Next-Day Transition Modal */}
+      {showNextDayModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+            <h2 className="text-xl font-bold text-slate-900">
+              Start Day {nextDayNumber}
+            </h2>
+            <p className="mt-1 text-sm text-slate-600">
+              How should Day {nextDayNumber} handle Day {activeDay}&apos;s marks?
+            </p>
+
+            <div className="mt-4 space-y-3">
+              <label
+                className={`flex cursor-pointer items-start gap-3 rounded-xl border p-3.5 transition ${
+                  nextDayCarryOver
+                    ? 'border-blue-600 bg-blue-50/70'
+                    : 'border-slate-200 hover:bg-slate-50'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="carryOverMode"
+                  checked={nextDayCarryOver}
+                  onChange={() => setNextDayCarryOver(true)}
+                  className="mt-1"
+                />
+                <div>
+                  <p className="text-sm font-bold text-slate-900">
+                    Continue from Day {activeDay} totals (Recommended)
+                  </p>
+                  <p className="text-xs text-slate-600">
+                    Day {nextDayNumber} marks add onto previous days. Public display shows
+                    both Day {nextDayNumber} Leader and Overall Camp Leader.
+                  </p>
+                </div>
+              </label>
+
+              <label
+                className={`flex cursor-pointer items-start gap-3 rounded-xl border p-3.5 transition ${
+                  !nextDayCarryOver
+                    ? 'border-blue-600 bg-blue-50/70'
+                    : 'border-slate-200 hover:bg-slate-50'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="carryOverMode"
+                  checked={!nextDayCarryOver}
+                  onChange={() => setNextDayCarryOver(false)}
+                  className="mt-1"
+                />
+                <div>
+                  <p className="text-sm font-bold text-slate-900">
+                    Start Day {nextDayNumber} fresh at 0
+                  </p>
+                  <p className="text-xs text-slate-600">
+                    Focus the public board on Day {nextDayNumber}&apos;s fresh competition
+                    from 0 (Overall totals remain available below).
+                  </p>
+                </div>
+              </label>
+
+              <label className="flex items-center gap-2.5 pt-1 text-sm text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={lockPrevDay}
+                  onChange={(e) => setLockPrevDay(e.target.checked)}
+                />
+                Lock Day {activeDay} so past scores aren&apos;t edited accidentally
+              </label>
+            </div>
+
+            <div className="mt-6 flex justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={() => setShowNextDayModal(false)}
+                className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={switchingDay}
+                onClick={() =>
+                  handleAdvanceDay(nextDayNumber, nextDayCarryOver, lockPrevDay)
+                }
+                className="rounded-xl bg-blue-600 px-5 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
+              >
+                {switchingDay ? 'Switching…' : `Start Day ${nextDayNumber}`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Finalize Confirmation Modal */}
+      {showFinalizeModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+            <h2 className="text-xl font-bold text-slate-900">Publish Final Results?</h2>
+            <p className="mt-2 text-sm text-slate-600">
+              This marks <strong>{event.name}</strong> as completed and locks further
+              scoring. You can reopen it later if needed.
+            </p>
+            <div className="mt-6 flex justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={() => setShowFinalizeModal(false)}
+                className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={finalizing}
+                onClick={handleFinalizeEvent}
+                className="rounded-xl bg-blue-600 px-5 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
+              >
+                {finalizing ? 'Publishing…' : 'Publish Results'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

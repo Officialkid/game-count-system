@@ -367,3 +367,51 @@
 .slide-enter {
   animation: fade-in 400ms ease-out forwards;
 }
+
+/* ===== Camp Reveal Show — 3D Broadcast & Staged PowerPoint Animations ===== */
+@keyframes revealSlideLeft {
+  0% { opacity: 0; transform: translateX(-64px) scale(0.95); filter: blur(6px); }
+  100% { opacity: 1; transform: translateX(0) scale(1); filter: blur(0); }
+}
+
+@keyframes revealSlideRight {
+  0% { opacity: 0; transform: translateX(64px) scale(0.95); filter: blur(6px); }
+  100% { opacity: 1; transform: translateX(0) scale(1); filter: blur(0); }
+}
+
+@keyframes revealRiseUp {
+  0% { opacity: 0; transform: translateY(48px) scale(0.94); filter: blur(6px); }
+  100% { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+}
+
+@keyframes revealFlip3D {
+  0% { opacity: 0; transform: perspective(1000px) rotateX(38deg) scale(0.72); filter: blur(10px); }
+  65% { opacity: 1; transform: perspective(1000px) rotateX(-5deg) scale(1.04); filter: blur(0); }
+  100% { opacity: 1; transform: perspective(1000px) rotateX(0deg) scale(1); filter: blur(0); }
+}
+
+@keyframes revealPopSlam {
+  0% { opacity: 0; transform: scale(1.65); filter: blur(8px); }
+  65% { opacity: 1; transform: scale(0.95); filter: blur(0); }
+  100% { opacity: 1; transform: scale(1); filter: blur(0); }
+}
+
+@keyframes countdownBeat {
+  0% { opacity: 0; transform: scale(1.75) rotate(-6deg); }
+  25% { opacity: 1; transform: scale(1) rotate(0deg); }
+  85% { opacity: 1; transform: scale(0.96); }
+  100% { opacity: 0.7; transform: scale(0.9); }
+}
+
+@keyframes podiumGrow {
+  0% { opacity: 0; transform: translateY(80px) scaleY(0.35); transform-origin: bottom; }
+  100% { opacity: 1; transform: translateY(0) scaleY(1); transform-origin: bottom; }
+}
+
+.anim-slide-left { animation: revealSlideLeft 0.75s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.anim-slide-right { animation: revealSlideRight 0.75s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.anim-rise-up { animation: revealRiseUp 0.75s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.anim-flip-3d { animation: revealFlip3D 0.85s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.anim-pop-slam { animation: revealPopSlam 0.65s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.anim-countdown-beat { animation: countdownBeat 0.88s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.anim-podium-grow { animation: podiumGrow 0.9s cubic-bezier(0.16, 1, 0.3, 1) both; }

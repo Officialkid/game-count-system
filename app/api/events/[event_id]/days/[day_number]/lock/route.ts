@@ -67,9 +67,18 @@ export async function POST(request: Request, { params }: { params: { event_id: s
       return NextResponse.json({ success: false, error: 'Event not found' }, { status: 404 });
     }
 
-    const permission = action === 'lock' ? canLockDay(event as any, dayNumber) : canUnlockDay(event as any, dayNumber);
-    if (!permission.allowed) {
-      return NextResponse.json({ success: false, error: permission.reason ?? 'Action not allowed' }, { status: 400 });
+    if (event.is_finalized || event.eventStatus === 'archived') {
+      return NextResponse.json(
+        { success: false, error: 'Cannot lock or unlock days on finalized or archived events' },
+        { status: 400 }
+      );
+    }
+
+    if (dayNumber < 1 || dayNumber > 30) {
+      return NextResponse.json(
+        { success: false, error: 'Day number must be between 1 and 30' },
+        { status: 400 }
+      );
     }
 
     await setDayLockStatus(event_id, dayNumber, action);

@@ -73,6 +73,8 @@ model Event {
   eventStatus            EventStatus   @default(draft)
   scoringMode            ScoringMode   @default(continuous)
   numberOfDays           Int           @default(1)
+  activeDayNumber        Int           @default(1)
+  showPublicActivity     Boolean       @default(true)
   requiresAuthentication Boolean       @default(false)
   legacyStatus           String?       @db.VarChar(32)
   themeColor             String?       @db.VarChar(32)
@@ -119,11 +121,12 @@ model EventToken {
 model EventDay {
   id        String    @id @default(cuid())
   eventId    String
-  dayNumber  Int
-  label      String?
-  date       DateTime?
-  isLocked   Boolean   @default(false)
-  lockedAt   DateTime?
+  dayNumber             Int
+  label                 String?
+  date                  DateTime?
+  isLocked              Boolean   @default(false)
+  lockedAt              DateTime?
+  carryOverFromPrevious Boolean   @default(true)
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
   event      Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)

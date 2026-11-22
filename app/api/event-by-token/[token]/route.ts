@@ -1,10 +1,10 @@
 /**
  * Get Event by Token
  * GET /api/event-by-token/{token}
- * Phase 1 Neon/Prisma migration slice
  */
 
 import { getEventAccessByToken } from '@/lib/server/event-service';
+import { sanitizeApiError } from '@/lib/server/prisma';
 import { forbidden, notFound, success, unauthorized, internalError } from '@/lib/api-responses';
 
 export async function GET(
@@ -22,12 +22,12 @@ export async function GET(
     const headerAdmin = request.headers.get('x-admin-token');
     const headerScorer = request.headers.get('x-scorer-token');
 
-    if (access.tokenType === 'admin' && headerAdmin !== token) {
-      return unauthorized('Admin token required');
+    if (access.tokenType === 'admin' && headerAdmin && headerAdmin !== token) {
+      return unauthorized('Admin token mismatch');
     }
 
-    if (access.tokenType === 'scorer' && headerScorer !== token) {
-      return unauthorized('Scorer token required');
+    if (access.tokenType === 'scorer' && headerScorer && headerScorer !== token) {
+      return unauthorized('Scorer token mismatch');
     }
 
     if (access.event.eventStatus === 'archived') {
@@ -41,6 +41,8 @@ export async function GET(
       status: access.event.eventStatus,
       scoringMode: access.event.scoringMode,
       number_of_days: access.event.numberOfDays,
+      active_day_number: access.event.activeDayNumber,
+      show_public_activity: access.event.showPublicActivity,
       startDate: access.event.startAt,
       endDate: access.event.endAt,
       start_at: access.event.startAt,
@@ -49,6 +51,16 @@ export async function GET(
       is_finalized: access.event.isFinalized,
       theme_color: access.event.themeColor,
       logo_url: access.event.logoUrl,
+      token_type: access.tokenType,
+      days: access.event.days.map((d) => ({
+        id: d.id,
+        day_number: d.dayNumber,
+        label: d.label,
+        date: d.date,
+        is_locked: d.isLocked,
+        locked_at: d.lockedAt,
+        carry_over_from_previous: d.carryOverFromPrevious,
+      })),
     };
 
     if (access.tokenType === 'admin') {
@@ -64,6 +76,6 @@ export async function GET(
     return success({ event: eventResponse });
   } catch (error: any) {
     console.error('Get event by token error:', error);
-    return internalError('Failed to get event', error?.message);
+    return internalError('Failed to get event', sanitizeApiError(error));
   }
 }

@@ -1,257 +1,235 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { ChevronDown, ChevronUp, Copy, Share2, ExternalLink } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import toast from 'react-hot-toast';
+import { QRCodeSVG } from 'qrcode.react';
+import {
+  Check,
+  CheckCircle2,
+  Copy,
+  ExternalLink,
+  Monitor,
+  PencilLine,
+  Shield,
+  Trophy,
+} from 'lucide-react';
 
-export default function EventSuccessPage() {
-  return (
-    <Suspense fallback={<SuccessPageFallback />}>
-      <EventSuccessContent />
-    </Suspense>
-  );
+interface CreatedEventPayload {
+  event: {
+    id: string;
+    name: string;
+    number_of_days?: number;
+  };
+  tokens: {
+    admin_token: string;
+    scorer_token: string;
+    public_token: string;
+  };
+  teams?: Array<{ id: string; name: string; color: string }>;
 }
 
-function SuccessPageFallback() {
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50 flex items-center justify-center p-4">
-      <div className="max-w-2xl w-full">
-        <div className="bg-white rounded-2xl shadow-xl border-2 border-green-200 overflow-hidden">
-          <div className="bg-gradient-to-r from-green-500 to-emerald-600 p-8 text-center">
-            <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg animate-pulse" />
-            <h1 className="text-3xl font-bold text-white mb-2">Preparing your event...</h1>
-            <p className="text-green-100 text-lg">Loading details</p>
-          </div>
-          <div className="p-8">
-            <div className="bg-amber-50 border-2 border-amber-200 rounded-xl p-6 mb-6 animate-pulse" />
-            <div className="h-14 bg-gray-100 rounded-xl mb-6 animate-pulse" />
-            <div className="h-48 bg-gray-100 rounded-xl animate-pulse" />
+export default function EventCreatedSuccessPage() {
+  const [data, setData] = useState<CreatedEventPayload | null>(null);
+  const [origin, setOrigin] = useState('');
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+
+  useEffect(() => {
+    setOrigin(window.location.origin);
+    try {
+      const raw = window.sessionStorage.getItem('gamesco_created_event');
+      if (raw) {
+        setData(JSON.parse(raw));
+      }
+    } catch {
+      // Ignore
+    }
+  }, []);
+
+  const copyLink = async (key: string, url: string) => {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopiedKey(key);
+      toast.success('Link copied!');
+      setTimeout(() => setCopiedKey(null), 2000);
+    } catch {
+      toast.error('Unable to copy automatically');
+    }
+  };
+
+  if (!data) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-50 p-4">
+        <div className="max-w-md rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+          <Trophy className="mx-auto h-10 w-10 text-blue-600" />
+          <h1 className="mt-3 text-xl font-bold text-slate-900">No recent event found</h1>
+          <p className="mt-1.5 text-sm text-slate-600">
+            Create a new event or open one saved on your device from the Home page.
+          </p>
+          <div className="mt-6 flex justify-center gap-3">
+            <Link
+              href="/"
+              className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+            >
+              Go Home
+            </Link>
+            <Link
+              href="/events/create"
+              className="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700"
+            >
+              Create Event
+            </Link>
           </div>
         </div>
       </div>
-    </div>
-  );
-}
-
-function EventSuccessContent() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const [isLinksExpanded, setIsLinksExpanded] = useState(true);
-  const [copiedLink, setCopiedLink] = useState<string | null>(null);
-
-  // Get event data from URL params
-  const eventId = searchParams.get('eventId');
-  const eventName = searchParams.get('eventName');
-  const adminToken = searchParams.get('adminToken');
-  const scorerToken = searchParams.get('scorerToken');
-  const publicToken = searchParams.get('publicToken');
-  const adminLink = searchParams.get('adminLink');
-  const scorerLink = searchParams.get('scorerLink');
-  const publicLink = searchParams.get('publicLink');
-
-  useEffect(() => {
-    // Redirect if missing required params
-    if (!eventId || !adminToken) {
-      router.push('/events/create');
-    }
-  }, [eventId, adminToken, router]);
-
-  const handleCopy = async (url: string, linkType: string) => {
-    try {
-      await navigator.clipboard.writeText(url);
-      setCopiedLink(linkType);
-      setTimeout(() => setCopiedLink(null), 2000);
-    } catch (error) {
-      console.error('Failed to copy:', error);
-    }
-  };
-
-  const handleOpenAdmin = () => {
-    if (adminLink) {
-      window.location.href = adminLink;
-    }
-  };
-
-  if (!eventId || !adminToken) {
-    return null;
+    );
   }
 
+  const base = origin || '';
+  const adminPath = `/admin/${data.tokens.admin_token}`;
+  const scorerPath = `/score/${data.tokens.scorer_token}`;
+  const publicPath = `/scoreboard/${data.tokens.public_token}`;
+
+  const adminUrl = `${base}${adminPath}`;
+  const scorerUrl = `${base}${scorerPath}`;
+  const publicUrl = `${base}${publicPath}`;
+
+  const links = [
+    {
+      key: 'admin',
+      title: 'Admin Link (Private)',
+      description: 'Manage teams, switch days, lock days, publish results & export PDF.',
+      url: adminUrl,
+      path: adminPath,
+      icon: Shield,
+      accent: 'border-blue-200 bg-blue-50/50',
+      badge: 'Saved on this device',
+    },
+    {
+      key: 'scorer',
+      title: 'Scorer Link (Share with Team)',
+      description: 'Enter game marks & deductions (works offline outdoors).',
+      url: scorerUrl,
+      path: scorerPath,
+      icon: PencilLine,
+      accent: 'border-emerald-200 bg-emerald-50/50',
+      badge: 'Works offline',
+    },
+    {
+      key: 'public',
+      title: 'Public Scoreboard Link',
+      description: 'Read-only live standings for projectors, TVs, and parents.',
+      url: publicUrl,
+      path: publicPath,
+      icon: Monitor,
+      accent: 'border-amber-200 bg-amber-50/50',
+      badge: 'Read-only',
+    },
+  ];
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50 flex items-center justify-center p-4">
-      <div className="max-w-2xl w-full">
-        {/* Success Card */}
-        <div className="bg-white rounded-2xl shadow-xl border-2 border-green-200 overflow-hidden">
-          {/* Header */}
-          <div className="bg-gradient-to-r from-green-500 to-emerald-600 p-8 text-center">
-            <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
-              <svg className="w-10 h-10 text-green-500" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-              </svg>
-            </div>
-            <h1 className="text-3xl font-bold text-white mb-2">Event Created Successfully!</h1>
-            <p className="text-green-100 text-lg">{eventName}</p>
+    <div className="min-h-screen bg-slate-50 px-4 py-10 text-slate-900 sm:px-6">
+      <div className="mx-auto max-w-3xl space-y-6">
+        {/* Success Banner */}
+        <div className="rounded-2xl border border-emerald-200 bg-white p-6 text-center shadow-sm sm:p-8">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+            <CheckCircle2 className="h-7 w-7" />
           </div>
+          <h1 className="mt-3 text-2xl font-extrabold text-slate-900 sm:text-3xl">
+            {data.event.name} is ready!
+          </h1>
+          <p className="mt-1.5 text-sm text-slate-600">
+            Your Admin access is automatically saved on this device. Share the Scorer and
+            Public links below.
+          </p>
 
-          {/* Main Content */}
-          <div className="p-8">
-            {/* Next Steps */}
-            <div className="bg-amber-50 border-2 border-amber-200 rounded-xl p-6 mb-6">
-              <div className="flex items-start gap-3">
-                <span className="text-2xl">💡</span>
-                <div>
-                  <h3 className="font-semibold text-amber-900 mb-2">Next Steps:</h3>
-                  <ol className="text-amber-800 space-y-1 text-sm">
-                    <li>1. Click "Open Admin Panel" below to add teams</li>
-                    <li>2. Use the Scorer link to enter points during your event</li>
-                    <li>3. Share the Public Scoreboard with your audience</li>
-                  </ol>
-                </div>
-              </div>
-            </div>
-
-            {/* Primary Action */}
-            <button
-              onClick={handleOpenAdmin}
-              className="w-full bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white font-semibold py-4 px-6 rounded-xl flex items-center justify-center gap-3 transition-all shadow-lg hover:shadow-xl mb-6"
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+            <Link
+              href={adminPath}
+              className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
             >
-              <span className="text-2xl">👑</span>
-              <span>Open Admin Panel</span>
-              <ExternalLink className="w-5 h-5" />
-            </button>
-
-            {/* Collapsible Links Section */}
-            <div className="border-2 border-gray-200 rounded-xl overflow-hidden">
-              <button
-                onClick={() => setIsLinksExpanded(!isLinksExpanded)}
-                className="w-full bg-gray-50 hover:bg-gray-100 px-6 py-4 flex items-center justify-between transition-colors"
-              >
-                <div className="flex items-center gap-3">
-                  <Share2 className="w-5 h-5 text-gray-600" />
-                  <span className="font-semibold text-gray-900">Share Links</span>
-                  <span className="text-xs text-gray-500 bg-gray-200 px-2 py-1 rounded-full">
-                    Save these links!
-                  </span>
-                </div>
-                {isLinksExpanded ? (
-                  <ChevronUp className="w-5 h-5 text-gray-600" />
-                ) : (
-                  <ChevronDown className="w-5 h-5 text-gray-600" />
-                )}
-              </button>
-
-              {isLinksExpanded && (
-                <div className="p-6 space-y-4 bg-white">
-                  {/* Admin Link */}
-                  {adminLink && (
-                    <div className="bg-purple-50 border-2 border-purple-200 rounded-xl p-4">
-                      <div className="flex items-center gap-3 mb-2">
-                        <span className="text-2xl">👑</span>
-                        <div>
-                          <h4 className="font-semibold text-purple-900">Admin Link</h4>
-                          <p className="text-xs text-purple-700">Full control – edit event, add teams, manage everything</p>
-                        </div>
-                      </div>
-                      <div className="flex gap-2">
-                        <input
-                          type="text"
-                          value={adminLink}
-                          readOnly
-                          className="flex-1 bg-white border border-purple-300 rounded-lg px-3 py-2 text-sm text-gray-700 font-mono"
-                          onClick={(e) => e.currentTarget.select()}
-                        />
-                        <button
-                          onClick={() => handleCopy(adminLink, 'admin')}
-                          className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors"
-                        >
-                          <Copy className="w-4 h-4" />
-                          {copiedLink === 'admin' ? 'Copied!' : 'Copy'}
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Scorer Link */}
-                  {scorerLink && (
-                    <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4">
-                      <div className="flex items-center gap-3 mb-2">
-                        <span className="text-2xl">🏀</span>
-                        <div>
-                          <h4 className="font-semibold text-blue-900">Scorer Link</h4>
-                          <p className="text-xs text-blue-700">Can add scores only – share with scorekeepers and officials</p>
-                        </div>
-                      </div>
-                      <div className="flex gap-2">
-                        <input
-                          type="text"
-                          value={scorerLink}
-                          readOnly
-                          className="flex-1 bg-white border border-blue-300 rounded-lg px-3 py-2 text-sm text-gray-700 font-mono"
-                          onClick={(e) => e.currentTarget.select()}
-                        />
-                        <button
-                          onClick={() => handleCopy(scorerLink, 'scorer')}
-                          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors"
-                        >
-                          <Copy className="w-4 h-4" />
-                          {copiedLink === 'scorer' ? 'Copied!' : 'Copy'}
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Public Link */}
-                  {publicLink && (
-                    <div className="bg-green-50 border-2 border-green-200 rounded-xl p-4">
-                      <div className="flex items-center gap-3 mb-2">
-                        <span className="text-2xl">📺</span>
-                        <div>
-                          <h4 className="font-semibold text-green-900">Public Scoreboard</h4>
-                          <p className="text-xs text-green-700">View-only – share with audience, display on projector</p>
-                        </div>
-                      </div>
-                      <div className="flex gap-2">
-                        <input
-                          type="text"
-                          value={publicLink}
-                          readOnly
-                          className="flex-1 bg-white border border-green-300 rounded-lg px-3 py-2 text-sm text-gray-700 font-mono"
-                          onClick={(e) => e.currentTarget.select()}
-                        />
-                        <button
-                          onClick={() => handleCopy(publicLink, 'public')}
-                          className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors"
-                        >
-                          <Copy className="w-4 h-4" />
-                          {copiedLink === 'public' ? 'Copied!' : 'Copy'}
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* Warning */}
-            <div className="mt-6 bg-red-50 border-2 border-red-200 rounded-xl p-4 flex items-start gap-3">
-              <span className="text-xl">⚠️</span>
-              <div>
-                <h4 className="font-semibold text-red-900 mb-1">Save these links!</h4>
-                <p className="text-sm text-red-800">
-                  There's no login system to retrieve them later. Copy them now and save them somewhere safe.
-                </p>
-              </div>
-            </div>
+              Open Admin Dashboard
+              <ExternalLink className="h-4 w-4" />
+            </Link>
+            <Link
+              href={scorerPath}
+              className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700"
+            >
+              Start Scoring Now
+              <PencilLine className="h-4 w-4" />
+            </Link>
+            <Link
+              href={publicPath}
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-800 transition hover:bg-slate-50"
+            >
+              View Public Scoreboard
+              <Monitor className="h-4 w-4" />
+            </Link>
           </div>
         </div>
 
-        {/* Footer */}
-        <div className="text-center mt-6">
-          <button
-            onClick={() => router.push('/')}
-            className="text-gray-600 hover:text-gray-900 text-sm underline"
-          >
-            ← Back to Home
-          </button>
+        {/* Share Links + QR */}
+        <div className="grid gap-4 md:grid-cols-3">
+          <div className="space-y-3 md:col-span-2">
+            {links.map((item) => {
+              const Icon = item.icon;
+              return (
+                <div
+                  key={item.key}
+                  className={`rounded-2xl border p-4 shadow-sm ${item.accent}`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <Icon className="h-4 w-4 text-slate-700" />
+                      <h2 className="text-sm font-bold text-slate-900">{item.title}</h2>
+                    </div>
+                    <span className="rounded-full bg-white px-2.5 py-0.5 text-[11px] font-semibold text-slate-600 shadow-sm">
+                      {item.badge}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-xs text-slate-600">{item.description}</p>
+                  <div className="mt-3 flex items-center gap-2">
+                    <input
+                      type="text"
+                      readOnly
+                      value={item.url}
+                      className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 font-mono text-xs text-slate-700"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => copyLink(item.key, item.url)}
+                      className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-800"
+                    >
+                      {copiedKey === item.key ? (
+                        <>
+                          <Check className="h-3.5 w-3.5" />
+                          Copied
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="h-3.5 w-3.5" />
+                          Copy
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Public QR Code */}
+          <div className="flex flex-col items-center justify-center rounded-2xl border border-slate-200 bg-white p-5 text-center shadow-sm">
+            <p className="text-xs font-bold uppercase tracking-wider text-slate-500">
+              Public Scoreboard QR
+            </p>
+            <div className="my-4 rounded-xl border border-slate-100 bg-white p-3">
+              {publicUrl && <QRCodeSVG value={publicUrl} size={152} />}
+            </div>
+            <p className="text-xs text-slate-600">
+              Scan to view live daily &amp; overall results on any phone.
+            </p>
+          </div>
         </div>
       </div>
     </div>
