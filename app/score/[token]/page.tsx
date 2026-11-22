@@ -570,7 +570,7 @@ export default function ScorerPage() {
               htmlFor="game-reason"
               className="block text-sm font-bold text-slate-900"
             >
-              Game Name or Deduction Reason
+              Game Name
             </label>
             <input
               id="game-reason"
@@ -578,7 +578,7 @@ export default function ScorerPage() {
               disabled={isDayLocked}
               value={category}
               onChange={(e) => setCategory(e.target.value)}
-              placeholder="e.g., Sack Race, Bible Quiz, Misbehavior, Noise..."
+              placeholder="e.g., Sack Race, Bible Quiz, Extra Marks..."
               className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:bg-slate-100"
             />
 

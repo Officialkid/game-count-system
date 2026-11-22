@@ -23,17 +23,6 @@ export function PoweredByFooter({ dark = false, className = '' }: PoweredByFoote
       >
         Eventsslot Technologies
       </a>
-      <span className="mx-1.5 opacity-50">·</span>
-      <a
-        href="https://www.eventsslot.com"
-        target="_blank"
-        rel="noopener noreferrer"
-        className={`font-medium transition hover:underline ${
-          dark ? 'text-slate-300 hover:text-white' : 'text-slate-600 hover:text-slate-900'
-        }`}
-      >
-        www.eventsslot.com
-      </a>
     </footer>
   );
 }

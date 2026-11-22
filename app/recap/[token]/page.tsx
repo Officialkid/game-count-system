@@ -1043,15 +1043,6 @@ export default function CampRecapShowPage() {
             >
               Eventsslot Technologies
             </a>
-            <span className="mx-1.5 opacity-50">·</span>
-            <a
-              href="https://www.eventsslot.com"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-slate-300 hover:text-white hover:underline"
-            >
-              www.eventsslot.com
-            </a>
           </div>
         </div>
       </footer>

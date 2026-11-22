@@ -267,7 +267,10 @@ export default function ScoreHistoryPage() {
         ) : (
           <div className="space-y-2.5">
             {visibleScores.map((entry) => {
-              const canMutate = !entry.day_locked && !event.is_finalized && event.token_type === 'admin';
+              const canMutate =
+                !entry.day_locked &&
+                !event.is_finalized &&
+                (event.token_type === 'admin' || event.token_type === 'scorer');
               return (
                 <div
                   key={entry.id}
