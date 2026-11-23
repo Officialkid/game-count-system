@@ -59,7 +59,8 @@ export async function POST(
       ...((existingEvent?.tvRemoteState as Partial<TvRemoteState>) || {}),
     };
 
-    const next: TvRemoteState = {
+    const next = {
+      ...prev,
       mode: body.mode === 'reveal' || body.mode === 'scoreboard' ? body.mode : prev.mode,
       slideIndex:
         typeof body.slideIndex === 'number' && Number.isInteger(body.slideIndex)
@@ -68,6 +69,7 @@ export async function POST(
       revealNowNonce: body.revealNow ? prev.revealNowNonce + 1 : prev.revealNowNonce,
       confettiNonce: body.fireConfetti ? prev.confettiNonce + 1 : prev.confettiNonce,
       theme: body.theme === 'light' || body.theme === 'dark' ? body.theme : prev.theme,
+      pairedAt: (prev as any).pairedAt || new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
 

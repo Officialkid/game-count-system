@@ -71,6 +71,8 @@ interface PublicBoardPayload {
   tv_remote?: {
     mode: 'scoreboard' | 'reveal';
     slideIndex: number;
+    pairCode?: string;
+    pairedAt?: string;
     theme?: 'dark' | 'light';
   } | null;
   overall_standings: RankedTeam[];
@@ -135,8 +137,8 @@ export default function PublicScoreboardPage() {
         setData(board);
         setLastUpdated(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
 
-        // If running on TV/Projector (?tv=1) and Admin triggered Reveal Show from phone, switch immediately!
-        if (isTvMode && board.tv_remote?.mode === 'reveal') {
+        // If running on TV/Projector (?tv=1) OR a phone remote is paired, switch immediately when Reveal is triggered!
+        if ((isTvMode || Boolean(board.tv_remote?.pairedAt)) && board.tv_remote?.mode === 'reveal') {
           router.replace(`/recap/${token}?tv=1`);
           return;
         }
@@ -169,13 +171,14 @@ export default function PublicScoreboardPage() {
     fetchBoard(false);
   }, [fetchBoard]);
 
-  // Live auto-refresh (fast 1.5s polling in TV mode for instant phone remote response; 6s normally)
+  // Fast 1.5s polling in TV mode or whenever a phone remote is paired for instant voice/tap response
+  const isRemotePaired = Boolean(data?.tv_remote?.pairedAt);
   useEffect(() => {
     const id = window.setInterval(() => {
       fetchBoard(true);
-    }, isTvMode ? 1500 : 6000);
+    }, isTvMode || isRemotePaired ? 1500 : 4000);
     return () => window.clearInterval(id);
-  }, [fetchBoard, isTvMode]);
+  }, [fetchBoard, isTvMode, isRemotePaired]);
 
   const activeDayNumber = data?.event.activeDayNumber || 1;
   const currentDayViewNumber =
@@ -288,6 +291,18 @@ export default function PublicScoreboardPage() {
               </span>
               {lastUpdated && (
                 <span className={`text-xs ${mutedText}`}>Updated {lastUpdated}</span>
+              )}
+              {data.tv_remote?.pairCode && (
+                <span
+                  title="Enter this 4-digit code at /remote on your phone to control this screen"
+                  className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 font-mono text-xs font-bold ${
+                    darkMode
+                      ? 'border-indigo-500/40 bg-indigo-500/15 text-indigo-300'
+                      : 'border-indigo-200 bg-indigo-50 text-indigo-700'
+                  }`}
+                >
+                  TV Code: {data.tv_remote.pairCode}
+                </span>
               )}
             </div>
             <h1 className="mt-1.5 text-2xl font-extrabold tracking-tight sm:text-3xl">

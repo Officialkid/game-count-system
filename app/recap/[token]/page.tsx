@@ -883,16 +883,18 @@ export default function CampRecapShowPage() {
                 >
                   Are you ready to see how the teams performed today?
                 </p>
-                <div className="anim-rise-up pt-2" style={{ animationDelay: '650ms' }}>
-                  <button
-                    type="button"
-                    onClick={goNext}
-                    className="inline-flex items-center gap-2 rounded-2xl bg-white px-8 py-4 text-base font-black text-slate-950 shadow-xl transition hover:scale-105"
-                  >
-                    Let&apos;s See the Numbers
-                    <ArrowRight className="h-5 w-5" />
-                  </button>
-                </div>
+                {!isTvMode && (
+                  <div className="anim-rise-up pt-2" style={{ animationDelay: '650ms' }}>
+                    <button
+                      type="button"
+                      onClick={goNext}
+                      className="inline-flex items-center gap-2 rounded-2xl bg-white px-8 py-4 text-base font-black text-slate-950 shadow-xl transition hover:scale-105"
+                    >
+                      Let&apos;s See the Numbers
+                      <ArrowRight className="h-5 w-5" />
+                    </button>
+                  </div>
+                )}
               </div>
             )}
 

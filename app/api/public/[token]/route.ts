@@ -97,12 +97,33 @@ export async function GET(
     // Evaluate server-side Suspense Freeze
     const freezeState = evaluateEventFreeze(event);
 
+    // Ensure every active event has a 4-digit TV Pairing Code ready for Phone-to-TV Remote
+    let tvRemoteState: any = (event.tvRemoteState as any) ?? null;
+    if (!tvRemoteState?.pairCode) {
+      const generatedCode = String(Math.floor(1000 + Math.random() * 9000));
+      tvRemoteState = {
+        mode: tvRemoteState?.mode || 'scoreboard',
+        slideIndex: tvRemoteState?.slideIndex ?? 0,
+        revealNowNonce: tvRemoteState?.revealNowNonce ?? 0,
+        confettiNonce: tvRemoteState?.confettiNonce ?? 0,
+        theme: tvRemoteState?.theme || 'dark',
+        pairCode: generatedCode,
+        updatedAt: new Date().toISOString(),
+      };
+      await withDbRetry(() =>
+        prisma.event.update({
+          where: { id: event.id },
+          data: { tvRemoteState: tvRemoteState as any },
+        })
+      );
+    }
+
     // Check if caller is an authorized MC/Admin (Reveal Show host bypass) OR TV screen during active Reveal mode
     let isAuthorizedHost = false;
     const reqUrl = new URL(request.url);
     const isTvRevealBroadcast =
       reqUrl.searchParams.get('tv_reveal') === '1' &&
-      (event.tvRemoteState as any)?.mode === 'reveal';
+      tvRemoteState?.mode === 'reveal';
 
     if (isTvRevealBroadcast) {
       isAuthorizedHost = true;
@@ -281,7 +302,7 @@ export async function GET(
           auto_freeze_time: freezeState.autoFreezeTime,
           host_bypass: isAuthorizedHost,
         },
-        tv_remote: (event.tvRemoteState as any) ?? null,
+        tv_remote: tvRemoteState,
         teams,
         overall_standings: overallStandings,
         day_standings: dayStandings,
