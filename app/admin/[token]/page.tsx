@@ -27,6 +27,7 @@ import {
   Snowflake,
   Sparkles,
   Trophy,
+  Tv,
   Unlock,
   Users,
   X,
@@ -35,6 +36,7 @@ import { saveEventToDevice } from '@/lib/device-vault';
 import { generateResultsPDF } from '@/lib/pdf-export';
 import { PoweredByFooter } from '@/components/PoweredByFooter';
 import { PresentToScreenButton } from '@/components/PresentToScreenButton';
+import { TvRemoteControl } from '@/components/TvRemoteControl';
 
 const TEAM_COLOR_CHOICES = [
   '#2563EB',
@@ -86,7 +88,7 @@ interface TeamSummary {
   day_totals?: Record<number, number>;
 }
 
-type AdminTab = 'overview' | 'teams' | 'share' | 'results';
+type AdminTab = 'overview' | 'teams' | 'remote' | 'share' | 'results';
 
 export default function AdminDashboardPage() {
   const params = useParams();
@@ -602,6 +604,7 @@ export default function AdminDashboardPage() {
   const tabs: Array<{ id: AdminTab; label: string; icon: any }> = [
     { id: 'overview', label: 'Overview & Days', icon: CalendarDays },
     { id: 'teams', label: `Teams (${teams.length})`, icon: Users },
+    { id: 'remote', label: 'TV Remote', icon: Tv },
     { id: 'share', label: 'Share & QR', icon: Share2 },
     { id: 'results', label: 'Results & Settings', icon: Settings },
   ];
@@ -1078,6 +1081,20 @@ export default function AdminDashboardPage() {
               </form>
             </div>
           </div>
+        )}
+
+        {/* TAB: TV REMOTE CONTROL */}
+        {activeTab === 'remote' && (
+          <TvRemoteControl
+            eventId={event.id}
+            adminToken={token}
+            teamCount={teams.length}
+            isFrozen={event.is_frozen}
+            updatingFreeze={updatingFreeze}
+            onFreezeToggle={() =>
+              handleFreezeAction(event.is_frozen ? 'unfreeze' : 'freeze')
+            }
+          />
         )}
 
         {/* TAB 3: SHARE & QR */}

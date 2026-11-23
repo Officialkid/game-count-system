@@ -81,6 +81,7 @@ model Event {
   freezeMode             String        @default("cutoff") @db.VarChar(16)
   freezeTimezoneOffset   Int           @default(180)
   lastUnfrozenAt         DateTime?
+  tvRemoteState          Json?
   requiresAuthentication Boolean       @default(false)
   legacyStatus           String?       @db.VarChar(32)
   themeColor             String?       @db.VarChar(32)

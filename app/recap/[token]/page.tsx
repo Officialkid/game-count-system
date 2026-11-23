@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { getSavedEvents } from '@/lib/device-vault';
 import {
@@ -65,6 +65,14 @@ interface RecapPayload {
     frozen_at: string | null;
     host_bypass?: boolean;
   };
+  tv_remote?: {
+    mode: 'scoreboard' | 'reveal';
+    slideIndex: number;
+    revealNowNonce: number;
+    confettiNonce: number;
+    theme?: 'dark' | 'light';
+    updatedAt: string;
+  } | null;
   overall_standings: RankedTeam[];
   day_standings: Record<number, RankedTeam[]>;
   scores: ActivityItem[];
@@ -262,15 +270,20 @@ function ConfettiCanvas({ burstKey }: { burstKey: number }) {
 
 export default function CampRecapShowPage() {
   const params = useParams();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const token = String(params?.token || '');
+  const isTvMode = searchParams?.get('tv') === '1';
 
   const [data, setData] = useState<RecapPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState('');
 
   // Playback & Choreography State
-  const [started, setStarted] = useState(false);
+  const [started, setStarted] = useState(isTvMode);
   const [slideIndex, setSlideIndex] = useState(0);
+  const lastRevealNowNonceRef = useRef<number>(0);
+  const lastConfettiNonceRef = useRef<number>(0);
   // Reveal stages: 0 = countdown (5..1), 1 = lead-in ("3rd Place goes to..."), 2 = team pops out, 3 = points slam in
   const [countdown, setCountdown] = useState<number | null>(null);
   const [revealStage, setRevealStage] = useState<0 | 1 | 2 | 3>(0);
@@ -306,7 +319,11 @@ export default function CampRecapShowPage() {
         hostAdminTokenRef.current = adminEntry.token;
       }
 
-      const res = await fetch(`/api/public/${token}`, {
+      const apiUrl = isTvMode
+        ? `/api/public/${token}?tv_reveal=1`
+        : `/api/public/${token}`;
+
+      const res = await fetch(apiUrl, {
         headers,
         cache: 'no-store',
       });
@@ -343,6 +360,55 @@ export default function CampRecapShowPage() {
   useEffect(() => {
     loadRecap();
   }, [loadRecap]);
+
+  // Live Phone-to-TV Remote Receiver Polling (when running in Clean TV Mode ?tv=1)
+  useEffect(() => {
+    if (!isTvMode || !token) return;
+    const interval = window.setInterval(async () => {
+      try {
+        const res = await fetch(`/api/public/${token}?tv_reveal=1`, {
+          cache: 'no-store',
+        });
+        if (!res.ok) return;
+        const payload = await res.json();
+        const remote = payload?.data?.tv_remote;
+        if (!remote) return;
+
+        if (remote.mode === 'scoreboard') {
+          router.replace(`/scoreboard/${token}?tv=1&theme=${remote.theme || 'dark'}`);
+          return;
+        }
+
+        if (typeof remote.slideIndex === 'number') {
+          setStarted(true);
+          setSlideIndex((prev) =>
+            prev !== remote.slideIndex ? remote.slideIndex : prev
+          );
+        }
+
+        if (
+          typeof remote.revealNowNonce === 'number' &&
+          remote.revealNowNonce > lastRevealNowNonceRef.current
+        ) {
+          lastRevealNowNonceRef.current = remote.revealNowNonce;
+          setCountdown(null);
+          setRevealStage(3);
+          setConfettiBurst((k) => k + 1);
+        }
+
+        if (
+          typeof remote.confettiNonce === 'number' &&
+          remote.confettiNonce > lastConfettiNonceRef.current
+        ) {
+          lastConfettiNonceRef.current = remote.confettiNonce;
+          setConfettiBurst((k) => k + 1);
+        }
+      } catch {
+        // Silent retry
+      }
+    }, 1500);
+    return () => window.clearInterval(interval);
+  }, [isTvMode, token, router]);
 
   // Automatically lock recap to the current active day!
   const activeDayNumber = data?.event.activeDayNumber || 1;
@@ -696,8 +762,9 @@ export default function CampRecapShowPage() {
 
       <ConfettiCanvas burstKey={confettiBurst} />
 
-      {/* Top Presenter Bar */}
-      <header className="relative z-20 flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-white/10 bg-slate-950/80 px-4 py-3 backdrop-blur sm:px-6">
+      {/* Top Presenter Bar (Hidden in Clean TV Projection Mode ?tv=1) */}
+      {!isTvMode && (
+        <header className="relative z-20 flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-white/10 bg-slate-950/80 px-4 py-3 backdrop-blur sm:px-6">
         <div className="flex items-center gap-2.5">
           <Link
             href={`/scoreboard/${token}`}
@@ -754,6 +821,7 @@ export default function CampRecapShowPage() {
           </button>
         </div>
       </header>
+      )}
 
       {/* Main Centered Stage (Fits Cleanly Inside 100dvh, Zero Bleed) */}
       <main className="relative z-10 flex flex-1 flex-col items-center justify-center overflow-y-auto px-4 py-6 sm:px-8">
@@ -1077,10 +1145,14 @@ export default function CampRecapShowPage() {
         )}
       </main>
 
-      {/* Bottom Bar — Pinned Cleanly to Viewport Bottom (Zero Overflow / Bleed!) */}
+      {/* Bottom Bar — Pinned Cleanly to Viewport Bottom (Clean Branding Only in TV Mode!) */}
       <footer className="relative z-20 shrink-0 border-t border-white/10 bg-slate-950/90 px-4 py-3 backdrop-blur sm:px-6">
-        <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3">
-          {started ? (
+        <div
+          className={`mx-auto flex max-w-5xl flex-wrap items-center gap-3 ${
+            isTvMode ? 'justify-center' : 'justify-between'
+          }`}
+        >
+          {!isTvMode && (started ? (
             <div className="flex items-center gap-2">
               <button
                 type="button"
@@ -1110,7 +1182,7 @@ export default function CampRecapShowPage() {
             <div className="text-xs font-medium text-slate-400">
               {activeDayLabel} · {standings.length} teams ready
             </div>
-          )}
+          ))}
 
           <div className="text-xs text-slate-400">
             Powered by{' '}

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useParams, useSearchParams } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import {
   CalendarDays,
   ChevronDown,
@@ -68,6 +68,11 @@ interface PublicBoardPayload {
     frozen_at: string | null;
     auto_freeze_time: string | null;
   };
+  tv_remote?: {
+    mode: 'scoreboard' | 'reveal';
+    slideIndex: number;
+    theme?: 'dark' | 'light';
+  } | null;
   overall_standings: RankedTeam[];
   day_standings: Record<number, RankedTeam[]>;
   scores: ActivityItem[];
@@ -90,6 +95,7 @@ function formatRankBadge(rank: number) {
 
 export default function PublicScoreboardPage() {
   const params = useParams();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const token = String(params?.token || '');
   const isTvMode = searchParams?.get('tv') === '1';
@@ -129,6 +135,12 @@ export default function PublicScoreboardPage() {
         setData(board);
         setLastUpdated(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
 
+        // If running on TV/Projector (?tv=1) and Admin triggered Reveal Show from phone, switch immediately!
+        if (isTvMode && board.tv_remote?.mode === 'reveal') {
+          router.replace(`/recap/${token}?tv=1`);
+          return;
+        }
+
         if (!initializedView) {
           setSelectedView(board.event.activeDayNumber || 1);
           setInitializedView(true);
@@ -157,13 +169,13 @@ export default function PublicScoreboardPage() {
     fetchBoard(false);
   }, [fetchBoard]);
 
-  // Live auto-refresh every 6 seconds
+  // Live auto-refresh (fast 1.5s polling in TV mode for instant phone remote response; 6s normally)
   useEffect(() => {
     const id = window.setInterval(() => {
       fetchBoard(true);
-    }, 6000);
+    }, isTvMode ? 1500 : 6000);
     return () => window.clearInterval(id);
-  }, [fetchBoard]);
+  }, [fetchBoard, isTvMode]);
 
   const activeDayNumber = data?.event.activeDayNumber || 1;
   const currentDayViewNumber =

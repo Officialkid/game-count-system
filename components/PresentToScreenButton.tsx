@@ -44,7 +44,7 @@ export function PresentToScreenButton({
   const buildTargetUrl = () => {
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
     if (targetView === 'recap') {
-      return `${origin}/recap/${publicToken}`;
+      return `${origin}/recap/${publicToken}?tv=1`;
     }
     return `${origin}/scoreboard/${publicToken}?tv=1&theme=${theme}`;
   };

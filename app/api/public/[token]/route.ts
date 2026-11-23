@@ -97,10 +97,19 @@ export async function GET(
     // Evaluate server-side Suspense Freeze
     const freezeState = evaluateEventFreeze(event);
 
-    // Check if caller is an authorized MC/Admin (Reveal Show host bypass)
+    // Check if caller is an authorized MC/Admin (Reveal Show host bypass) OR TV screen during active Reveal mode
     let isAuthorizedHost = false;
+    const reqUrl = new URL(request.url);
+    const isTvRevealBroadcast =
+      reqUrl.searchParams.get('tv_reveal') === '1' &&
+      (event.tvRemoteState as any)?.mode === 'reveal';
+
+    if (isTvRevealBroadcast) {
+      isAuthorizedHost = true;
+    }
+
     const adminHeader = request.headers.get('x-admin-token');
-    if (adminHeader && freezeState.active) {
+    if (adminHeader && freezeState.active && !isAuthorizedHost) {
       const adminHash = hashToken(adminHeader);
       const adminTokenRow = await withDbRetry(() =>
         prisma.eventToken.findFirst({
@@ -272,6 +281,7 @@ export async function GET(
           auto_freeze_time: freezeState.autoFreezeTime,
           host_bypass: isAuthorizedHost,
         },
+        tv_remote: (event.tvRemoteState as any) ?? null,
         teams,
         overall_standings: overallStandings,
         day_standings: dayStandings,
