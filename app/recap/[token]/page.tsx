@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
+import toast from 'react-hot-toast';
+import { getSavedEvents } from '@/lib/device-vault';
 import {
   ArrowLeft,
   ArrowRight,
@@ -55,6 +57,13 @@ interface RecapPayload {
     numberOfDays: number;
     activeDayNumber: number;
     isFinalized: boolean;
+  };
+  freeze?: {
+    active: boolean;
+    reason: 'manual' | 'scheduled' | 'none';
+    mode: 'cutoff' | 'mystery';
+    frozen_at: string | null;
+    host_bypass?: boolean;
   };
   overall_standings: RankedTeam[];
   day_standings: Record<number, RankedTeam[]>;
@@ -275,6 +284,8 @@ export default function CampRecapShowPage() {
 
   const soundRef = useRef<ReturnType<typeof createSoundEngine> | null>(null);
   const stageRef = useRef<HTMLDivElement | null>(null);
+  const hostAdminTokenRef = useRef<string | null>(null);
+  const autoUnfrozeRef = useRef<boolean>(false);
 
   useEffect(() => {
     soundRef.current = createSoundEngine();
@@ -285,13 +296,43 @@ export default function CampRecapShowPage() {
     try {
       setLoading(true);
       setErrorMsg('');
-      const res = await fetch(`/api/public/${token}`, { cache: 'no-store' });
+
+      // Look up any saved Admin token on this device so the MC sees true marks even while frozen
+      const saved = getSavedEvents();
+      const adminEntry = saved.find((e) => e.role === 'admin');
+      const headers: Record<string, string> = {};
+      if (adminEntry?.token) {
+        headers['X-ADMIN-TOKEN'] = adminEntry.token;
+        hostAdminTokenRef.current = adminEntry.token;
+      }
+
+      const res = await fetch(`/api/public/${token}`, {
+        headers,
+        cache: 'no-store',
+      });
       const payload = await res.json().catch(() => ({}));
       if (!res.ok || !payload.success) {
         setErrorMsg(payload?.message || payload?.error || 'Recap not found');
         return;
       }
-      setData(payload.data as RecapPayload);
+      const loaded = payload.data as RecapPayload;
+      // Match exact event admin token if multiple events are saved on device
+      const exactAdmin = saved.find(
+        (e) => e.eventId === loaded.event.id && e.role === 'admin'
+      );
+      if (exactAdmin && exactAdmin.token !== hostAdminTokenRef.current) {
+        hostAdminTokenRef.current = exactAdmin.token;
+        const retryRes = await fetch(`/api/public/${token}`, {
+          headers: { 'X-ADMIN-TOKEN': exactAdmin.token },
+          cache: 'no-store',
+        });
+        const retryPayload = await retryRes.json().catch(() => ({}));
+        if (retryRes.ok && retryPayload.success) {
+          setData(retryPayload.data as RecapPayload);
+          return;
+        }
+      }
+      setData(loaded);
     } catch {
       setErrorMsg('Could not load recap data. Please check your connection.');
     } finally {
@@ -465,6 +506,44 @@ export default function CampRecapShowPage() {
       timers.forEach((id) => window.clearTimeout(id));
     };
   }, [started, slideIndex, currentSlide, soundEnabled]);
+
+  // Automatically unfreeze Public Scoreboard the exact moment #1 Champion is revealed!
+  useEffect(() => {
+    if (
+      !started ||
+      !data?.freeze?.active ||
+      autoUnfrozeRef.current ||
+      !hostAdminTokenRef.current
+    ) {
+      return;
+    }
+
+    const isChampionRevealed =
+      (currentSlide?.kind === 'reveal' &&
+        currentSlide.isChampion &&
+        revealStage >= 2) ||
+      currentSlide?.kind === 'podium';
+
+    if (!isChampionRevealed) return;
+
+    autoUnfrozeRef.current = true;
+    fetch(`/api/events/${data.event.id}/freeze`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-ADMIN-TOKEN': hostAdminTokenRef.current,
+      },
+      body: JSON.stringify({ action: 'unfreeze' }),
+    })
+      .then((res) => {
+        if (res.ok) {
+          toast.success('Public Scoreboard is now UNFROZEN & LIVE!');
+        }
+      })
+      .catch(() => {
+        autoUnfrozeRef.current = false;
+      });
+  }, [started, currentSlide, revealStage, data]);
 
   // Confetti burst on Grand Podium slide
   useEffect(() => {

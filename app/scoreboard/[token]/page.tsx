@@ -12,6 +12,7 @@ import {
   Maximize2,
   Moon,
   RefreshCw,
+  Snowflake,
   Sparkles,
   Sun,
   Trophy,
@@ -59,6 +60,13 @@ interface PublicBoardPayload {
     activeDayNumber: number;
     showPublicActivity: boolean;
     isFinalized: boolean;
+  };
+  freeze?: {
+    active: boolean;
+    reason: 'manual' | 'scheduled' | 'none';
+    mode: 'cutoff' | 'mystery';
+    frozen_at: string | null;
+    auto_freeze_time: string | null;
   };
   overall_standings: RankedTeam[];
   day_standings: Record<number, RankedTeam[]>;
@@ -370,7 +378,49 @@ export default function PublicScoreboardPage() {
       </header>
 
       <main className="mx-auto max-w-6xl space-y-6 px-4 py-6 sm:px-6">
-        {overallStandings.length === 0 ? (
+        {/* Suspense Freeze Banner (Cutoff Mode) */}
+        {data.freeze?.active && data.freeze.mode === 'cutoff' && (
+          <div
+            className={`flex flex-wrap items-center justify-center gap-2.5 rounded-2xl border px-5 py-3.5 text-center text-sm font-bold ${
+              darkMode
+                ? 'border-sky-500/40 bg-sky-950/60 text-sky-200'
+                : 'border-sky-300 bg-sky-50 text-sky-900'
+            }`}
+          >
+            <Snowflake className="h-4 w-4 shrink-0 animate-pulse text-sky-500" />
+            <span>
+              Scores Frozen
+              {data.freeze.frozen_at
+                ? ` as of ${new Date(data.freeze.frozen_at).toLocaleTimeString([], {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}`
+                : ''}{' '}
+              — New marks are hidden until the Reveal Show!
+            </span>
+          </div>
+        )}
+
+        {/* Full Mystery Lock Screen */}
+        {data.freeze?.active && data.freeze.mode === 'mystery' ? (
+          <div
+            className={`${cardClass} mx-auto max-w-2xl p-10 text-center sm:p-14`}
+          >
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-sky-500/15 text-sky-500">
+              <Lock className="h-8 w-8 animate-pulse" />
+            </div>
+            <p className="mt-4 text-xs font-extrabold uppercase tracking-[0.25em] text-sky-500">
+              Suspense Mode Active
+            </p>
+            <h2 className="mt-2 text-2xl font-black sm:text-4xl">
+              Results Are Locked for the Big Reveal!
+            </h2>
+            <p className={`mx-auto mt-3 max-w-md text-sm sm:text-base ${mutedText}`}>
+              Marks are still being counted behind the scenes. Standings will unlock
+              automatically the moment the winners are announced in the Reveal Show!
+            </p>
+          </div>
+        ) : overallStandings.length === 0 ? (
           <div className={`${cardClass} p-12 text-center`}>
             <Trophy className="mx-auto h-12 w-12 text-blue-500 opacity-70" />
             <h2 className="mt-3 text-xl font-bold">Waiting for teams &amp; scores</h2>

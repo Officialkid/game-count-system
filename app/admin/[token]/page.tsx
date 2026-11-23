@@ -24,6 +24,7 @@ import {
   Settings,
   Share2,
   Shield,
+  Snowflake,
   Sparkles,
   Trophy,
   Unlock,
@@ -63,6 +64,11 @@ interface AdminEvent {
   number_of_days: number;
   active_day_number: number;
   show_public_activity: boolean;
+  is_frozen?: boolean;
+  freeze_reason?: 'manual' | 'scheduled' | 'none';
+  freeze_mode?: 'cutoff' | 'mystery';
+  frozen_at?: string | null;
+  auto_freeze_time?: string | null;
   is_finalized: boolean;
   start_at: string;
   end_at: string;
@@ -117,6 +123,11 @@ export default function AdminDashboardPage() {
   const [updatingSettings, setUpdatingSettings] = useState(false);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
+  // Suspense Freeze state
+  const [freezeTimeInput, setFreezeTimeInput] = useState('');
+  const [freezeModeInput, setFreezeModeInput] = useState<'cutoff' | 'mystery'>('cutoff');
+  const [updatingFreeze, setUpdatingFreeze] = useState(false);
+
   useEffect(() => {
     setOrigin(window.location.origin);
   }, []);
@@ -160,6 +171,8 @@ export default function AdminDashboardPage() {
       }
 
       setEvent(loadedEvent);
+      setFreezeTimeInput(loadedEvent.auto_freeze_time || '');
+      setFreezeModeInput(loadedEvent.freeze_mode === 'mystery' ? 'mystery' : 'cutoff');
 
       // Remember this event permanently on this device (Zero-Signup Vault)
       saveEventToDevice({
@@ -444,6 +457,49 @@ export default function AdminDashboardPage() {
     }
   };
 
+  const handleFreezeAction = async (
+    action: 'freeze' | 'unfreeze' | 'configure',
+    overrides?: { auto_freeze_time?: string | null; freeze_mode?: 'cutoff' | 'mystery' }
+  ) => {
+    if (!event) return;
+    try {
+      setUpdatingFreeze(true);
+      const tzOffset = new Date().getTimezoneOffset() * -1; // minutes ahead of UTC
+      const res = await fetch(`/api/events/${event.id}/freeze`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-ADMIN-TOKEN': token,
+        },
+        body: JSON.stringify({
+          action,
+          freeze_mode: overrides?.freeze_mode ?? freezeModeInput,
+          auto_freeze_time:
+            overrides?.auto_freeze_time !== undefined
+              ? overrides.auto_freeze_time
+              : freezeTimeInput || null,
+          timezone_offset: tzOffset,
+        }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok || !payload.success) {
+        throw new Error(payload?.error || 'Failed to update Suspense Freeze');
+      }
+      if (action === 'freeze') {
+        toast.success('Public scoreboard frozen! New marks are hidden until Reveal.');
+      } else if (action === 'unfreeze') {
+        toast.success('Public scoreboard unfrozen — live results are visible!');
+      } else {
+        toast.success('Suspense Freeze settings saved!');
+      }
+      await loadData();
+    } catch (err: any) {
+      toast.error(err?.message || 'Could not update freeze settings');
+    } finally {
+      setUpdatingFreeze(false);
+    }
+  };
+
   const handleExportPdf = async () => {
     if (!event) return;
     try {
@@ -574,6 +630,12 @@ export default function AdminDashboardPage() {
               ) : (
                 <span className="rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-800">
                   Day {activeDay} of {event.number_of_days}
+                </span>
+              )}
+              {event.is_frozen && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-sky-100 px-2.5 py-0.5 text-xs font-bold text-sky-800">
+                  <Snowflake className="h-3 w-3" />
+                  Frozen
                 </span>
               )}
             </div>
@@ -1163,6 +1225,156 @@ export default function AdminDashboardPage() {
                     View Event Recap
                   </Link>
                 )}
+              </div>
+            </section>
+
+            {/* Suspense Freeze Card (Hide Public Marks Until Reveal Show) */}
+            <section className="rounded-2xl border border-sky-200 bg-white p-6 shadow-sm">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <div className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-sky-600">
+                    <Snowflake className="h-4 w-4" />
+                    Suspense Freeze · Auto-Unfreezes on Reveal
+                  </div>
+                  <h3 className="mt-1 text-lg font-bold text-slate-900">
+                    Hide Public Marks Before the Reveal Show
+                  </h3>
+                  <p className="mt-1 text-sm text-slate-600">
+                    Freeze the public scoreboard manually or automatically at a set time each
+                    day. Scorers keep entering marks privately, and the moment you reveal{' '}
+                    <strong>#1 Champion</strong> in the Reveal Show, the public board
+                    automatically unfreezes!
+                  </p>
+                </div>
+
+                <span
+                  className={`rounded-full px-3 py-1 text-xs font-bold ${
+                    event.is_frozen
+                      ? 'bg-sky-100 text-sky-800'
+                      : 'bg-emerald-100 text-emerald-800'
+                  }`}
+                >
+                  {event.is_frozen ? '❄️ Public Board Frozen' : '🟢 Public Board Live'}
+                </span>
+              </div>
+
+              {/* Instant Freeze / Unfreeze Button */}
+              <div className="mt-5 flex flex-wrap items-center gap-3">
+                {!event.is_frozen ? (
+                  <button
+                    type="button"
+                    disabled={updatingFreeze}
+                    onClick={() => handleFreezeAction('freeze')}
+                    className="inline-flex items-center gap-2 rounded-xl bg-sky-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-sky-700 disabled:opacity-60"
+                  >
+                    <Snowflake className="h-4 w-4" />
+                    {updatingFreeze ? 'Freezing…' : 'Freeze Public Scores Now'}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={updatingFreeze}
+                    onClick={() => handleFreezeAction('unfreeze')}
+                    className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-emerald-700 disabled:opacity-60"
+                  >
+                    <Unlock className="h-4 w-4" />
+                    {updatingFreeze ? 'Unfreezing…' : 'Unfreeze & Show Live Results'}
+                  </button>
+                )}
+              </div>
+
+              {/* Daily Auto-Freeze Schedule & Display Style */}
+              <div className="mt-5 grid gap-4 border-t border-slate-100 pt-5 sm:grid-cols-2">
+                <div>
+                  <label
+                    htmlFor="auto-freeze-time"
+                    className="block text-xs font-bold uppercase tracking-wider text-slate-500"
+                  >
+                    Daily Auto-Freeze Time (Optional)
+                  </label>
+                  <p className="mt-0.5 text-xs text-slate-500">
+                    e.g., set <strong>19:00</strong> (7:00 PM) so evening marks stay secret
+                    until you run the Reveal Show.
+                  </p>
+                  <div className="mt-2.5 flex items-center gap-2">
+                    <input
+                      id="auto-freeze-time"
+                      type="time"
+                      value={freezeTimeInput}
+                      onChange={(e) => setFreezeTimeInput(e.target.value)}
+                      className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-900 focus:border-sky-500 focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      disabled={updatingFreeze}
+                      onClick={() =>
+                        handleFreezeAction('configure', {
+                          auto_freeze_time: freezeTimeInput || null,
+                        })
+                      }
+                      className="rounded-xl bg-slate-900 px-3.5 py-2 text-xs font-bold text-white hover:bg-slate-800 disabled:opacity-50"
+                    >
+                      Save Time
+                    </button>
+                    {freezeTimeInput && (
+                      <button
+                        type="button"
+                        disabled={updatingFreeze}
+                        onClick={() => {
+                          setFreezeTimeInput('');
+                          handleFreezeAction('configure', { auto_freeze_time: null });
+                        }}
+                        className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                    What Public Sees While Frozen
+                  </p>
+                  <div className="mt-2.5 grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      disabled={updatingFreeze}
+                      onClick={() => {
+                        setFreezeModeInput('cutoff');
+                        handleFreezeAction('configure', { freeze_mode: 'cutoff' });
+                      }}
+                      className={`rounded-xl border p-3 text-left text-xs transition ${
+                        freezeModeInput === 'cutoff'
+                          ? 'border-sky-600 bg-sky-50 text-sky-900'
+                          : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-white'
+                      }`}
+                    >
+                      <p className="font-bold">Frozen at Cutoff</p>
+                      <p className="mt-0.5 opacity-80">
+                        Keeps pre-freeze scores; hides new marks
+                      </p>
+                    </button>
+                    <button
+                      type="button"
+                      disabled={updatingFreeze}
+                      onClick={() => {
+                        setFreezeModeInput('mystery');
+                        handleFreezeAction('configure', { freeze_mode: 'mystery' });
+                      }}
+                      className={`rounded-xl border p-3 text-left text-xs transition ${
+                        freezeModeInput === 'mystery'
+                          ? 'border-sky-600 bg-sky-50 text-sky-900'
+                          : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-white'
+                      }`}
+                    >
+                      <p className="font-bold">Full Mystery Lock</p>
+                      <p className="mt-0.5 opacity-80">
+                        Hides all marks behind a lock screen
+                      </p>
+                    </button>
+                  </div>
+                </div>
               </div>
             </section>
 

@@ -3,16 +3,19 @@
  * GET /api/public/{token}
  *
  * UNAUTHENTICATED — Read-only live scoreboard data.
- * Returns:
- * - active_day_number & labeled days (with carry_over_from_previous & is_locked)
- * - overall_standings (ranked cumulative totals across all days)
- * - day_standings (per-day ranked totals so Day 2 Leader & Overall Leader are both shown!)
- * - recent_activity (games & deductions feed, respecting show_public_activity)
+ * Enforces server-side Suspense Freeze:
+ * - If frozen & no valid X-ADMIN-TOKEN header is provided:
+ *   - 'cutoff' mode: strips all scores created after frozenAt before computing totals!
+ *   - 'mystery' mode: conceals all standings & scores behind a suspense lock!
+ * - If valid X-ADMIN-TOKEN header is provided (used by the MC's Reveal Show):
+ *   - Returns true unfiltered marks + freeze metadata so Reveal Show can auto-unfreeze on #1!
  */
 
 import { NextResponse } from 'next/server';
 import { calculateTeamTotal, getPublicEventByToken } from '@/lib/server/event-lifecycle-service';
-import { withDbRetry } from '@/lib/server/prisma';
+import prisma, { withDbRetry } from '@/lib/server/prisma';
+import { evaluateEventFreeze } from '@/lib/server/freeze-logic';
+import { hashToken } from '@/lib/token-utils';
 
 export const dynamic = 'force-dynamic';
 
@@ -55,7 +58,7 @@ function rankTeams(
 }
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: { token: string } }
 ) {
   try {
@@ -67,7 +70,8 @@ export async function GET(
         {
           success: false,
           error: 'Event not found',
-          message: 'This event link is invalid or no longer exists. Please check your link and try again.',
+          message:
+            'This event link is invalid or no longer exists. Please check your link and try again.',
         },
         { status: 404 }
       );
@@ -81,12 +85,44 @@ export async function GET(
         {
           success: false,
           error: 'Event expired',
-          message: `This event ended ${expiryDate !== 'recently' ? `on ${expiryDate}` : expiryDate} and is no longer available.`,
+          message: `This event ended ${
+            expiryDate !== 'recently' ? `on ${expiryDate}` : expiryDate
+          } and is no longer available.`,
           expired_at: event.endAt,
         },
         { status: 410 }
       );
     }
+
+    // Evaluate server-side Suspense Freeze
+    const freezeState = evaluateEventFreeze(event);
+
+    // Check if caller is an authorized MC/Admin (Reveal Show host bypass)
+    let isAuthorizedHost = false;
+    const adminHeader = request.headers.get('x-admin-token');
+    if (adminHeader && freezeState.active) {
+      const adminHash = hashToken(adminHeader);
+      const adminTokenRow = await withDbRetry(() =>
+        prisma.eventToken.findFirst({
+          where: {
+            eventId: event.id,
+            tokenType: 'admin',
+            tokenHash: adminHash,
+            isActive: true,
+            revokedAt: null,
+          },
+          select: { id: true },
+        })
+      );
+      isAuthorizedHost = Boolean(adminTokenRow);
+    }
+
+    const shouldMaskPublic = freezeState.active && !isAuthorizedHost;
+    const cutoffMs =
+      shouldMaskPublic && freezeState.mode === 'cutoff' && freezeState.frozenAt
+        ? freezeState.frozenAt.getTime()
+        : null;
+    const hideAllForMystery = shouldMaskPublic && freezeState.mode === 'mystery';
 
     const days = event.eventDays.map((day) => ({
       day_number: day.dayNumber,
@@ -95,7 +131,6 @@ export async function GET(
       carry_over_from_previous: day.carryOverFromPrevious,
     }));
 
-    // Ensure at least Day 1 exists in the response
     if (days.length === 0) {
       days.push({
         day_number: 1,
@@ -105,42 +140,55 @@ export async function GET(
       });
     }
 
-    const teams = event.teams.map((team) => ({
-      id: team.id,
-      name: team.name,
-      color: team.color,
-      avatar_url: team.avatarUrl,
-      total_points: calculateTeamTotal(team.scores),
-    }));
+    const filterScoresForVisibility = <T extends { createdAt: Date }>(list: T[]): T[] => {
+      if (hideAllForMystery) return [];
+      if (cutoffMs !== null) {
+        return list.filter((s) => s.createdAt.getTime() <= cutoffMs);
+      }
+      return list;
+    };
 
-    // Build overall standings
-    const overallStandings = rankTeams(
-      teams.map((team) => ({
+    const teams = event.teams.map((team) => {
+      const visibleScores = filterScoresForVisibility(team.scores);
+      return {
         id: team.id,
         name: team.name,
         color: team.color,
-        avatar_url: team.avatar_url,
-        points: team.total_points,
-        overall_points: team.total_points,
-      }))
-    );
+        avatar_url: team.avatarUrl,
+        total_points: calculateTeamTotal(visibleScores),
+      };
+    });
 
-    // Build per-day standings (for every day in the event)
+    const overallStandings = hideAllForMystery
+      ? []
+      : rankTeams(
+          teams.map((team) => ({
+            id: team.id,
+            name: team.name,
+            color: team.color,
+            avatar_url: team.avatar_url,
+            points: team.total_points,
+            overall_points: team.total_points,
+          }))
+        );
+
     const dayStandings: Record<number, RankedTeam[]> = {};
     const allDayNumbers = Array.from(
-      new Set([
-        ...days.map((d) => d.day_number),
-        event.activeDayNumber || 1,
-      ])
+      new Set([...days.map((d) => d.day_number), event.activeDayNumber || 1])
     ).sort((a, b) => a - b);
 
     for (const dayNum of allDayNumbers) {
+      if (hideAllForMystery) {
+        dayStandings[dayNum] = [];
+        continue;
+      }
       const dayEntries = event.teams.map((team) => {
-        const dayScores = team.scores.filter(
+        const visibleScores = filterScoresForVisibility(team.scores);
+        const dayScores = visibleScores.filter(
           (score) => (score.eventDay?.dayNumber ?? 1) === dayNum
         );
         const dayPoints = calculateTeamTotal(dayScores);
-        const overallPoints = calculateTeamTotal(team.scores);
+        const overallPoints = calculateTeamTotal(visibleScores);
         return {
           id: team.id,
           name: team.name,
@@ -153,24 +201,30 @@ export async function GET(
       dayStandings[dayNum] = rankTeams(dayEntries);
     }
 
-    const scores = event.teams
-      .flatMap((team) =>
-        team.scores.map((score) => ({
-          id: score.id,
-          team_id: team.id,
-          team_name: team.name,
-          team_color: team.color,
-          category: score.category || (score.points < 0 ? 'Deduction' : 'Game Score'),
-          points: score.points,
-          penalty: score.penalty,
-          bonus: score.bonus,
-          notes: score.notes,
-          day_number: score.eventDay?.dayNumber ?? 1,
-          day_label: score.eventDay?.label ?? `Day ${score.eventDay?.dayNumber ?? 1}`,
-          created_at: score.createdAt.toISOString(),
-        }))
-      )
-      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    const scores = hideAllForMystery
+      ? []
+      : event.teams
+          .flatMap((team) =>
+            filterScoresForVisibility(team.scores).map((score) => ({
+              id: score.id,
+              team_id: team.id,
+              team_name: team.name,
+              team_color: team.color,
+              category: score.category || (score.points < 0 ? 'Deduction' : 'Game Score'),
+              points: score.points,
+              penalty: score.penalty,
+              bonus: score.bonus,
+              notes: score.notes,
+              day_number: score.eventDay?.dayNumber ?? 1,
+              day_label:
+                score.eventDay?.label ?? `Day ${score.eventDay?.dayNumber ?? 1}`,
+              created_at: score.createdAt.toISOString(),
+            }))
+          )
+          .sort(
+            (a, b) =>
+              new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+          );
 
     const groupedByDay = new Map<number, typeof scores>();
     for (const score of scores) {
@@ -184,7 +238,8 @@ export async function GET(
       .sort((a, b) => a[0] - b[0])
       .map(([dayNumber, dayScores]) => ({
         day_number: dayNumber,
-        day_label: days.find((day) => day.day_number === dayNumber)?.label || `Day ${dayNumber}`,
+        day_label:
+          days.find((day) => day.day_number === dayNumber)?.label || `Day ${dayNumber}`,
         scores: dayScores,
       }));
 
@@ -208,6 +263,14 @@ export async function GET(
           endDate: event.endAt.toISOString(),
           isFinalized: event.isFinalized,
           finalizedAt: event.finalizedAt?.toISOString() ?? null,
+        },
+        freeze: {
+          active: freezeState.active,
+          reason: freezeState.reason,
+          mode: freezeState.mode,
+          frozen_at: freezeState.frozenAt ? freezeState.frozenAt.toISOString() : null,
+          auto_freeze_time: freezeState.autoFreezeTime,
+          host_bypass: isAuthorizedHost,
         },
         teams,
         overall_standings: overallStandings,

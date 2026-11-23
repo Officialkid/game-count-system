@@ -75,6 +75,12 @@ model Event {
   numberOfDays           Int           @default(1)
   activeDayNumber        Int           @default(1)
   showPublicActivity     Boolean       @default(true)
+  isFrozen               Boolean       @default(false)
+  frozenAt               DateTime?
+  autoFreezeTime         String?       @db.VarChar(8)
+  freezeMode             String        @default("cutoff") @db.VarChar(16)
+  freezeTimezoneOffset   Int           @default(180)
+  lastUnfrozenAt         DateTime?
   requiresAuthentication Boolean       @default(false)
   legacyStatus           String?       @db.VarChar(32)
   themeColor             String?       @db.VarChar(32)

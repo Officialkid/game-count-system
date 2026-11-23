@@ -1,5 +1,6 @@
 import { Prisma, TokenType } from '@prisma/client';
 import prisma, { withDbRetry } from './prisma';
+import { evaluateEventFreeze } from './freeze-logic';
 import { calculateAutoCleanupDate, calculateEndDate, getEventModeConfig, validateModeConstraints } from '@/lib/event-mode-helpers';
 import { generateEventTokens, generateShareLink, hashToken } from '@/lib/token-utils';
 
@@ -40,6 +41,11 @@ export type EventAccessResult = {
     numberOfDays: number;
     activeDayNumber: number;
     showPublicActivity: boolean;
+    isFrozen: boolean;
+    freezeReason: 'manual' | 'scheduled' | 'none';
+    freezeMode: 'cutoff' | 'mystery';
+    frozenAt: string | null;
+    autoFreezeTime: string | null;
     isFinalized: boolean;
     startAt: string;
     endAt: string;
@@ -207,6 +213,8 @@ export async function getEventAccessByToken(token: string): Promise<EventAccessR
     carryOverFromPrevious: day.carryOverFromPrevious,
   }));
 
+  const freezeState = evaluateEventFreeze(access.event);
+
   return {
     event: {
       id: access.event.id,
@@ -217,6 +225,11 @@ export async function getEventAccessByToken(token: string): Promise<EventAccessR
       numberOfDays: access.event.numberOfDays,
       activeDayNumber: access.event.activeDayNumber,
       showPublicActivity: access.event.showPublicActivity,
+      isFrozen: freezeState.active,
+      freezeReason: freezeState.reason,
+      freezeMode: freezeState.mode,
+      frozenAt: freezeState.frozenAt ? freezeState.frozenAt.toISOString() : null,
+      autoFreezeTime: access.event.autoFreezeTime,
       isFinalized: access.event.isFinalized,
       startAt: access.event.startAt.toISOString(),
       endAt: access.event.endAt.toISOString(),
