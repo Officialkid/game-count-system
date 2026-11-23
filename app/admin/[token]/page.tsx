@@ -33,6 +33,7 @@ import {
 import { saveEventToDevice } from '@/lib/device-vault';
 import { generateResultsPDF } from '@/lib/pdf-export';
 import { PoweredByFooter } from '@/components/PoweredByFooter';
+import { PresentToScreenButton } from '@/components/PresentToScreenButton';
 
 const TEAM_COLOR_CHOICES = [
   '#2563EB',
@@ -593,6 +594,10 @@ export default function AdminDashboardPage() {
             )}
             {event.public_token && (
               <>
+                <PresentToScreenButton
+                  publicToken={event.public_token}
+                  eventName={event.name}
+                />
                 <Link
                   href={`/recap/${event.public_token}`}
                   className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 px-3.5 py-2 text-xs font-bold text-white shadow-sm hover:from-indigo-700 hover:to-purple-700"

@@ -2,13 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import {
   CalendarDays,
   ChevronDown,
   ChevronUp,
   Crown,
   Lock,
+  Maximize2,
   Moon,
   RefreshCw,
   Sparkles,
@@ -17,6 +18,7 @@ import {
 } from 'lucide-react';
 import { saveEventToDevice } from '@/lib/device-vault';
 import { PoweredByFooter } from '@/components/PoweredByFooter';
+import { PresentToScreenButton } from '@/components/PresentToScreenButton';
 
 interface RankedTeam {
   id: string;
@@ -80,15 +82,20 @@ function formatRankBadge(rank: number) {
 
 export default function PublicScoreboardPage() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const token = String(params?.token || '');
+  const isTvMode = searchParams?.get('tv') === '1';
+  const initialTheme = searchParams?.get('theme');
 
   const [data, setData] = useState<PublicBoardPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState('');
   const [selectedView, setSelectedView] = useState<'overall' | number>(1);
   const [initializedView, setInitializedView] = useState(false);
-  const [darkMode, setDarkMode] = useState(false);
-  const [showActivity, setShowActivity] = useState(true);
+  const [darkMode, setDarkMode] = useState(
+    initialTheme === 'dark' || (isTvMode && initialTheme !== 'light')
+  );
+  const [showActivity, setShowActivity] = useState(!isTvMode);
   const [lastUpdated, setLastUpdated] = useState<string>('');
 
   const fetchBoard = useCallback(
@@ -268,40 +275,56 @@ export default function PublicScoreboardPage() {
             </h1>
           </div>
 
-          <div className="flex items-center justify-center gap-2 md:absolute md:right-6 md:top-1/2 md:-translate-y-1/2">
-            <Link
-              href={`/recap/${token}`}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 px-3.5 py-2 text-xs font-bold text-white shadow-sm transition hover:from-indigo-700 hover:to-purple-700"
-            >
-              <Sparkles className="h-4 w-4" />
-              Reveal Show
-            </Link>
+          {!isTvMode ? (
+            <div className="flex flex-wrap items-center justify-center gap-2 md:absolute md:right-6 md:top-1/2 md:-translate-y-1/2">
+              <PresentToScreenButton
+                publicToken={token}
+                eventName={data.event.name}
+                variant={darkMode ? 'dark' : 'default'}
+              />
+              <Link
+                href={`/recap/${token}`}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 px-3.5 py-2 text-xs font-bold text-white shadow-sm transition hover:from-indigo-700 hover:to-purple-700"
+              >
+                <Sparkles className="h-4 w-4" />
+                Reveal Show
+              </Link>
+              <button
+                type="button"
+                onClick={() => setDarkMode((prev) => !prev)}
+                className={`inline-flex items-center gap-1.5 rounded-xl border px-3.5 py-2 text-xs font-semibold transition ${
+                  darkMode
+                    ? 'border-slate-700 bg-slate-800 text-slate-100 hover:bg-slate-700'
+                    : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                {darkMode ? (
+                  <>
+                    <Sun className="h-4 w-4 text-amber-400" />
+                    Light Mode
+                  </>
+                ) : (
+                  <>
+                    <Moon className="h-4 w-4 text-slate-600" />
+                    TV Dark Mode
+                  </>
+                )}
+              </button>
+            </div>
+          ) : (
             <button
               type="button"
-              onClick={() => setDarkMode((prev) => !prev)}
-              className={`inline-flex items-center gap-1.5 rounded-xl border px-3.5 py-2 text-xs font-semibold transition ${
-                darkMode
-                  ? 'border-slate-700 bg-slate-800 text-slate-100 hover:bg-slate-700'
-                  : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-100'
-              }`}
+              onClick={() => document.documentElement.requestFullscreen?.().catch(() => {})}
+              title="Enter Fullscreen"
+              className="absolute right-4 top-1/2 -translate-y-1/2 rounded-xl border border-white/15 bg-white/5 p-2 text-slate-400 opacity-0 transition hover:opacity-100 focus:opacity-100"
             >
-              {darkMode ? (
-                <>
-                  <Sun className="h-4 w-4 text-amber-400" />
-                  Light Mode
-                </>
-              ) : (
-                <>
-                  <Moon className="h-4 w-4 text-slate-600" />
-                  TV Dark Mode
-                </>
-              )}
+              <Maximize2 className="h-4 w-4" />
             </button>
-          </div>
+          )}
         </div>
 
-        {/* Day Switcher Pills */}
-        {data.days.length > 1 && (
+        {/* Day Switcher Pills (Hidden in Clean TV Projection Mode) */}
+        {!isTvMode && data.days.length > 1 && (
           <div className="mx-auto max-w-6xl px-4 pb-3 sm:px-6">
             <div className="flex items-center gap-1.5 overflow-x-auto md:justify-center">
               {data.days.map((day) => {
