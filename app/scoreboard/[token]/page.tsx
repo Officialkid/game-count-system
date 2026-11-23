@@ -137,8 +137,8 @@ export default function PublicScoreboardPage() {
         setData(board);
         setLastUpdated(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
 
-        // If running on TV/Projector (?tv=1) OR a phone remote is paired, switch immediately when Reveal is triggered!
-        if ((isTvMode || Boolean(board.tv_remote?.pairedAt)) && board.tv_remote?.mode === 'reveal') {
+        // ONLY auto-switch when explicitly running in TV Receiver Mode (?tv=1) — NEVER hijack normal public scoreboard!
+        if (isTvMode && board.tv_remote?.mode === 'reveal') {
           router.replace(`/recap/${token}?tv=1`);
           return;
         }

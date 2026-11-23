@@ -1147,15 +1147,22 @@ export default function CampRecapShowPage() {
         )}
       </main>
 
-      {/* Bottom Bar — Pinned Cleanly to Viewport Bottom (Clean Branding Only in TV Mode!) */}
-      <footer className="relative z-20 shrink-0 border-t border-white/10 bg-slate-950/90 px-4 py-3 backdrop-blur sm:px-6">
-        <div
-          className={`mx-auto flex max-w-5xl flex-wrap items-center gap-3 ${
-            isTvMode ? 'justify-center' : 'justify-between'
-          }`}
-        >
-          {!isTvMode && (started ? (
-            <div className="flex items-center gap-2">
+      {/* Bottom Bar — Pinned Cleanly to Viewport Bottom (Hover-to-show controls in TV mode so you are NEVER stuck!) */}
+      <footer className="group relative z-20 shrink-0 border-t border-white/10 bg-slate-950/90 px-4 py-3 backdrop-blur sm:px-6">
+        <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3">
+          {started ? (
+            <div
+              className={`flex items-center gap-2 transition-opacity ${
+                isTvMode ? 'opacity-20 hover:opacity-100 group-hover:opacity-100' : 'opacity-100'
+              }`}
+            >
+              <Link
+                href={`/scoreboard/${token}${isTvMode ? '?tv=1' : ''}`}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-xs font-bold text-slate-200 hover:bg-white/10"
+              >
+                <Monitor className="h-3.5 w-3.5" />
+                Live Board
+              </Link>
               <button
                 type="button"
                 onClick={goPrev}
@@ -1184,7 +1191,7 @@ export default function CampRecapShowPage() {
             <div className="text-xs font-medium text-slate-400">
               {activeDayLabel} · {standings.length} teams ready
             </div>
-          ))}
+          )}
 
           <div className="text-xs text-slate-400">
             Powered by{' '}
