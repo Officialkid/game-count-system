@@ -68,7 +68,7 @@ const PRESET_REASONS = [
   { label: 'Rule Violation', defaultPoints: -50 },
 ];
 
-const QUICK_DELTAS = [-50, -10, +10, +50, +100];
+const QUICK_DELTAS = [-50, -10, 0, +10, +50, +100];
 
 export default function ScorerPage() {
   const params = useParams();
@@ -291,11 +291,15 @@ export default function ScorerPage() {
   const isDayLocked = Boolean(currentDayInfo.is_locked || event?.is_finalized);
 
   const adjustTeamInput = (teamId: string, delta: number) => {
+    if (delta === 0) {
+      setTeamInputs((prev) => ({ ...prev, [teamId]: '0' }));
+      return;
+    }
     setTeamInputs((prev) => {
       const current = Number.parseInt(prev[teamId] || '0', 10);
       const safeCurrent = Number.isNaN(current) ? 0 : current;
       const next = safeCurrent + delta;
-      return { ...prev, [teamId]: next === 0 ? '' : String(next) };
+      return { ...prev, [teamId]: String(next) };
     });
   };
 
@@ -312,8 +316,10 @@ export default function ScorerPage() {
   const enteredItems = useMemo(() => {
     return teams
       .map((team) => {
-        const parsed = Number.parseInt((teamInputs[team.id] || '').trim(), 10);
-        if (Number.isNaN(parsed) || parsed === 0) return null;
+        const raw = (teamInputs[team.id] ?? '').trim();
+        if (raw === '' || raw === '-') return null;
+        const parsed = Number.parseInt(raw, 10);
+        if (Number.isNaN(parsed)) return null;
         return {
           team_id: team.id,
           team_name: team.name,
@@ -615,7 +621,7 @@ export default function ScorerPage() {
               optimisticTeams.map((team) => {
                 const rawVal = teamInputs[team.id] ?? '';
                 const numericVal = Number.parseInt(rawVal, 10);
-                const hasVal = !Number.isNaN(numericVal) && numericVal !== 0;
+                const hasVal = rawVal.trim() !== '' && rawVal.trim() !== '-' && !Number.isNaN(numericVal);
 
                 return (
                   <div
@@ -624,6 +630,8 @@ export default function ScorerPage() {
                       hasVal
                         ? numericVal < 0
                           ? 'border-red-300 ring-1 ring-red-100'
+                          : numericVal === 0
+                          ? 'border-blue-300 ring-1 ring-blue-100'
                           : 'border-emerald-300 ring-1 ring-emerald-100'
                         : 'border-slate-200'
                     }`}
@@ -692,6 +700,8 @@ export default function ScorerPage() {
                           className={`rounded-lg border px-2.5 py-1.5 text-xs font-bold tabular-nums transition active:scale-95 disabled:opacity-50 ${
                             delta < 0
                               ? 'border-red-200 bg-red-50 text-red-700 hover:bg-red-100'
+                              : delta === 0
+                              ? 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100'
                               : 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
                           }`}
                         >
