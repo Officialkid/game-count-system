@@ -241,9 +241,9 @@ export default function PublicScoreboardPage() {
             : 'border-slate-200 bg-white/95'
         }`}
       >
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-6">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
+        <div className="relative mx-auto flex max-w-6xl flex-col items-center justify-center gap-3 px-4 py-4 sm:px-6">
+          <div className="min-w-0 text-center">
+            <div className="flex flex-wrap items-center justify-center gap-2">
               <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-xs font-bold text-emerald-500">
                 <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500" />
                 {data.event.isFinalized ? 'FINAL RESULTS' : 'LIVE'}
@@ -263,12 +263,12 @@ export default function PublicScoreboardPage() {
                 <span className={`text-xs ${mutedText}`}>Updated {lastUpdated}</span>
               )}
             </div>
-            <h1 className="mt-1 truncate text-2xl font-extrabold tracking-tight sm:text-3xl">
+            <h1 className="mt-1.5 text-2xl font-extrabold tracking-tight sm:text-3xl">
               {data.event.name}
             </h1>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center justify-center gap-2 md:absolute md:right-6 md:top-1/2 md:-translate-y-1/2">
             <Link
               href={`/recap/${token}`}
               className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 px-3.5 py-2 text-xs font-bold text-white shadow-sm transition hover:from-indigo-700 hover:to-purple-700"
@@ -303,7 +303,7 @@ export default function PublicScoreboardPage() {
         {/* Day Switcher Pills */}
         {data.days.length > 1 && (
           <div className="mx-auto max-w-6xl px-4 pb-3 sm:px-6">
-            <div className="flex items-center gap-1.5 overflow-x-auto">
+            <div className="flex items-center gap-1.5 overflow-x-auto md:justify-center">
               {data.days.map((day) => {
                 const active = selectedView === day.day_number;
                 return (
