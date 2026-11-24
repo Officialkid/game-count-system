@@ -43,9 +43,6 @@ export function PresentToScreenButton({
 
   const buildTargetUrl = () => {
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
-    if (targetView === 'recap') {
-      return `${origin}/recap/${publicToken}?tv=1`;
-    }
     return `${origin}/scoreboard/${publicToken}?tv=1&theme=${theme}`;
   };
 
@@ -213,63 +210,34 @@ export function PresentToScreenButton({
               </button>
             </div>
 
-            {/* Step 1: Choose What to Project */}
-            <div className="mt-5 grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => setTargetView('scoreboard')}
-                className={`flex items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-xs font-bold transition ${
-                  targetView === 'scoreboard'
-                    ? 'border-blue-600 bg-blue-50 text-blue-700'
-                    : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-white'
-                }`}
-              >
-                <Monitor className="h-4 w-4" />
-                Live Scoreboard
-              </button>
-              <button
-                type="button"
-                onClick={() => setTargetView('recap')}
-                className={`flex items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-xs font-bold transition ${
-                  targetView === 'recap'
-                    ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
-                    : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-white'
-                }`}
-              >
-                <Sparkles className="h-4 w-4" />
-                Reveal Show
-              </button>
-            </div>
-
-            {targetView === 'scoreboard' && (
-              <div className="mt-3 flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2 text-xs">
-                <span className="font-semibold text-slate-700">TV Screen Theme</span>
-                <div className="flex gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => setTheme('dark')}
-                    className={`rounded-lg px-2.5 py-1 font-bold ${
-                      theme === 'dark'
-                        ? 'bg-slate-900 text-white'
-                        : 'text-slate-600 hover:bg-white'
-                    }`}
-                  >
-                    Dark TV
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setTheme('light')}
-                    className={`rounded-lg px-2.5 py-1 font-bold ${
-                      theme === 'light'
-                        ? 'bg-white text-slate-900 shadow-sm'
-                        : 'text-slate-600 hover:bg-white'
-                    }`}
-                  >
-                    Bright Light
-                  </button>
-                </div>
+            {/* Choose TV Screen Theme */}
+            <div className="mt-5 flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-xs">
+              <span className="font-semibold text-slate-700">TV Screen Theme</span>
+              <div className="flex gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setTheme('dark')}
+                  className={`rounded-lg px-2.5 py-1 font-bold ${
+                    theme === 'dark'
+                      ? 'bg-slate-900 text-white'
+                      : 'text-slate-600 hover:bg-white'
+                  }`}
+                >
+                  Dark TV
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTheme('light')}
+                  className={`rounded-lg px-2.5 py-1 font-bold ${
+                    theme === 'light'
+                      ? 'bg-white text-slate-900 shadow-sm'
+                      : 'text-slate-600 hover:bg-white'
+                  }`}
+                >
+                  Bright Light
+                </button>
               </div>
-            )}
+            </div>
 
             {/* Step 2: Detected Connected Displays */}
             <div className="mt-5">

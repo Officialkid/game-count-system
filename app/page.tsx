@@ -126,22 +126,13 @@ export default function HomePage() {
             </span>
           </Link>
 
-          <div className="flex items-center gap-2">
-            <Link
-              href="/remote"
-              className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-800 transition hover:bg-slate-50 sm:text-sm"
-            >
-              <Tv className="h-4 w-4 text-indigo-600" />
-              <span>TV Remote</span>
-            </Link>
-            <Link
-              href="/events/create"
-              className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-blue-600 px-3.5 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-blue-700 sm:text-sm"
-            >
-              <Plus className="h-4 w-4" />
-              <span>New Event</span>
-            </Link>
-          </div>
+          <Link
+            href="/events/create"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-blue-600 px-3.5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
+          >
+            <Plus className="h-4 w-4" />
+            <span>New Event</span>
+          </Link>
         </div>
       </header>
 

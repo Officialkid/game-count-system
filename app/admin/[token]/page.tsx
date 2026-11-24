@@ -88,7 +88,7 @@ interface TeamSummary {
   day_totals?: Record<number, number>;
 }
 
-type AdminTab = 'overview' | 'teams' | 'remote' | 'share' | 'results';
+type AdminTab = 'overview' | 'teams' | 'share' | 'results';
 
 export default function AdminDashboardPage() {
   const params = useParams();
@@ -604,7 +604,6 @@ export default function AdminDashboardPage() {
   const tabs: Array<{ id: AdminTab; label: string; icon: any }> = [
     { id: 'overview', label: 'Overview & Days', icon: CalendarDays },
     { id: 'teams', label: `Teams (${teams.length})`, icon: Users },
-    { id: 'remote', label: 'TV Remote', icon: Tv },
     { id: 'share', label: 'Share & QR', icon: Share2 },
     { id: 'results', label: 'Results & Settings', icon: Settings },
   ];
@@ -663,13 +662,6 @@ export default function AdminDashboardPage() {
                   publicToken={event.public_token}
                   eventName={event.name}
                 />
-                <Link
-                  href={`/recap/${event.public_token}`}
-                  className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 px-3.5 py-2 text-xs font-bold text-white shadow-sm hover:from-indigo-700 hover:to-purple-700"
-                >
-                  <Sparkles className="h-3.5 w-3.5" />
-                  Reveal Show
-                </Link>
                 <Link
                   href={`/scoreboard/${event.public_token}`}
                   className="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-xs font-semibold text-slate-800 hover:bg-slate-50"
@@ -1081,20 +1073,6 @@ export default function AdminDashboardPage() {
               </form>
             </div>
           </div>
-        )}
-
-        {/* TAB: TV REMOTE CONTROL */}
-        {activeTab === 'remote' && (
-          <TvRemoteControl
-            eventId={event.id}
-            adminToken={token}
-            teamCount={teams.length}
-            isFrozen={event.is_frozen}
-            updatingFreeze={updatingFreeze}
-            onFreezeToggle={() =>
-              handleFreezeAction(event.is_frozen ? 'unfreeze' : 'freeze')
-            }
-          />
         )}
 
         {/* TAB 3: SHARE & QR */}

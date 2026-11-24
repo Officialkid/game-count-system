@@ -137,12 +137,6 @@ export default function PublicScoreboardPage() {
         setData(board);
         setLastUpdated(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
 
-        // ONLY auto-switch when explicitly running in TV Receiver Mode (?tv=1) — NEVER hijack normal public scoreboard!
-        if (isTvMode && board.tv_remote?.mode === 'reveal') {
-          router.replace(`/recap/${token}?tv=1`);
-          return;
-        }
-
         if (!initializedView) {
           setSelectedView(board.event.activeDayNumber || 1);
           setInitializedView(true);
@@ -271,7 +265,7 @@ export default function PublicScoreboardPage() {
             : 'border-slate-200 bg-white/95'
         }`}
       >
-        <div className="relative mx-auto flex max-w-6xl flex-col items-center justify-center gap-3 px-4 py-4 sm:px-6">
+        <div className="mx-auto flex max-w-6xl flex-col items-center justify-center gap-3 px-4 py-4 sm:px-6">
           <div className="min-w-0 text-center">
             <div className="flex flex-wrap items-center justify-center gap-2">
               <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-xs font-bold text-emerald-500">
@@ -292,18 +286,6 @@ export default function PublicScoreboardPage() {
               {lastUpdated && (
                 <span className={`text-xs ${mutedText}`}>Updated {lastUpdated}</span>
               )}
-              {data.tv_remote?.pairCode && (
-                <span
-                  title="Enter this 4-digit code at /remote on your phone to control this screen"
-                  className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 font-mono text-xs font-bold ${
-                    darkMode
-                      ? 'border-indigo-500/40 bg-indigo-500/15 text-indigo-300'
-                      : 'border-indigo-200 bg-indigo-50 text-indigo-700'
-                  }`}
-                >
-                  TV Code: {data.tv_remote.pairCode}
-                </span>
-              )}
             </div>
             <h1 className="mt-1.5 text-2xl font-extrabold tracking-tight sm:text-3xl">
               {data.event.name}
@@ -311,19 +293,12 @@ export default function PublicScoreboardPage() {
           </div>
 
           {!isTvMode ? (
-            <div className="flex flex-wrap items-center justify-center gap-2 md:absolute md:right-6 md:top-1/2 md:-translate-y-1/2">
+            <div className="flex flex-wrap items-center justify-center gap-2">
               <PresentToScreenButton
                 publicToken={token}
                 eventName={data.event.name}
                 variant={darkMode ? 'dark' : 'default'}
               />
-              <Link
-                href={`/recap/${token}`}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 px-3.5 py-2 text-xs font-bold text-white shadow-sm transition hover:from-indigo-700 hover:to-purple-700"
-              >
-                <Sparkles className="h-4 w-4" />
-                Reveal Show
-              </Link>
               <button
                 type="button"
                 onClick={() => setDarkMode((prev) => !prev)}
@@ -351,7 +326,7 @@ export default function PublicScoreboardPage() {
               type="button"
               onClick={() => document.documentElement.requestFullscreen?.().catch(() => {})}
               title="Enter Fullscreen"
-              className="absolute right-4 top-1/2 -translate-y-1/2 rounded-xl border border-white/15 bg-white/5 p-2 text-slate-400 opacity-0 transition hover:opacity-100 focus:opacity-100"
+              className="fixed right-4 top-4 z-40 rounded-xl border border-white/15 bg-white/5 p-2 text-slate-400 opacity-0 transition hover:opacity-100 focus:opacity-100"
             >
               <Maximize2 className="h-4 w-4" />
             </button>
